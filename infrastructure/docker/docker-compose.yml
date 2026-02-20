@@ -1,0 +1,144 @@
+version: '3.9'
+
+# ============================================================
+# REMS — Docker Compose (Development)
+# ============================================================
+
+services:
+
+  # PostgreSQL with TimescaleDB for time-series analytics
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: rems-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rems
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rems_dev_password}
+      POSTGRES_DB: rems
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U rems']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis — distributed lock + queue + caching
+  redis:
+    image: redis:7-alpine
+    container_name: rems-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-rems_dev_redis}
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # API Server (NestJS/Fastify)
+  api:
+    build:
+      context: ../../
+      dockerfile: apps/api/Dockerfile
+    container_name: rems-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://rems:${POSTGRES_PASSWORD:-rems_dev_password}@postgres:5432/rems
+      REDIS_URL: redis://:${REDIS_PASSWORD:-rems_dev_redis}@redis:6379
+      JWT_SECRET: ${JWT_SECRET:-change_in_production}
+      NODE_ENV: development
+      PORT: 3000
+    ports:
+      - '3000:3000'
+    volumes:
+      - ../../apps/api/src:/app/src  # Hot reload
+
+  # Background Worker (Queue processor)
+  worker:
+    build:
+      context: ../../
+      dockerfile: apps/worker/Dockerfile
+    container_name: rems-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://rems:${POSTGRES_PASSWORD:-rems_dev_password}@postgres:5432/rems
+      REDIS_URL: redis://:${REDIS_PASSWORD:-rems_dev_redis}@redis:6379
+      NODE_ENV: development
+      # OTA Credentials (inject from secrets manager in production)
+      BOOKING_COM_API_KEY: ${BOOKING_COM_API_KEY}
+      BOOKING_COM_HOTEL_ID: ${BOOKING_COM_HOTEL_ID}
+      BOOKING_COM_WEBHOOK_SECRET: ${BOOKING_COM_WEBHOOK_SECRET}
+      AIRBNB_ACCESS_TOKEN: ${AIRBNB_ACCESS_TOKEN}
+      AIRBNB_LISTING_ID: ${AIRBNB_LISTING_ID}
+      AIRBNB_WEBHOOK_SECRET: ${AIRBNB_WEBHOOK_SECRET}
+      GATHERN_API_KEY: ${GATHERN_API_KEY}
+      GATHERN_LISTING_ID: ${GATHERN_LISTING_ID}
+      GATHERN_WEBHOOK_SECRET: ${GATHERN_WEBHOOK_SECRET}
+
+  # Dashboard (Next.js)
+  dashboard:
+    build:
+      context: ../../
+      dockerfile: apps/dashboard/Dockerfile
+    container_name: rems-dashboard
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_API_URL: http://api:3000
+      NODE_ENV: development
+    ports:
+      - '3001:3001'
+
+  # Nginx reverse proxy (rate limiting + SSL termination)
+  nginx:
+    image: nginx:alpine
+    container_name: rems-nginx
+    restart: unless-stopped
+    depends_on:
+      - api
+      - dashboard
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../nginx/ssl:/etc/ssl/rems:ro
+
+  # BullBoard — Queue monitoring UI (dev only)
+  bullboard:
+    image: node:20-alpine
+    container_name: rems-bullboard
+    working_dir: /app
+    command: npx @bull-board/cli --redis-url redis://:${REDIS_PASSWORD:-rems_dev_redis}@redis:6379
+    depends_on:
+      - redis
+    ports:
+      - '3002:3000'
+    profiles:
+      - debug
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: rems-network
