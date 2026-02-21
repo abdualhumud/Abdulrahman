@@ -1,176 +1,239 @@
 'use client';
 
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
+import { Icons } from '@/lib/icons';
 import {
   KPI_DATA, MONTHLY_REVENUE, CHANNEL_BREAKDOWN,
-  RECENT_BOOKINGS, CHANNEL_SYNC_STATUS, DAILY_OCCUPANCY, OWNER,
+  RECENT_BOOKINGS, CHANNEL_SYNC_STATUS, OWNER,
 } from '@/lib/mock-data';
+
+const STATUS_STYLE: Record<string, string> = {
+  CONFIRMED:   'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  CHECKED_IN:  'bg-blue-50 text-blue-700 border border-blue-200',
+  CHECKED_OUT: 'bg-slate-100 text-slate-500 border border-slate-200',
+  PENDING:     'bg-amber-50 text-amber-700 border border-amber-200',
+};
+
+function KpiCard({ label, value, sub, trendVal, trendLabel, icon, accent }: {
+  label: string; value: string; sub?: string; trendVal?: number; trendLabel?: string;
+  icon: React.ReactNode; accent: string;
+}) {
+  const up = (trendVal ?? 0) >= 0;
+  return (
+    <div className="card p-5">
+      <div className="flex items-start justify-between mb-3">
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider leading-none">{label}</p>
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: accent + '15', color: accent }}>
+          {icon}
+        </div>
+      </div>
+      <p className="text-[1.6rem] font-extrabold text-slate-900 tracking-tight leading-none">{value}</p>
+      {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
+      {trendVal !== undefined && (
+        <div className={`flex items-center gap-1 mt-3 text-xs font-bold ${up ? 'text-emerald-600' : 'text-red-500'}`}>
+          {up ? <Icons.trendUp size={12} /> : <Icons.trendDown size={12} />}
+          {Math.abs(trendVal)}% {trendLabel}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-slate-100 shadow-xl rounded-xl px-4 py-3 text-left">
+      <p className="text-xs text-slate-400 mb-1 font-medium">{label}</p>
+      <p className="text-base font-bold text-slate-900">SAR {Number(payload[0].value).toLocaleString()}</p>
+    </div>
+  );
+};
 
 export default function OverviewPage() {
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-5 min-h-full">
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Portfolio Overview</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Welcome back, {OWNER.fullName} · February 2026</p>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+            Good morning, {OWNER.fullName.split(' ')[0]} 👋
+          </h1>
+          <p className="text-sm text-slate-400 mt-1">February 2026 — Portfolio at a glance</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 bg-white border border-emerald-100 shadow-sm rounded-xl px-3.5 py-2">
           <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-          <span className="text-sm text-slate-500">All channels synced</span>
+          <span className="text-xs font-semibold text-emerald-700">All channels live</span>
         </div>
       </div>
 
-      {/* KPI Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
-        {[
-          { label: 'Total Revenue', value: `SAR ${KPI_DATA.totalRevenue.toLocaleString()}`, trend: KPI_DATA.revenueTrend, icon: '💵', color: 'emerald' },
-          { label: 'Net Payout', value: `SAR ${KPI_DATA.netPayout.toLocaleString()}`, trend: null, icon: '🏦', color: 'blue' },
-          { label: 'Occupancy', value: `${KPI_DATA.averageOccupancy}%`, trend: KPI_DATA.occupancyTrend, icon: '🛏️', color: 'purple' },
-          { label: 'ADR', value: `SAR ${KPI_DATA.adr.toLocaleString()}`, trend: null, icon: '📊', color: 'amber' },
-          { label: 'RevPAR', value: `SAR ${KPI_DATA.revPAR.toLocaleString()}`, trend: null, icon: '⭐', color: 'rose' },
-          { label: 'Bookings', value: KPI_DATA.totalBookings.toString(), trend: null, icon: '🏷️', color: 'blue' },
-        ].map(kpi => (
-          <div key={kpi.label} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-            <div className="flex items-start justify-between">
-              <p className="text-xs text-slate-500 font-medium">{kpi.label}</p>
-              <span className="text-lg">{kpi.icon}</span>
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        <KpiCard label="Total Revenue" value={`SAR ${KPI_DATA.totalRevenue.toLocaleString()}`}
+          icon={<Icons.financials size={17} />} accent="#3B82F6"
+          trendVal={KPI_DATA.revenueTrend} trendLabel="vs last month" />
+        <KpiCard label="Net Payout" value={`SAR ${KPI_DATA.netPayout.toLocaleString()}`}
+          sub="After fees & commissions"
+          icon={<Icons.download size={17} />} accent="#10B981" />
+        <KpiCard label="Occupancy" value={`${KPI_DATA.averageOccupancy}%`}
+          icon={<Icons.building size={17} />} accent="#8B5CF6"
+          trendVal={KPI_DATA.occupancyTrend} trendLabel="vs last month" />
+        <KpiCard label="ADR" value={`SAR ${KPI_DATA.adr.toLocaleString()}`}
+          sub="Avg. nightly rate"
+          icon={<Icons.analytics size={17} />} accent="#F59E0B" />
+        <KpiCard label="RevPAR" value={`SAR ${KPI_DATA.revPAR.toLocaleString()}`}
+          sub="Per available room"
+          icon={<Icons.trendUp size={17} />} accent="#EC4899" />
+        <KpiCard label="Bookings" value={`${KPI_DATA.totalBookings}`}
+          sub="This period"
+          icon={<Icons.bookings size={17} />} accent="#06B6D4" />
+      </div>
+
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-7 gap-5">
+
+        {/* Revenue area chart */}
+        <div className="lg:col-span-5 card">
+          <div className="px-6 pt-5 pb-0 flex items-start justify-between">
+            <div>
+              <p className="font-bold text-slate-900">Monthly Revenue</p>
+              <p className="text-xs text-slate-400 mt-0.5">Aug 2025 – Mar 2026</p>
             </div>
-            <p className="text-xl font-bold text-slate-900 mt-2">{kpi.value}</p>
-            {kpi.trend !== null && kpi.trend !== undefined && (
-              <p className={`text-xs mt-1 font-semibold ${kpi.trend >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                {kpi.trend >= 0 ? '▲' : '▼'} {Math.abs(kpi.trend)}% vs last period
-              </p>
-            )}
+            <span className="text-xs font-semibold bg-blue-50 text-blue-600 px-2.5 py-1 rounded-full border border-blue-100">SAR</span>
           </div>
-        ))}
-      </div>
-
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Revenue Chart */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-          <h2 className="font-semibold text-slate-800 mb-4">Monthly Revenue (SAR)</h2>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={MONTHLY_REVENUE}>
-              <defs>
-                <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => [`SAR ${v.toLocaleString()}`, 'Revenue']} />
-              <Area type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2.5} fill="url(#revGrad)" />
-            </AreaChart>
-          </ResponsiveContainer>
+          <div className="px-1 pb-3 pt-3">
+            <ResponsiveContainer width="100%" height={190}>
+              <AreaChart data={MONTHLY_REVENUE} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id="rg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"   stopColor="#3B82F6" stopOpacity={0.2} />
+                    <stop offset="100%" stopColor="#3B82F6" stopOpacity={0}   />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false}
+                  tickFormatter={v => `${(v/1000).toFixed(0)}k`} width={34} />
+                <Tooltip content={<CustomTooltip />} />
+                <Area type="monotone" dataKey="revenue" stroke="#3B82F6" strokeWidth={2.5}
+                  fill="url(#rg)" dot={false}
+                  activeDot={{ r: 5, fill: '#3B82F6', stroke: '#fff', strokeWidth: 2 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
-        {/* Channel Pie */}
-        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-          <h2 className="font-semibold text-slate-800 mb-4">Revenue by Channel</h2>
-          <ResponsiveContainer width="100%" height={160}>
+        {/* Channel donut */}
+        <div className="lg:col-span-2 card p-5 flex flex-col gap-4">
+          <div>
+            <p className="font-bold text-slate-900">Revenue Split</p>
+            <p className="text-xs text-slate-400 mt-0.5">By channel</p>
+          </div>
+          <ResponsiveContainer width="100%" height={130}>
             <PieChart>
-              <Pie data={CHANNEL_BREAKDOWN} cx="50%" cy="50%" innerRadius={45} outerRadius={70} dataKey="revenue" paddingAngle={3}>
-                {CHANNEL_BREAKDOWN.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} />
-                ))}
+              <Pie data={CHANNEL_BREAKDOWN} cx="50%" cy="50%" innerRadius={38} outerRadius={58}
+                dataKey="revenue" paddingAngle={4} startAngle={90} endAngle={-270}>
+                {CHANNEL_BREAKDOWN.map((e, i) => <Cell key={i} fill={e.color} />)}
               </Pie>
               <Tooltip formatter={(v: number) => [`SAR ${v.toLocaleString()}`, '']} />
             </PieChart>
           </ResponsiveContainer>
-          <div className="space-y-1.5 mt-2">
+          <div className="space-y-2.5">
             {CHANNEL_BREAKDOWN.map(ch => (
-              <div key={ch.channel} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: ch.color }} />
-                  <span className="text-slate-600">{ch.channel}</span>
-                </div>
-                <span className="font-semibold text-slate-800">{ch.share}%</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Occupancy + Channel Sync */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Occupancy */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-          <h2 className="font-semibold text-slate-800 mb-4">Daily Occupancy Rate (%)</h2>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={DAILY_OCCUPANCY} barSize={14}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="day" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval={1} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
-              <Tooltip formatter={(v: number) => [`${v}%`, 'Occupancy']} />
-              <Bar dataKey="rate" fill="#8b5cf6" radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Sync Status */}
-        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-          <h2 className="font-semibold text-slate-800 mb-4">Channel Sync Status</h2>
-          <div className="space-y-3">
-            {CHANNEL_SYNC_STATUS.map(ch => (
-              <div key={ch.channel} className="flex items-center gap-3 p-3 rounded-lg bg-slate-50">
-                <div className={`w-9 h-9 rounded-lg ${ch.bg} flex items-center justify-center text-lg flex-shrink-0`}>
-                  {ch.logo}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className={`text-sm font-semibold ${ch.color}`}>{ch.channel}</p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${ch.syncMethod.includes('Webhook') ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {ch.syncMethod}
-                    </span>
+              <div key={ch.channel} className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: ch.color }} />
+                <span className="flex-1 text-xs text-slate-500 truncate">{ch.channel}</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-14 bg-slate-100 rounded-full h-1.5">
+                    <div className="h-1.5 rounded-full" style={{ width: `${ch.share}%`, background: ch.color }} />
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5">Last sync: {ch.lastSync}</p>
+                  <span className="text-xs font-bold text-slate-700 w-7 text-right">{ch.share}%</span>
                 </div>
-                <span className="w-2 h-2 bg-emerald-400 rounded-full flex-shrink-0" />
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Recent Bookings */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-        <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
-          <h2 className="font-semibold text-slate-800">Recent Bookings</h2>
-          <span className="text-xs text-blue-600 cursor-pointer hover:underline">View all →</span>
+      {/* Bottom row */}
+      <div className="grid grid-cols-1 lg:grid-cols-7 gap-5">
+
+        {/* Sync status */}
+        <div className="lg:col-span-2 card p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="font-bold text-slate-900">Channel Sync</p>
+            <span className="badge bg-emerald-50 text-emerald-600 border border-emerald-100">Live</span>
+          </div>
+          {CHANNEL_SYNC_STATUS.map(ch => (
+            <div key={ch.channel} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{ background: ch.bg }}>
+                {ch.logo}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slate-800 leading-none">{ch.channel}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{ch.lastSync}</p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${ch.syncMethod.includes('Webhook') ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
+                  {ch.syncMethod.includes('Webhook') ? 'WH' : 'Poll'}
+                </span>
+                <span className="w-2 h-2 bg-emerald-400 rounded-full" />
+              </div>
+            </div>
+          ))}
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-50">
-                {['Booking ID', 'Guest', 'Property', 'Channel', 'Check-in', 'Check-out', 'Nights', 'Amount', 'Status'].map(h => (
-                  <th key={h} className="text-left text-xs font-medium text-slate-400 px-4 py-3">{h}</th>
+
+        {/* Recent Bookings */}
+        <div className="lg:col-span-5 card overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+            <p className="font-bold text-slate-900">Recent Bookings</p>
+            <button className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
+              View all <Icons.chevronRight size={12} />
+            </button>
+          </div>
+          <table className="w-full data-table">
+            <thead className="bg-slate-50/80 border-b border-slate-100">
+              <tr>
+                {['Guest', 'Property', 'Channel', 'Dates', 'Amount', 'Status'].map(h => (
+                  <th key={h}>{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-50">
               {RECENT_BOOKINGS.slice(0, 5).map(b => (
-                <tr key={b.id} className="border-b border-gray-50 hover:bg-slate-50/60 transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-slate-600">{b.id}</td>
-                  <td className="px-4 py-3 font-medium text-slate-800">{b.guest}</td>
-                  <td className="px-4 py-3 text-slate-600 text-xs">{b.property}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: b.channelColor }}>
-                      ● {b.channel}
-                    </span>
+                <tr key={b.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0"
+                        style={{ background: '#EFF6FF', color: '#2563EB' }}>
+                        {b.guest.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-slate-800 text-sm leading-none">{b.guest}</p>
+                        <p className="text-xs text-slate-400 mt-0.5 font-mono">{b.id}</p>
+                      </div>
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-slate-600 text-xs">{b.checkIn}</td>
-                  <td className="px-4 py-3 text-slate-600 text-xs">{b.checkOut}</td>
-                  <td className="px-4 py-3 text-center text-slate-600">{b.nights}</td>
-                  <td className="px-4 py-3 font-semibold text-slate-800">SAR {b.amount.toLocaleString()}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${b.statusColor}`}>{b.status}</span>
+                  <td>
+                    <p className="text-slate-700 text-xs font-medium truncate max-w-[130px]">{b.property}</p>
+                    <p className="text-slate-400 text-xs">{b.unit}</p>
+                  </td>
+                  <td>
+                    <span className="text-xs font-bold" style={{ color: b.channelColor }}>● {b.channel}</span>
+                  </td>
+                  <td>
+                    <p className="text-xs text-slate-600 font-medium">{b.checkIn}</p>
+                    <p className="text-xs text-slate-400">{b.checkOut}</p>
+                  </td>
+                  <td className="font-bold text-slate-900">SAR {b.amount.toLocaleString()}</td>
+                  <td>
+                    <span className={`badge text-xs ${STATUS_STYLE[b.status] ?? 'bg-slate-100 text-slate-500'}`}>
+                      {b.status.replace('_', ' ')}
+                    </span>
                   </td>
                 </tr>
               ))}

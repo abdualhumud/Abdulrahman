@@ -1,143 +1,175 @@
 'use client';
 
 import { useState } from 'react';
+import { Icons } from '@/lib/icons';
 import { INBOX_MESSAGES } from '@/lib/mock-data';
 
 export default function InboxPage() {
-  const [messages, setMessages] = useState(INBOX_MESSAGES);
-  const [selectedId, setSelectedId] = useState<string | null>('m1');
-  const [reply, setReply] = useState('');
+  const [msgs,   setMsgs]   = useState(INBOX_MESSAGES);
+  const [selId,  setSelId]  = useState<string | null>('m1');
+  const [reply,  setReply]  = useState('');
   const [sending, setSending] = useState(false);
-  const [filter, setFilter] = useState('ALL');
+  const [chFilter, setChFilter] = useState('ALL');
 
-  const selected = messages.find(m => m.id === selectedId);
+  const selected = msgs.find(m => m.id === selId);
+  const unread   = msgs.filter(m => !m.isRead).length;
+  const shown    = chFilter === 'ALL' ? msgs : msgs.filter(m => m.channel === chFilter);
 
-  const handleSelect = (id: string) => {
-    setSelectedId(id);
-    setMessages(ms => ms.map(m => m.id === id ? { ...m, isRead: true } : m));
+  const pick = (id: string) => {
+    setSelId(id);
+    setMsgs(ms => ms.map(m => m.id === id ? { ...m, isRead: true } : m));
   };
 
-  const handleSend = async () => {
+  const send = async () => {
     if (!reply.trim()) return;
     setSending(true);
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 900));
     setSending(false);
     setReply('');
   };
 
-  const filtered = filter === 'ALL' ? messages : messages.filter(m => m.channel === filter);
-  const unread = messages.filter(m => !m.isRead).length;
+  const CHANNELS = ['ALL', 'Booking.com', 'Airbnb', 'Gathern'];
 
   return (
-    <div className="flex h-[calc(100vh-0px)] overflow-hidden">
-      {/* List */}
-      <div className="w-80 flex-shrink-0 border-r border-gray-100 bg-white flex flex-col">
-        <div className="p-4 border-b border-gray-100">
+    <div className="flex h-screen overflow-hidden bg-slate-50">
+
+      {/* ── Sidebar list ── */}
+      <div className="w-80 flex-shrink-0 bg-white border-r border-slate-100 flex flex-col">
+
+        {/* Header */}
+        <div className="px-4 pt-5 pb-3 border-b border-slate-50">
           <div className="flex items-center justify-between mb-3">
-            <h1 className="font-bold text-slate-900 text-lg">Unified Inbox</h1>
+            <h1 className="font-extrabold text-slate-900 text-lg tracking-tight">Inbox</h1>
             {unread > 0 && (
               <span className="bg-blue-600 text-white text-xs rounded-full px-2 py-0.5 font-bold">{unread}</span>
             )}
           </div>
-          <select value={filter} onChange={e => setFilter(e.target.value)}
-            className="w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 text-slate-600 focus:outline-none">
-            <option value="ALL">All Channels</option>
-            <option value="Booking.com">Booking.com</option>
-            <option value="Airbnb">Airbnb</option>
-            <option value="Gathern">Gathern</option>
-          </select>
+          {/* Channel filter */}
+          <div className="flex gap-1.5 flex-wrap">
+            {CHANNELS.map(c => (
+              <button key={c} onClick={() => setChFilter(c)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                  chFilter === c ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                }`}>
+                {c === 'ALL' ? 'All' : c}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
-          {filtered.map(msg => (
-            <button key={msg.id} onClick={() => handleSelect(msg.id)}
-              className={`w-full text-left p-4 hover:bg-slate-50 transition-colors ${
-                selectedId === msg.id ? 'bg-blue-50 border-l-2 border-l-blue-500' : ''
-              }`}>
-              <div className="flex items-start gap-2.5">
-                <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0"
-                  style={{ background: msg.channelColor + '22', color: msg.channelColor }}>
+        {/* Message list */}
+        <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
+          {shown.map(msg => (
+            <button key={msg.id} onClick={() => pick(msg.id)}
+              className={`w-full text-left p-4 transition-colors hover:bg-slate-50 relative
+                ${selId === msg.id ? 'bg-blue-50/60' : ''}`}>
+              {selId === msg.id && (
+                <div className="absolute left-0 top-3 bottom-3 w-0.5 bg-blue-500 rounded-full" />
+              )}
+              <div className="flex items-start gap-3 pl-2">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0"
+                  style={{ background: msg.channelColor + '18', color: msg.channelColor }}>
                   {msg.guest.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className={`text-sm truncate ${!msg.isRead ? 'font-bold text-slate-900' : 'font-medium text-slate-600'}`}>
+                  <div className="flex items-center justify-between gap-1">
+                    <p className={`text-sm truncate leading-none ${!msg.isRead ? 'font-bold text-slate-900' : 'font-medium text-slate-600'}`}>
                       {msg.guest}
                     </p>
-                    <span className="text-xs text-slate-400 flex-shrink-0 ml-1">{msg.time}</span>
+                    <span className="text-[10px] text-slate-400 flex-shrink-0">{msg.time}</span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5" style={{ color: msg.channelColor }}>● {msg.channel}</p>
-                  <p className={`text-xs mt-1 truncate ${!msg.isRead ? 'text-slate-700' : 'text-slate-400'}`}>
+                  <p className="text-[11px] font-semibold mt-1" style={{ color: msg.channelColor }}>
+                    ● {msg.channel}
+                  </p>
+                  <p className={`text-xs mt-1 truncate leading-snug ${!msg.isRead ? 'text-slate-600' : 'text-slate-400'}`}>
                     {msg.message}
                   </p>
                 </div>
-                {!msg.isRead && <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1.5" />}
+                {!msg.isRead && (
+                  <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1.5" />
+                )}
               </div>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Detail */}
-      <div className="flex-1 flex flex-col bg-slate-50">
+      {/* ── Message detail ── */}
+      <div className="flex-1 flex flex-col min-w-0">
         {selected ? (
           <>
-            {/* Header */}
-            <div className="bg-white border-b border-gray-100 px-6 py-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold"
-                style={{ background: selected.channelColor + '22', color: selected.channelColor }}>
+            {/* Convo header */}
+            <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center gap-3 flex-shrink-0">
+              <div className="w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm flex-shrink-0"
+                style={{ background: selected.channelColor + '18', color: selected.channelColor }}>
                 {selected.guest.charAt(0)}
               </div>
-              <div>
-                <p className="font-semibold text-slate-900">{selected.guest}</p>
-                <p className="text-xs text-slate-500">
-                  <span style={{ color: selected.channelColor }}>● {selected.channel}</span>
-                  {' · '}{selected.property} · Booking {selected.bookingId}
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-slate-900 leading-none">{selected.guest}</p>
+                <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
+                  <span className="font-semibold" style={{ color: selected.channelColor }}>● {selected.channel}</span>
+                  <span>·</span>
+                  <span>{selected.property}</span>
+                  <span>·</span>
+                  <span className="font-mono">{selected.bookingId}</span>
                 </p>
               </div>
-              <div className="ml-auto flex gap-2">
-                <button className="text-xs border border-gray-200 bg-white hover:bg-slate-50 px-3 py-1.5 rounded-lg text-slate-600 transition-colors">View Booking</button>
-              </div>
+              <button className="btn-ghost text-xs py-1.5 px-3">View Booking</button>
             </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="max-w-xl">
-                <div className="flex items-end gap-2 mb-4">
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0"
-                    style={{ background: selected.channelColor + '22', color: selected.channelColor }}>
-                    {selected.guest.charAt(0)}
-                  </div>
-                  <div className="bg-white border border-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm max-w-sm">
-                    <p className="text-sm text-slate-800">{selected.message}</p>
-                    <p className="text-xs text-slate-400 mt-1.5">{selected.time}</p>
-                  </div>
+            {/* Messages area */}
+            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+              {/* Property info chip */}
+              <div className="flex justify-center">
+                <span className="bg-white border border-slate-100 text-xs text-slate-400 px-3 py-1 rounded-full shadow-sm">
+                  {selected.property} — {selected.time}
+                </span>
+              </div>
+
+              {/* Guest message bubble */}
+              <div className="flex items-end gap-3 max-w-lg">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0"
+                  style={{ background: selected.channelColor + '18', color: selected.channelColor }}>
+                  {selected.guest.charAt(0)}
+                </div>
+                <div className="bg-white border border-slate-100 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
+                  <p className="text-sm text-slate-800 leading-relaxed">{selected.message}</p>
+                  <p className="text-[10px] text-slate-400 mt-2">{selected.time}</p>
                 </div>
               </div>
             </div>
 
-            {/* Reply */}
-            <div className="bg-white border-t border-gray-100 p-4">
+            {/* Reply box */}
+            <div className="bg-white border-t border-slate-100 px-5 py-4 flex-shrink-0">
+              <p className="text-xs text-slate-400 mb-2 font-medium">
+                Replying via <span className="font-bold" style={{ color: selected.channelColor }}>● {selected.channel}</span>
+              </p>
               <div className="flex gap-3 items-end">
-                <div className="flex-1">
-                  <p className="text-xs text-slate-400 mb-1.5">
-                    Reply via <span style={{ color: selected.channelColor }} className="font-semibold">● {selected.channel}</span>
-                  </p>
-                  <textarea value={reply} onChange={e => setReply(e.target.value)}
-                    placeholder={`Message ${selected.guest}...`}
-                    rows={2}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
-                </div>
-                <button onClick={handleSend} disabled={sending || !reply.trim()}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 mb-0.5">
-                  {sending ? '...' : 'Send'}
+                <textarea
+                  value={reply} onChange={e => setReply(e.target.value)}
+                  placeholder={`Message ${selected.guest.split(' ')[0]}…`}
+                  rows={2}
+                  onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) send(); }}
+                  className="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none text-slate-800 placeholder-slate-400 transition-all"
+                />
+                <button onClick={send} disabled={sending || !reply.trim()}
+                  className="btn-primary py-2.5 px-4 disabled:opacity-40 flex-shrink-0">
+                  {sending
+                    ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <Icons.send size={15} />}
+                  {!sending && 'Send'}
                 </button>
               </div>
+              <p className="text-[10px] text-slate-300 mt-1.5">⌘ + Enter to send</p>
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
-            Select a message to view
+          <div className="flex-1 flex flex-col items-center justify-center text-center">
+            <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
+              <Icons.inbox size={28} className="text-slate-300" />
+            </div>
+            <p className="font-semibold text-slate-400">No conversation selected</p>
+            <p className="text-sm text-slate-300 mt-1">Pick a message from the list</p>
           </div>
         )}
       </div>

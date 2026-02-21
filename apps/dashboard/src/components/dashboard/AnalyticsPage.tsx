@@ -2,125 +2,175 @@
 
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { MONTHLY_REVENUE, CHANNEL_BREAKDOWN, DAILY_OCCUPANCY, PROPERTIES } from '@/lib/mock-data';
+import { Icons } from '@/lib/icons';
+import { MONTHLY_REVENUE, CHANNEL_BREAKDOWN, DAILY_OCCUPANCY } from '@/lib/mock-data';
 
-const PROPERTY_METRICS = [
-  { name: 'Riyadh Apt', revpar: 1024, adr: 1248, occ: 82, revenue: 84200 },
-  { name: 'Jeddah Villa', revpar: 1180, adr: 1750, occ: 67, revenue: 91400 },
-  { name: 'Diriyah Chalet', revpar: 780, adr: 1100, occ: 71, revenue: 62300 },
-  { name: 'AlUla Studio', revpar: 640, adr: 900, occ: 71, revenue: 46850 },
+const PROPS = [
+  { name: 'Riyadh Apt.',    city: 'Riyadh', revpar: 1024, adr: 1248, occ: 82,  revenue: 84200,  color: '#3B82F6' },
+  { name: 'Jeddah Villa',   city: 'Jeddah', revpar: 1180, adr: 1750, occ: 67,  revenue: 91400,  color: '#8B5CF6' },
+  { name: 'Diriyah Chalet', city: 'Riyadh', revpar: 780,  adr: 1100, occ: 71,  revenue: 62300,  color: '#F59E0B' },
+  { name: 'AlUla Studio',   city: 'AlUla',  revpar: 640,  adr: 900,  occ: 71,  revenue: 46850,  color: '#10B981' },
 ];
 
-export default function AnalyticsPage() {
+const OCC_COLOR = (v: number) => v >= 80 ? '#10B981' : v >= 65 ? '#F59E0B' : '#EF4444';
+const OCC_BADGE = (v: number) =>
+  v >= 80 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+  v >= 65 ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+            'bg-red-50 text-red-600 border border-red-200';
+const OCC_LABEL = (v: number) => v >= 80 ? 'Excellent' : v >= 65 ? 'Good' : 'Needs attention';
+
+const Tip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Analytics & Reports</h1>
-        <p className="text-slate-500 text-sm mt-0.5">Performance metrics across your portfolio</p>
+    <div className="bg-white border border-slate-100 shadow-xl rounded-xl px-4 py-3">
+      <p className="text-xs text-slate-400 mb-1">{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.name} className="text-sm font-bold" style={{ color: p.color }}>
+          {p.name}: {typeof p.value === 'number' && p.name?.includes('Rev')
+            ? `SAR ${p.value.toLocaleString()}` : p.value}
+        </p>
+      ))}
+    </div>
+  );
+};
+
+export default function AnalyticsPage() {
+  const totalRev = PROPS.reduce((s, p) => s + p.revenue, 0);
+
+  return (
+    <div className="p-6 space-y-5">
+
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Analytics</h1>
+          <p className="text-sm text-slate-400 mt-1">Performance metrics — February 2026</p>
+        </div>
+        <button className="btn-ghost text-xs py-2">
+          <Icons.download size={14} /> Export Report
+        </button>
       </div>
 
-      {/* Property Performance Table */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-        <div className="px-5 py-4 border-b border-gray-50">
-          <h2 className="font-semibold text-slate-800">Property Performance — February 2026</h2>
+      {/* Property Performance */}
+      <div className="card overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+          <p className="font-bold text-slate-900">Property Performance</p>
+          <span className="text-xs text-slate-400">Total: <strong className="text-slate-700">SAR {totalRev.toLocaleString()}</strong></span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-gray-100">
-              <tr>
-                {['Property', 'Revenue (SAR)', 'RevPAR', 'ADR', 'Occupancy', 'Performance'].map(h => (
-                  <th key={h} className="text-left text-xs font-semibold text-slate-500 px-5 py-3">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {PROPERTY_METRICS.map(p => (
-                <tr key={p.name} className="hover:bg-slate-50/50">
-                  <td className="px-5 py-4 font-semibold text-slate-800">{p.name}</td>
-                  <td className="px-5 py-4 font-bold text-slate-900">{p.revenue.toLocaleString()}</td>
-                  <td className="px-5 py-4 text-slate-700">{p.revpar}</td>
-                  <td className="px-5 py-4 text-slate-700">{p.adr}</td>
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-slate-100 rounded-full h-2">
-                        <div className="h-2 rounded-full bg-blue-500" style={{ width: `${p.occ}%` }} />
-                      </div>
-                      <span className="text-slate-700 font-semibold text-xs w-10">{p.occ}%</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                      p.occ >= 80 ? 'bg-emerald-100 text-emerald-700' :
-                      p.occ >= 65 ? 'bg-amber-100 text-amber-700' :
-                      'bg-red-100 text-red-600'
-                    }`}>
-                      {p.occ >= 80 ? 'Excellent' : p.occ >= 65 ? 'Good' : 'Needs Attention'}
-                    </span>
-                  </td>
-                </tr>
+        <table className="w-full data-table">
+          <thead className="bg-slate-50/70 border-b border-slate-100">
+            <tr>
+              {['Property', 'Revenue (SAR)', 'RevPAR', 'ADR', 'Occupancy', 'Rating'].map(h => (
+                <th key={h}>{h}</th>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {PROPS.map(p => (
+              <tr key={p.name} className="hover:bg-slate-50/50 transition-colors">
+                <td>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ background: p.color + '18', color: p.color }}>
+                      <Icons.building size={14} />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-800 leading-none">{p.name}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{p.city}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="font-extrabold text-slate-900">SAR {p.revenue.toLocaleString()}</td>
+                <td className="font-semibold text-slate-700">SAR {p.revpar.toLocaleString()}</td>
+                <td className="font-semibold text-slate-700">SAR {p.adr.toLocaleString()}</td>
+                <td>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden" style={{ minWidth: 60 }}>
+                      <div className="h-2 rounded-full transition-all" style={{ width: `${p.occ}%`, background: OCC_COLOR(p.occ) }} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-700 w-9 flex-shrink-0">{p.occ}%</span>
+                  </div>
+                </td>
+                <td>
+                  <span className={`badge ${OCC_BADGE(p.occ)}`}>{OCC_LABEL(p.occ)}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Revenue vs Bookings */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="font-semibold text-slate-800 mb-4">Revenue vs Bookings (8 months)</h2>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={MONTHLY_REVENUE}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${v/1000}k`} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <Tooltip />
-              <Legend />
-              <Bar yAxisId="left" dataKey="revenue" name="Revenue (SAR)" fill="#3b82f6" radius={[4,4,0,0]} />
-              <Bar yAxisId="right" dataKey="bookings" name="Bookings" fill="#8b5cf6" radius={[4,4,0,0]} />
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="card p-5">
+          <p className="font-bold text-slate-900 mb-1">Revenue & Bookings</p>
+          <p className="text-xs text-slate-400 mb-4">8-month trend</p>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={MONTHLY_REVENUE} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+              <YAxis yAxisId="l" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false}
+                tickFormatter={v => `${v/1000}k`} width={30} />
+              <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} width={24} />
+              <Tooltip content={<Tip />} />
+              <Bar yAxisId="l" dataKey="revenue" name="Revenue (SAR)" fill="#3B82F6" radius={[5,5,0,0]} maxBarSize={24} />
+              <Bar yAxisId="r" dataKey="bookings" name="Bookings" fill="#8B5CF6" radius={[5,5,0,0]} maxBarSize={24} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Occupancy Line */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="font-semibold text-slate-800 mb-4">Daily Occupancy Rate — February</h2>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={DAILY_OCCUPANCY}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="day" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval={2} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
+        <div className="card p-5">
+          <p className="font-bold text-slate-900 mb-1">Daily Occupancy</p>
+          <p className="text-xs text-slate-400 mb-4">February 2026</p>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={DAILY_OCCUPANCY} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+              <XAxis dataKey="day" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} interval={2} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false}
+                tickFormatter={v => `${v}%`} width={30} />
               <Tooltip formatter={(v: number) => [`${v}%`, 'Occupancy']} />
-              <Line type="monotone" dataKey="rate" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 3, fill: '#8b5cf6' }} />
+              <Line type="monotone" dataKey="rate" stroke="#8B5CF6" strokeWidth={2.5}
+                dot={{ r: 3, fill: '#8B5CF6', strokeWidth: 0 }}
+                activeDot={{ r: 5, fill: '#8B5CF6', stroke: '#fff', strokeWidth: 2 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Channel Commission Analysis */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <h2 className="font-semibold text-slate-800 mb-5">Commission Cost Analysis by Channel</h2>
+      {/* Commission breakdown */}
+      <div className="card p-5">
+        <p className="font-bold text-slate-900 mb-1">Commission Analysis</p>
+        <p className="text-xs text-slate-400 mb-5">Gross vs. net revenue after OTA fees</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {CHANNEL_BREAKDOWN.map(ch => (
-            <div key={ch.channel} className="border border-gray-100 rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="w-3 h-3 rounded-full" style={{ background: ch.color }} />
-                <p className="font-semibold text-sm text-slate-800">{ch.channel}</p>
+          {CHANNEL_BREAKDOWN.map(ch => {
+            const net = ch.revenue - ch.commission;
+            const pct = ((ch.commission / ch.revenue) * 100).toFixed(1);
+            return (
+              <div key={ch.channel} className="border border-slate-100 rounded-2xl p-4 hover:shadow-md transition-shadow">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: ch.color }} />
+                  <p className="font-bold text-sm text-slate-800">{ch.channel}</p>
+                </div>
+                <p className="text-xl font-extrabold text-slate-900 leading-none">
+                  SAR {ch.revenue.toLocaleString()}
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">Gross revenue</p>
+                <div className="my-3 border-t border-slate-50" />
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-red-400 font-semibold">Commission ({pct}%)</span>
+                    <span className="text-red-500 font-bold">−SAR {ch.commission.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-emerald-600 font-semibold">Net</span>
+                    <span className="text-emerald-700 font-bold">SAR {net.toLocaleString()}</span>
+                  </div>
+                </div>
               </div>
-              <p className="text-xl font-bold text-slate-900">SAR {ch.revenue.toLocaleString()}</p>
-              <p className="text-xs text-slate-400 mt-0.5">Gross revenue</p>
-              <div className="mt-3 pt-3 border-t border-gray-50">
-                <p className="text-sm font-semibold text-red-500">-SAR {ch.commission.toLocaleString()}</p>
-                <p className="text-xs text-slate-400">Commission paid</p>
-              </div>
-              <div className="mt-2">
-                <p className="text-sm font-bold text-emerald-600">SAR {(ch.revenue - ch.commission).toLocaleString()}</p>
-                <p className="text-xs text-slate-400">Net revenue</p>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
