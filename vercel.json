@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "name": "rems-dashboard",
+  "buildCommand": "cd apps/dashboard && npm install && npm run build",
+  "outputDirectory": "apps/dashboard/.next",
+  "installCommand": "cd apps/dashboard && npm install",
+  "framework": "nextjs",
+  "rootDirectory": "apps/dashboard"
+}
