@@ -3,8 +3,10 @@
 import { useState } from 'react';
 import { Icons } from '@/lib/icons';
 import { INBOX_MESSAGES } from '@/lib/mock-data';
+import { useLang } from '@/lib/language-context';
 
 export default function InboxPage() {
+  const { t } = useLang();
   const [msgs,   setMsgs]   = useState(INBOX_MESSAGES);
   const [selId,  setSelId]  = useState<string | null>('m1');
   const [reply,  setReply]  = useState('');
@@ -34,12 +36,12 @@ export default function InboxPage() {
     <div className="flex h-screen overflow-hidden bg-slate-50">
 
       {/* ── Sidebar list ── */}
-      <div className="w-80 flex-shrink-0 bg-white border-r border-slate-100 flex flex-col">
+      <div className="w-80 flex-shrink-0 bg-white border-e border-slate-100 flex flex-col">
 
         {/* Header */}
         <div className="px-4 pt-5 pb-3 border-b border-slate-50">
           <div className="flex items-center justify-between mb-3">
-            <h1 className="font-extrabold text-slate-900 text-lg tracking-tight">Inbox</h1>
+            <h1 className="font-extrabold text-slate-900 text-lg tracking-tight">{t.inbox.title}</h1>
             {unread > 0 && (
               <span className="bg-blue-600 text-white text-xs rounded-full px-2 py-0.5 font-bold">{unread}</span>
             )}
@@ -51,7 +53,7 @@ export default function InboxPage() {
                 className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
                   chFilter === c ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                 }`}>
-                {c === 'ALL' ? 'All' : c}
+                {c === 'ALL' ? t.inbox.allChannels : c}
               </button>
             ))}
           </div>
@@ -61,12 +63,12 @@ export default function InboxPage() {
         <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
           {shown.map(msg => (
             <button key={msg.id} onClick={() => pick(msg.id)}
-              className={`w-full text-left p-4 transition-colors hover:bg-slate-50 relative
+              className={`w-full text-start p-4 transition-colors hover:bg-slate-50 relative
                 ${selId === msg.id ? 'bg-blue-50/60' : ''}`}>
               {selId === msg.id && (
-                <div className="absolute left-0 top-3 bottom-3 w-0.5 bg-blue-500 rounded-full" />
+                <div className="inbox-active-border absolute start-0 top-3 bottom-3 w-0.5 bg-blue-500 rounded-full" />
               )}
-              <div className="flex items-start gap-3 pl-2">
+              <div className="flex items-start gap-3 ps-2">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0"
                   style={{ background: msg.channelColor + '18', color: msg.channelColor }}>
                   {msg.guest.charAt(0)}
@@ -111,10 +113,10 @@ export default function InboxPage() {
                   <span>·</span>
                   <span>{selected.property}</span>
                   <span>·</span>
-                  <span className="font-mono">{selected.bookingId}</span>
+                  <span className="font-mono" style={{ direction: 'ltr', unicodeBidi: 'embed' }}>{selected.bookingId}</span>
                 </p>
               </div>
-              <button className="btn-ghost text-xs py-1.5 px-3">View Booking</button>
+              <button className="btn-ghost text-xs py-1.5 px-3">{t.inbox.viewBooking}</button>
             </div>
 
             {/* Messages area */}
@@ -132,7 +134,7 @@ export default function InboxPage() {
                   style={{ background: selected.channelColor + '18', color: selected.channelColor }}>
                   {selected.guest.charAt(0)}
                 </div>
-                <div className="bg-white border border-slate-100 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
+                <div className="bg-white border border-slate-100 rounded-2xl rounded-es-sm px-4 py-3 shadow-sm">
                   <p className="text-sm text-slate-800 leading-relaxed">{selected.message}</p>
                   <p className="text-[10px] text-slate-400 mt-2">{selected.time}</p>
                 </div>
@@ -142,25 +144,26 @@ export default function InboxPage() {
             {/* Reply box */}
             <div className="bg-white border-t border-slate-100 px-5 py-4 flex-shrink-0">
               <p className="text-xs text-slate-400 mb-2 font-medium">
-                Replying via <span className="font-bold" style={{ color: selected.channelColor }}>● {selected.channel}</span>
+                {t.inbox.replyVia} <span className="font-bold" style={{ color: selected.channelColor }}>● {selected.channel}</span>
               </p>
               <div className="flex gap-3 items-end">
                 <textarea
                   value={reply} onChange={e => setReply(e.target.value)}
-                  placeholder={`Message ${selected.guest.split(' ')[0]}…`}
+                  placeholder={`${t.inbox.placeholder} ${selected.guest.split(' ')[0]}…`}
                   rows={2}
                   onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) send(); }}
                   className="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none text-slate-800 placeholder-slate-400 transition-all"
+                  style={{ direction: 'ltr' }}
                 />
                 <button onClick={send} disabled={sending || !reply.trim()}
                   className="btn-primary py-2.5 px-4 disabled:opacity-40 flex-shrink-0">
                   {sending
                     ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     : <Icons.send size={15} />}
-                  {!sending && 'Send'}
+                  {!sending && t.common.send}
                 </button>
               </div>
-              <p className="text-[10px] text-slate-300 mt-1.5">⌘ + Enter to send</p>
+              <p className="text-[10px] text-slate-300 mt-1.5">{t.inbox.cmdEnter}</p>
             </div>
           </>
         ) : (
@@ -168,8 +171,8 @@ export default function InboxPage() {
             <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
               <Icons.inbox size={28} className="text-slate-300" />
             </div>
-            <p className="font-semibold text-slate-400">No conversation selected</p>
-            <p className="text-sm text-slate-300 mt-1">Pick a message from the list</p>
+            <p className="font-semibold text-slate-400">{t.inbox.noConvo}</p>
+            <p className="text-sm text-slate-300 mt-1">{t.inbox.pickMsg}</p>
           </div>
         )}
       </div>

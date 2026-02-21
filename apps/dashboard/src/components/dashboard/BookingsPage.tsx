@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { Icons } from '@/lib/icons';
+import { useLang } from '@/lib/language-context';
 import { RECENT_BOOKINGS } from '@/lib/mock-data';
-
-const STATUSES = ['ALL', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'PENDING'];
 
 const STATUS_STYLE: Record<string, string> = {
   CONFIRMED:   'bg-emerald-50 text-emerald-700 border border-emerald-200',
@@ -14,8 +13,10 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 export default function BookingsPage() {
-  const [filter, setFilter]   = useState('ALL');
-  const [search, setSearch]   = useState('');
+  const { t } = useLang();
+  const STATUSES = ['ALL', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'PENDING'];
+  const [filter, setFilter] = useState('ALL');
+  const [search, setSearch] = useState('');
 
   const rows = RECENT_BOOKINGS.filter(b => {
     const s = filter === 'ALL' || b.status === filter;
@@ -27,33 +28,33 @@ export default function BookingsPage() {
   });
 
   const stats = {
-    confirmed:  RECENT_BOOKINGS.filter(b => b.status === 'CONFIRMED').length,
-    checkedIn:  RECENT_BOOKINGS.filter(b => b.status === 'CHECKED_IN').length,
-    pending:    RECENT_BOOKINGS.filter(b => b.status === 'PENDING').length,
-    revenue:    RECENT_BOOKINGS.reduce((s, b) => s + b.amount, 0),
+    confirmed: RECENT_BOOKINGS.filter(b => b.status === 'CONFIRMED').length,
+    checkedIn: RECENT_BOOKINGS.filter(b => b.status === 'CHECKED_IN').length,
+    pending:   RECENT_BOOKINGS.filter(b => b.status === 'PENDING').length,
+    revenue:   RECENT_BOOKINGS.reduce((s, b) => s + b.amount, 0),
+  };
+
+  const filterLabel = (s: string) => {
+    if (s === 'ALL') return t.common.all;
+    return t.status[s as keyof typeof t.status] ?? s.replace('_', ' ');
   };
 
   return (
     <div className="p-6 space-y-5">
-
-      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Bookings</h1>
-          <p className="text-sm text-slate-400 mt-1">{RECENT_BOOKINGS.length} total reservations</p>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">{t.bookings.title}</h1>
+          <p className="text-sm text-slate-400 mt-1">{RECENT_BOOKINGS.length} {t.bookings.subtitle}</p>
         </div>
-        <button className="btn-primary">
-          <Icons.plus size={16} /> New Booking
-        </button>
+        <button className="btn-primary"><Icons.plus size={16} /> {t.bookings.newBooking}</button>
       </div>
 
-      {/* Summary chips */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Confirmed',  value: stats.confirmed, color: 'text-emerald-700', bg: 'bg-emerald-50 border border-emerald-100' },
-          { label: 'Checked In', value: stats.checkedIn, color: 'text-blue-700',    bg: 'bg-blue-50 border border-blue-100' },
-          { label: 'Pending',    value: stats.pending,   color: 'text-amber-700',   bg: 'bg-amber-50 border border-amber-100' },
-          { label: 'Total Revenue', value: `SAR ${stats.revenue.toLocaleString()}`, color: 'text-slate-900', bg: 'bg-white border border-slate-100 shadow-sm' },
+          { label: t.bookings.confirmed,   value: stats.confirmed,                                        color: 'text-emerald-700', bg: 'bg-emerald-50 border border-emerald-100' },
+          { label: t.bookings.checkedIn,   value: stats.checkedIn,                                        color: 'text-blue-700',    bg: 'bg-blue-50 border border-blue-100' },
+          { label: t.bookings.pending,     value: stats.pending,                                          color: 'text-amber-700',   bg: 'bg-amber-50 border border-amber-100' },
+          { label: t.bookings.totalRevenue,value: `${t.common.sar} ${stats.revenue.toLocaleString()}`,   color: 'text-slate-900',   bg: 'bg-white border border-slate-100 shadow-sm' },
         ].map(s => (
           <div key={s.label} className={`rounded-2xl p-4 ${s.bg}`}>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{s.label}</p>
@@ -62,37 +63,31 @@ export default function BookingsPage() {
         ))}
       </div>
 
-      {/* Filters */}
       <div className="card p-4 flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Icons.search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search guest name, booking ID, or property…"
-            className="input pl-9"
-          />
+          <Icons.search size={15} className="absolute start-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder={t.bookings.searchPlaceholder} className="input ps-9" />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Icons.filter size={14} className="text-slate-400 flex-shrink-0" />
           {STATUSES.map(s => (
             <button key={s} onClick={() => setFilter(s)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                filter === s
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                filter === s ? 'bg-slate-900 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
               }`}>
-              {s === 'ALL' ? 'All' : s.replace('_', ' ')}
+              {filterLabel(s)}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Table */}
       <div className="card overflow-hidden">
         <table className="w-full data-table">
           <thead className="bg-slate-50 border-b border-slate-100">
             <tr>
-              {['Booking', 'Guest', 'Property', 'Channel', 'Check-in', 'Check-out', 'Nights', 'Amount', 'Status', ''].map(h => (
+              {[t.table.booking, t.table.guest, t.table.property, t.table.channel,
+                t.table.checkIn, t.table.checkOut, t.table.nights, t.table.amountSAR, t.table.status, ''].map(h => (
                 <th key={h}>{h}</th>
               ))}
             </tr>
@@ -113,21 +108,19 @@ export default function BookingsPage() {
                   <p className="text-slate-700 font-medium text-xs">{b.property}</p>
                   <p className="text-slate-400 text-xs">{b.unit}</p>
                 </td>
-                <td>
-                  <span className="text-xs font-bold" style={{ color: b.channelColor }}>● {b.channel}</span>
-                </td>
-                <td className="text-xs text-slate-600 font-medium">{b.checkIn}</td>
-                <td className="text-xs text-slate-600 font-medium">{b.checkOut}</td>
+                <td><span className="text-xs font-bold" style={{ color: b.channelColor }}>● {b.channel}</span></td>
+                <td className="text-xs text-slate-600 font-mono">{b.checkIn}</td>
+                <td className="text-xs text-slate-600 font-mono">{b.checkOut}</td>
                 <td className="text-center font-semibold text-slate-700">{b.nights}</td>
-                <td className="font-bold text-slate-900">SAR {b.amount.toLocaleString()}</td>
+                <td className="font-bold text-slate-900">{b.amount.toLocaleString()}</td>
                 <td>
                   <span className={`badge ${STATUS_STYLE[b.status] ?? 'bg-slate-100 text-slate-500'}`}>
-                    {b.status.replace('_', ' ')}
+                    {t.status[b.status as keyof typeof t.status] ?? b.status}
                   </span>
                 </td>
                 <td>
                   <button className="opacity-0 group-hover:opacity-100 transition-opacity btn-ghost py-1.5 px-2.5 text-xs">
-                    <Icons.eye size={13} /> View
+                    <Icons.eye size={13} /> {t.bookings.view}
                   </button>
                 </td>
               </tr>
@@ -136,7 +129,7 @@ export default function BookingsPage() {
               <tr>
                 <td colSpan={10} className="py-16 text-center">
                   <p className="text-slate-300 text-3xl mb-2">📭</p>
-                  <p className="text-slate-400 text-sm font-medium">No bookings match your search</p>
+                  <p className="text-slate-400 text-sm font-medium">{t.bookings.noResults}</p>
                 </td>
               </tr>
             )}

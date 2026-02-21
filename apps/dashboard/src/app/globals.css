@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -12,6 +12,33 @@ body {
   color: #0F172A;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Arabic: Cairo font */
+[dir=rtl] body,
+[dir=rtl] button,
+[dir=rtl] input,
+[dir=rtl] textarea,
+[dir=rtl] select,
+[dir=rtl] th,
+[dir=rtl] td,
+[dir=rtl] p,
+[dir=rtl] span,
+[dir=rtl] div,
+[dir=rtl] label {
+  font-family: 'Cairo', ui-sans-serif;
+  letter-spacing: 0;
+}
+[dir=rtl] .recharts-text,
+[dir=rtl] .recharts-cartesian-axis-tick-value {
+  font-family: 'Cairo', sans-serif !important;
+}
+
+/* RTL corrections */
+[dir=rtl] .sidebar-chevron     { transform: scaleX(-1); }
+[dir=rtl] .data-table th,
+[dir=rtl] .data-table td       { text-align: right; }
+[dir=rtl] .inbox-active-border { border-left: none !important; border-right: 2px solid #3B82F6; }
+.font-mono                      { direction: ltr; unicode-bidi: embed; }
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
