@@ -5,9 +5,10 @@ import { Icons } from '@/lib/icons';
 import { OWNER } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
 
-const NAV_IDS = ['overview','calendar','bookings','channels','inbox','analytics','financials'] as const;
+const NAV_IDS = ['overview','properties','calendar','bookings','channels','inbox','analytics','financials'] as const;
 const NAV_ICONS = {
   overview:   Icons.overview,
+  properties: Icons.properties,
   calendar:   Icons.calendar,
   bookings:   Icons.bookings,
   channels:   Icons.channels,

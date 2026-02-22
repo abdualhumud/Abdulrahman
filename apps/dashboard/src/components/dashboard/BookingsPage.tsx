@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
-import { RECENT_BOOKINGS } from '@/lib/mock-data';
+import { RECENT_BOOKINGS, INSURANCE_RECORDS } from '@/lib/mock-data';
 
 const STATUS_STYLE: Record<string, string> = {
   CONFIRMED:   'bg-emerald-50 text-emerald-700 border border-emerald-200',
@@ -87,7 +87,8 @@ export default function BookingsPage() {
           <thead className="bg-slate-50 border-b border-slate-100">
             <tr>
               {[t.table.booking, t.table.guest, t.table.property, t.table.channel,
-                t.table.checkIn, t.table.checkOut, t.table.nights, t.table.amountSAR, t.table.status, ''].map(h => (
+                t.table.checkIn, t.table.checkOut, t.table.nights, t.table.amountSAR, t.table.status,
+                t.insurance.title, ''].map(h => (
                 <th key={h}>{h}</th>
               ))}
             </tr>
@@ -117,6 +118,29 @@ export default function BookingsPage() {
                   <span className={`badge ${STATUS_STYLE[b.status] ?? 'bg-slate-100 text-slate-500'}`}>
                     {t.status[b.status as keyof typeof t.status] ?? b.status}
                   </span>
+                </td>
+                <td>
+                  {(() => {
+                    const ins = INSURANCE_RECORDS.find(r => r.bookingId === b.id);
+                    if (!ins) return <span className="text-slate-300 text-xs">—</span>;
+                    const styleMap: Record<string, string> = {
+                      HELD:               'bg-blue-50 text-blue-700 border border-blue-200',
+                      PENDING_INSPECTION: 'bg-amber-50 text-amber-700 border border-amber-200',
+                      RELEASED:           'bg-emerald-50 text-emerald-700 border border-emerald-200',
+                    };
+                    return (
+                      <div className="flex flex-col gap-0.5">
+                        <span className={`badge text-[10px] flex items-center gap-1 ${styleMap[ins.status]}`}>
+                          <Icons.shield size={10} />
+                          {ins.status === 'HELD' ? t.insurance.depositHeld :
+                           ins.status === 'RELEASED' ? t.insurance.depositReleased : t.insurance.depositPending}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-semibold" style={{ direction: 'ltr' }}>
+                          SAR {ins.depositAmount.toLocaleString()} · {ins.provider}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td>
                   <button className="opacity-0 group-hover:opacity-100 transition-opacity btn-ghost py-1.5 px-2.5 text-xs">

@@ -31,9 +31,28 @@ export default function ChannelsPage() {
         <p className="text-sm text-slate-400 mt-1">{t.channels.subtitle}</p>
       </div>
 
+      {/* Priority badge for Gathern & Booking.com */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t.lang === 'ar' ? 'الأولوية' : 'Priority'}:</span>
+        {['Booking.com','Gathern'].map(ch => (
+          <span key={ch} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border-2 border-blue-200 bg-blue-50 text-blue-700">
+            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" /> {ch}
+          </span>
+        ))}
+        <span className="text-xs text-slate-400">{t.lang === 'ar' ? '— اتصال API مباشر · مزامنة ثنائية الاتجاه' : '— Direct API bridge · 2-way sync (availability, pricing, insurance fee)'}</span>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {CHANNEL_SYNC_STATUS.map(ch => (
-          <div key={ch.channel} className="card p-5">
+        {CHANNEL_SYNC_STATUS.map(ch => {
+          const isPriority = ch.channel === 'Booking.com' || ch.channel === 'Gathern';
+          return (
+          <div key={ch.channel} className={`card p-5 ${isPriority ? 'ring-2 ring-blue-500/20' : ''}`}>
+            {isPriority && (
+              <div className="flex items-center gap-1 mb-2 -mt-1">
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">{t.lang === 'ar' ? 'أولوية' : 'Priority'}</span>
+              </div>
+            )}
             <div className="flex items-center gap-3 mb-5">
               <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0" style={{ background: ch.bg }}>
                 {ch.logo}
@@ -69,8 +88,17 @@ export default function ChannelsPage() {
                 <Icons.refresh size={12} /> {t.channels.forceSync}
               </button>
             </div>
+            {/* Insurance sync indicator */}
+            {isPriority && (
+              <div className="mt-3 pt-3 border-t border-slate-50 flex items-center gap-2">
+                <Icons.shield size={12} className="text-violet-500" />
+                <span className="text-[10px] text-violet-600 font-semibold">
+                  {t.lang === 'ar' ? 'مزامنة رسوم التأمين مفعّلة' : 'Insurance fee sync active'}
+                </span>
+              </div>
+            )}
           </div>
-        ))}
+        );})}
       </div>
 
       {/* Rate Parity */}
