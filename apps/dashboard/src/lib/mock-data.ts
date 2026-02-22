@@ -5,9 +5,16 @@
 export const OWNER = {
   id: 'owner-001',
   fullName: 'Abdulrahman Al-Rashidi',
+  fullNameAr: 'عبدالرحمن الراشدي',
   email: 'abdualhumud@elm.sa',
   currency: 'SAR',
   propertyCount: 4,
+  crNumber: '1010234567',
+  vatNumber: '300012345600003',
+  estNameEn: 'Al-Rashidi Properties',
+  estNameAr: 'شركة الراشدي للعقارات',
+  bankName: 'Al Rajhi Bank',
+  iban: 'SA44 2000 0001 2345 6789 1234',
 };
 
 export const PROPERTIES = [
@@ -232,7 +239,7 @@ export const INBOX_MESSAGES = [
 export const UNITS = [
   {
     id: 'u1', propertyId: 'p1', propertyName: 'Riyadh Luxury Apartment',
-    name: 'Unit A — 3BR Deluxe', type: 'APARTMENT', size: 180, floor: 5,
+    name: 'Unit A — 3BR Deluxe', nameAr: 'الوحدة أ — شقة 3 غرف فاخرة', type: 'APARTMENT', size: 180, floor: 5,
     beds: 3, baths: 2,
     amenities: ['wifi','ac','kitchen','tv','washer','parking','balcony'],
     city: 'Riyadh', district: 'Al-Malaz', street: 'King Fahd Rd', postal: '12345',
@@ -245,7 +252,7 @@ export const UNITS = [
   },
   {
     id: 'u2', propertyId: 'p1', propertyName: 'Riyadh Luxury Apartment',
-    name: 'Unit B — 2BR Classic', type: 'APARTMENT', size: 130, floor: 3,
+    name: 'Unit B — 2BR Classic', nameAr: 'الوحدة ب — شقة 2 غرف كلاسيكية', type: 'APARTMENT', size: 130, floor: 3,
     beds: 2, baths: 2,
     amenities: ['wifi','ac','kitchen','tv','balcony'],
     city: 'Riyadh', district: 'Al-Malaz', street: 'King Fahd Rd', postal: '12345',
@@ -258,7 +265,7 @@ export const UNITS = [
   },
   {
     id: 'u3', propertyId: 'p2', propertyName: 'Jeddah Corniche Villa',
-    name: 'Main Villa — 5BR Sea View', type: 'VILLA', size: 450, floor: 0,
+    name: 'Main Villa — 5BR Sea View', nameAr: 'الفيلا الرئيسية — 5 غرف إطلالة بحرية', type: 'VILLA', size: 450, floor: 0,
     beds: 5, baths: 4,
     amenities: ['wifi','ac','kitchen','tv','washer','parking','pool','balcony'],
     city: 'Jeddah', district: 'Al-Corniche', street: 'Corniche Rd', postal: '23542',
@@ -271,7 +278,7 @@ export const UNITS = [
   },
   {
     id: 'u4', propertyId: 'p3', propertyName: 'Diriyah Heritage Chalet',
-    name: 'Chalet 1 — 4BR Heritage', type: 'CHALET', size: 280, floor: 0,
+    name: 'Chalet 1 — 4BR Heritage', nameAr: 'شاليه 1 — 4 غرف تراثية', type: 'CHALET', size: 280, floor: 0,
     beds: 4, baths: 3,
     amenities: ['wifi','ac','kitchen','tv','parking','balcony'],
     city: 'Riyadh', district: 'Diriyah', street: 'At-Turaif Rd', postal: '13712',
@@ -284,7 +291,7 @@ export const UNITS = [
   },
   {
     id: 'u5', propertyId: 'p3', propertyName: 'Diriyah Heritage Chalet',
-    name: 'Chalet 2 — 3BR Garden', type: 'CHALET', size: 220, floor: 0,
+    name: 'Chalet 2 — 3BR Garden', nameAr: 'شاليه 2 — 3 غرف حديقة', type: 'CHALET', size: 220, floor: 0,
     beds: 3, baths: 2,
     amenities: ['wifi','ac','kitchen','parking'],
     city: 'Riyadh', district: 'Diriyah', street: 'At-Turaif Rd', postal: '13712',
@@ -297,7 +304,7 @@ export const UNITS = [
   },
   {
     id: 'u6', propertyId: 'p4', propertyName: 'AlUla Desert Studio',
-    name: 'Desert Studio — 1BR Eco', type: 'STUDIO', size: 60, floor: 1,
+    name: 'Desert Studio — 1BR Eco', nameAr: 'استوديو الصحراء — غرفة واحدة إيكو', type: 'STUDIO', size: 60, floor: 1,
     beds: 1, baths: 1,
     amenities: ['wifi','ac','tv'],
     city: 'AlUla', district: 'Al-Hijr', street: 'Heritage Blvd', postal: '49326',

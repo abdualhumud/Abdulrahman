@@ -12,8 +12,9 @@ const PAGE_TITLES: Record<string, { en: string; ar: string; icon: keyof typeof i
   cleaning:    { en: 'Cleaning & Housekeeping', ar: 'التنظيف والتدبير', icon: 'cleaning'   },
   inbox:       { en: 'Inbox',              ar: 'صندوق الوارد'       , icon: 'inbox'       },
   analytics:   { en: 'Analytics',          ar: 'التحليلات'          , icon: 'analytics'   },
-  financials:  { en: 'Financials',         ar: 'المالية'            , icon: 'financials'  },
-  properties:  { en: 'Properties & Units', ar: 'العقارات والوحدات'  , icon: 'properties'  },
+  financials:  { en: 'Financials',         ar: 'التقارير المالية'   , icon: 'financials'  },
+  properties:  { en: 'Properties & Units', ar: 'إدارة الأملاك'      , icon: 'properties'  },
+  settings:    { en: 'Settings',           ar: 'الإعدادات'           , icon: 'settings'    },
 };
 
 interface Props {

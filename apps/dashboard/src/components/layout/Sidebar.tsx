@@ -5,7 +5,7 @@ import { Icons } from '@/lib/icons';
 import { OWNER } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
 
-const NAV_IDS = ['overview','properties','calendar','bookings','channels','cleaning','inbox','analytics','financials'] as const;
+const NAV_IDS = ['overview','properties','calendar','bookings','channels','cleaning','inbox','analytics','financials','settings'] as const;
 const NAV_ICONS = {
   overview:   Icons.overview,
   properties: Icons.properties,
@@ -16,6 +16,7 @@ const NAV_ICONS = {
   inbox:      Icons.inbox,
   analytics:  Icons.analytics,
   financials: Icons.financials,
+  settings:   Icons.settings,
 };
 const NAV_BADGES: Record<string, number> = { bookings: 1, inbox: 2, cleaning: 1 };
 
@@ -30,7 +31,7 @@ interface Props { activePage: string; onNavigate: (p: string) => void; }
 
 export default function Sidebar({ activePage, onNavigate }: Props) {
   const [collapsed, setCollapsed] = useState(false);
-  const { t, lang, toggle } = useLang();
+  const { t, lang } = useLang();
 
   return (
     <aside
@@ -111,17 +112,6 @@ export default function Sidebar({ activePage, onNavigate }: Props) {
           </div>
         </div>
       )}
-
-      {/* Language toggle */}
-      <div className="px-3 pb-2 flex-shrink-0">
-        <button
-          onClick={toggle}
-          className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-white/10 text-xs font-bold text-slate-400 hover:text-white hover:bg-white/8 transition-all"
-        >
-          <span className="text-base leading-none">{lang === 'en' ? '🇸🇦' : '🇬🇧'}</span>
-          {!collapsed && <span>{t.nav.switchLang}</span>}
-        </button>
-      </div>
 
       {/* User */}
       <div className="p-3 border-t border-white/5 flex-shrink-0">

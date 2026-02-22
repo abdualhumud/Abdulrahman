@@ -16,8 +16,9 @@ import InboxPage      from '@/components/dashboard/InboxPage';
 import AnalyticsPage  from '@/components/dashboard/AnalyticsPage';
 import FinancialsPage from '@/components/dashboard/FinancialsPage';
 import PropertiesPage from '@/components/dashboard/PropertiesPage';
+import SettingsPage   from '@/components/dashboard/SettingsPage';
 
-type Page = 'overview' | 'properties' | 'bookings' | 'calendar' | 'channels' | 'cleaning' | 'inbox' | 'analytics' | 'financials';
+type Page = 'overview' | 'properties' | 'bookings' | 'calendar' | 'channels' | 'cleaning' | 'inbox' | 'analytics' | 'financials' | 'settings';
 
 function App() {
   const [activePage, setActivePage] = useState<Page>('overview');
@@ -54,6 +55,7 @@ function App() {
       case 'inbox':       return <InboxPage />;
       case 'analytics':   return <AnalyticsPage />;
       case 'financials':  return <FinancialsPage />;
+      case 'settings':    return <SettingsPage />;
       default:            return <OverviewPage onNavigate={navigate} />;
     }
   };

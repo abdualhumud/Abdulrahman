@@ -13,6 +13,19 @@ export default function ChannelsPage() {
   const [pushed,  setPushed]  = useState(false);
   // Per-channel sync state: channelName → 'idle' | 'syncing' | 'done'
   const [syncState, setSyncState] = useState<Record<string, 'idle'|'syncing'|'done'>>({});
+  // Kill switch per channel: true = open/active, false = closed/paused
+  const [killSwitch, setKillSwitch] = useState<Record<string, boolean>>({
+    'Booking.com': true, 'Airbnb': true, 'Gathern': true,
+  });
+  const [killAnimating, setKillAnimating] = useState<Record<string, boolean>>({});
+
+  const toggleKill = (channel: string) => {
+    setKillAnimating(s => ({ ...s, [channel]: true }));
+    setTimeout(() => {
+      setKillSwitch(s => ({ ...s, [channel]: !s[channel] }));
+      setKillAnimating(s => ({ ...s, [channel]: false }));
+    }, 300);
+  };
 
   const forceSync = async (channelName: string) => {
     setSyncState(s => ({ ...s, [channelName]: 'syncing' }));
@@ -58,7 +71,7 @@ export default function ChannelsPage() {
         {CHANNEL_SYNC_STATUS.map(ch => {
           const isPriority = ch.channel === 'Booking.com' || ch.channel === 'Gathern';
           return (
-          <div key={ch.channel} className={`card p-5 ${isPriority ? 'ring-2 ring-blue-500/20' : ''}`}>
+          <div key={ch.channel} className={`card p-5 transition-all ${isPriority ? 'ring-2 ring-blue-500/20' : ''} ${killSwitch[ch.channel] === false ? 'opacity-60 grayscale' : ''}`}>
             {isPriority && (
               <div className="flex items-center gap-1 mb-2 -mt-1">
                 <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
@@ -123,6 +136,35 @@ export default function ChannelsPage() {
                 </span>
               </div>
             )}
+
+            {/* Kill Switch */}
+            <div className="mt-3 pt-3 border-t border-slate-50 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-600">
+                  {t.lang === 'ar' ? 'مفتاح الإيقاف' : 'Kill Switch'}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  {killSwitch[ch.channel]
+                    ? (t.lang === 'ar' ? 'القناة مفتوحة — تقبل الحجوزات' : 'Channel open — accepting bookings')
+                    : (t.lang === 'ar' ? 'القناة مغلقة — لا حجوزات جديدة' : 'Channel closed — no new bookings')}
+                </p>
+              </div>
+              <button
+                onClick={() => toggleKill(ch.channel)}
+                disabled={killAnimating[ch.channel]}
+                className={`relative w-12 h-6 rounded-full transition-all duration-300 flex-shrink-0 focus:outline-none
+                  ${killSwitch[ch.channel] ? 'bg-emerald-500' : 'bg-slate-300'}
+                  ${killAnimating[ch.channel] ? 'opacity-60' : ''}`}
+                title={killSwitch[ch.channel]
+                  ? (t.lang === 'ar' ? 'انقر لإغلاق القناة' : 'Click to close channel')
+                  : (t.lang === 'ar' ? 'انقر لفتح القناة' : 'Click to open channel')}
+              >
+                <span
+                  className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-300
+                    ${killSwitch[ch.channel] ? 'start-6' : 'start-0.5'}`}
+                />
+              </button>
+            </div>
           </div>
         );})}
       </div>

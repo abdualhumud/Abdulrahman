@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Icons } from '@/lib/icons';
 import { UNITS, INSURANCE_RECORDS } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
 import { useJourney } from '@/lib/journey-context';
 import { SAUDI_CITIES, CITY_COORDS, PROPERTY_IMAGES } from '@/lib/saudi-cities';
 
-type Unit = typeof UNITS[number];
+type Unit = typeof UNITS[number] & { nameAr?: string; channelKillSwitch?: Record<string, boolean>; uploadedPhotos?: string[] };
 type InsuranceStatus = 'HELD' | 'PENDING_INSPECTION' | 'RELEASED';
 
 const AMENITY_KEYS = ['wifi','ac','kitchen','tv','washer','parking','pool','balcony'] as const;
@@ -25,23 +25,319 @@ const INS_STYLE: Record<InsuranceStatus, string> = {
   RELEASED:           'bg-emerald-50 text-emerald-700 border border-emerald-200',
 };
 
-/* ── OpenStreetMap iframe (no API key needed) ─────────────────────── */
-function OSMMap({ lat, lng, name }: { lat: number; lng: number; name: string }) {
-  const zoom = 14;
-  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.03},${lat - 0.02},${lng + 0.03},${lat + 0.02}&layer=mapnik&marker=${lat},${lng}`;
+const CHANNEL_COLOR: Record<string, string> = {
+  'Booking.com': '#003580', 'Airbnb': '#FF5A5F', 'Gathern': '#00a651', 'Direct': '#F59E0B',
+};
+
+/* ── Photo Upload Component ───────────────────────────────────────── */
+function PhotoUploader({ photos, onPhotosChange, lang }: {
+  photos: string[]; onPhotosChange: (p: string[]) => void; lang: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const processFiles = (files: FileList | null) => {
+    if (!files) return;
+    const readers: Promise<string>[] = Array.from(files).slice(0, 10 - photos.length).map(
+      file => new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.readAsDataURL(file);
+      })
+    );
+    Promise.all(readers).then(results => onPhotosChange([...photos, ...results]));
+  };
+
+  const removePhoto = (idx: number) => {
+    onPhotosChange(photos.filter((_, i) => i !== idx));
+  };
+
   return (
-    <div className="relative w-full h-44 rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
-      <iframe
-        src={src}
-        title={name}
-        width="100%"
-        height="100%"
-        style={{ border: 0, display: 'block' }}
-        loading="lazy"
-        referrerPolicy="no-referrer"
-      />
-      <div className="absolute bottom-2 start-2 bg-white/90 backdrop-blur-sm rounded-lg px-2.5 py-1 shadow text-xs font-bold text-slate-700 max-w-[160px] truncate pointer-events-none">
-        {name}
+    <div>
+      {/* Drop zone */}
+      <div
+        className={`relative border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all
+          ${dragging ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-blue-400 hover:bg-slate-50'}`}
+        onClick={() => inputRef.current?.click()}
+        onDragOver={e => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={e => { e.preventDefault(); setDragging(false); processFiles(e.dataTransfer.files); }}
+      >
+        <Icons.upload size={24} className="text-slate-300 mx-auto mb-2" />
+        <p className="text-sm font-semibold text-slate-400">
+          {lang === 'ar' ? 'اسحب الصور أو انقر للرفع' : 'Drag photos or click to upload'}
+        </p>
+        <p className="text-xs text-slate-300 mt-1">PNG, JPG up to 10MB · Max 10 photos</p>
+        <input ref={inputRef} type="file" accept="image/*" multiple className="sr-only"
+          onChange={e => processFiles(e.target.files)} />
+      </div>
+
+      {/* Preview grid */}
+      {photos.length > 0 && (
+        <div className="grid grid-cols-4 gap-2 mt-3">
+          {photos.map((src, idx) => (
+            <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden border border-slate-200">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt="" className="w-full h-full object-cover" />
+              <button
+                onClick={() => removePhoto(idx)}
+                className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <Icons.x size={10} />
+              </button>
+              {idx === 0 && (
+                <span className="absolute bottom-0 left-0 right-0 text-center text-[9px] font-bold bg-blue-600 text-white py-0.5">
+                  {lang === 'ar' ? 'الصورة الرئيسية' : 'Cover'}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {photos.length > 0 && (
+        <p className="text-xs text-emerald-600 font-semibold mt-2 flex items-center gap-1">
+          <Icons.camera size={12} /> {photos.length} {lang === 'ar' ? 'صورة مرفوعة' : 'photo(s) uploaded'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* ── Interactive OSM Map with coordinate inputs ───────────────────── */
+function InteractiveMap({ lat, lng, name, onCoordsChange, lang }: {
+  lat: number; lng: number; name: string;
+  onCoordsChange: (lat: number, lng: number) => void;
+  lang: string;
+}) {
+  const [localLat, setLocalLat] = useState(String(lat));
+  const [localLng, setLocalLng] = useState(String(lng));
+  const [mapKey, setMapKey] = useState(0);
+
+  const applyCoords = () => {
+    const newLat = parseFloat(localLat);
+    const newLng = parseFloat(localLng);
+    if (!isNaN(newLat) && !isNaN(newLng)) {
+      onCoordsChange(newLat, newLng);
+      setMapKey(k => k + 1);
+    }
+  };
+
+  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.03},${lat - 0.02},${lng + 0.03},${lat + 0.02}&layer=mapnik&marker=${lat},${lng}`;
+
+  return (
+    <div>
+      {/* Map iframe */}
+      <div className="relative w-full h-44 rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+        <iframe key={mapKey} src={src} title={name} width="100%" height="100%"
+          style={{ border: 0, display: 'block' }} loading="lazy" referrerPolicy="no-referrer" />
+        <div className="absolute bottom-2 start-2 bg-white/90 backdrop-blur-sm rounded-lg px-2.5 py-1 shadow text-xs font-bold text-slate-700 max-w-[160px] truncate pointer-events-none">
+          {name}
+        </div>
+      </div>
+
+      {/* Coordinate inputs */}
+      <div className="flex items-end gap-2 mt-3">
+        <div className="flex-1">
+          <label className="text-xs font-semibold text-slate-500 mb-1 block">
+            {lang === 'ar' ? 'خط العرض' : 'Latitude'}
+          </label>
+          <input
+            type="number" step="0.0001"
+            value={localLat}
+            onChange={e => setLocalLat(e.target.value)}
+            className="input w-full" style={{ direction: 'ltr' }}
+          />
+        </div>
+        <div className="flex-1">
+          <label className="text-xs font-semibold text-slate-500 mb-1 block">
+            {lang === 'ar' ? 'خط الطول' : 'Longitude'}
+          </label>
+          <input
+            type="number" step="0.0001"
+            value={localLng}
+            onChange={e => setLocalLng(e.target.value)}
+            className="input w-full" style={{ direction: 'ltr' }}
+          />
+        </div>
+        <button
+          onClick={applyCoords}
+          className="btn-primary px-4 py-2 flex-shrink-0 flex items-center gap-1.5 text-xs"
+        >
+          <Icons.mapPin size={13} />
+          {lang === 'ar' ? 'تحديث' : 'Update Pin'}
+        </button>
+      </div>
+      <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1">
+        <Icons.mapPin size={11} />
+        {lang === 'ar' ? 'أدخل الإحداثيات لتحريك الدبوس على الخريطة' : 'Enter coordinates above to reposition the map pin'}
+      </p>
+    </div>
+  );
+}
+
+/* ── National Address Auto-fill ───────────────────────────────────── */
+function NationalAddressField({ onAutoFill, lang }: {
+  onAutoFill: (city: string, district: string, street: string, lat: number, lng: number) => void;
+  lang: string;
+}) {
+  const [value, setValue] = useState('');
+  const [status, setStatus] = useState<'idle'|'searching'|'found'|'notfound'>('idle');
+
+  const handleSearch = useCallback(async () => {
+    if (!value.trim()) return;
+    setStatus('searching');
+
+    // Try to match against known Saudi cities/districts from static data
+    const lowerVal = value.toLowerCase();
+    let matched = false;
+    for (const [city, districts] of Object.entries(SAUDI_CITIES)) {
+      if (lowerVal.includes(city.toLowerCase())) {
+        const matchedDistrict = districts.find(d => lowerVal.includes(d.toLowerCase())) ?? districts[0];
+        const coords = CITY_COORDS[city] ?? { lat: 24.7136, lng: 46.6753 };
+        onAutoFill(city, matchedDistrict, '', coords.lat, coords.lng);
+        setStatus('found');
+        matched = true;
+        break;
+      }
+      // Try district match
+      const matchedDist = districts.find(d => lowerVal.includes(d.toLowerCase()));
+      if (matchedDist) {
+        const coords = CITY_COORDS[city] ?? { lat: 24.7136, lng: 46.6753 };
+        onAutoFill(city, matchedDist, '', coords.lat, coords.lng);
+        setStatus('found');
+        matched = true;
+        break;
+      }
+    }
+
+    if (!matched) {
+      // Fallback: try Nominatim geocoding (OpenStreetMap, no API key)
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value + ', Saudi Arabia')}&format=json&limit=1&addressdetails=1`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        const data = await res.json();
+        if (data[0]) {
+          const addr = data[0].address ?? {};
+          const city = addr.city || addr.state || addr.county || 'Riyadh';
+          const district = addr.suburb || addr.neighbourhood || addr.quarter || '';
+          const street = addr.road || '';
+          const lat = parseFloat(data[0].lat);
+          const lng = parseFloat(data[0].lon);
+          onAutoFill(city, district, street, lat, lng);
+          setStatus('found');
+        } else {
+          setStatus('notfound');
+        }
+      } catch {
+        setStatus('notfound');
+      }
+    }
+
+    setTimeout(() => setStatus('idle'), 3000);
+  }, [value, onAutoFill]);
+
+  return (
+    <div className="mb-3">
+      <label className="text-xs font-semibold text-slate-500 mb-1 block">
+        {lang === 'ar' ? 'العنوان الوطني (تعبئة تلقائية)' : 'Saudi National Address (Auto-fill)'}
+      </label>
+      <div className="flex gap-2">
+        <input
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSearch()}
+          className="input flex-1"
+          placeholder={lang === 'ar' ? 'مثال: RYYY1234 أو شارع الملك فهد، الملز' : 'e.g. RYYY1234 or King Fahd Rd, Al-Malaz, Riyadh'}
+        />
+        <button
+          onClick={handleSearch}
+          disabled={status === 'searching'}
+          className="btn-primary px-4 flex-shrink-0 flex items-center gap-1.5 text-xs disabled:opacity-60"
+        >
+          {status === 'searching' ? (
+            <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Icons.search size={13} />
+          )}
+          {lang === 'ar' ? 'بحث' : 'Lookup'}
+        </button>
+      </div>
+      {status === 'found' && (
+        <p className="text-xs text-emerald-600 font-semibold mt-1.5 flex items-center gap-1">
+          <Icons.check size={12} /> {lang === 'ar' ? 'تم تعبئة الموقع تلقائياً' : 'Location auto-filled from address'}
+        </p>
+      )}
+      {status === 'notfound' && (
+        <p className="text-xs text-red-500 font-semibold mt-1.5 flex items-center gap-1">
+          <Icons.alertCircle size={12} /> {lang === 'ar' ? 'لم يتم العثور على العنوان — حدّد الموقع يدوياً' : 'Address not found — set location manually'}
+        </p>
+      )}
+      <p className="text-[11px] text-slate-400 mt-1">
+        {lang === 'ar' ? 'إدخال عنوان معروف يملأ تلقائياً المدينة والحي والإحداثيات' : 'A recognised address auto-populates city, neighbourhood & GPS coords'}
+      </p>
+    </div>
+  );
+}
+
+/* ── Share Unit Modal (URL + QR) ──────────────────────────────────── */
+function ShareUnitModal({ unit, onClose, lang }: { unit: Unit; onClose: () => void; lang: string }) {
+  const shareUrl = `https://abdualhumud.github.io/Abdulrahman/unit/${unit.id}`;
+  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(shareUrl)}&size=200x200&margin=10`;
+  const [copied, setCopied] = useState(false);
+
+  const copyLink = () => {
+    navigator.clipboard?.writeText(shareUrl).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-3xl p-7 w-full max-w-sm shadow-2xl">
+        <div className="flex items-start justify-between mb-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+              <Icons.share size={18} className="text-blue-600" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-slate-900 leading-none">
+                {lang === 'ar' ? 'مشاركة الوحدة' : 'Share Unit'}
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {lang === 'ar' ? (unit.nameAr ?? unit.name) : unit.name}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200">
+            <Icons.x size={15} />
+          </button>
+        </div>
+
+        {/* QR Code */}
+        <div className="flex justify-center mb-5">
+          <div className="p-3 bg-slate-50 border border-slate-100 rounded-2xl">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qrSrc} alt="QR Code" width={160} height={160} className="rounded-xl" />
+          </div>
+        </div>
+
+        {/* URL */}
+        <div className="bg-slate-50 rounded-xl px-4 py-3 mb-4 border border-slate-100 flex items-center gap-2">
+          <Icons.link size={14} className="text-slate-400 flex-shrink-0" />
+          <p className="text-xs text-slate-600 font-mono truncate flex-1" style={{ direction: 'ltr' }}>{shareUrl}</p>
+        </div>
+
+        <button onClick={copyLink}
+          className={`w-full py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all
+            ${copied ? 'bg-emerald-500 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
+          {copied ? <Icons.check size={16} /> : <Icons.link size={16} />}
+          {copied
+            ? (lang === 'ar' ? 'تم النسخ!' : 'Copied!')
+            : (lang === 'ar' ? 'نسخ الرابط' : 'Copy Link')}
+        </button>
       </div>
     </div>
   );
@@ -69,7 +365,6 @@ function InspectionModal({ bookingId, onClose, onRelease }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="bg-white rounded-3xl p-7 w-full max-w-md shadow-2xl">
-        {/* Header */}
         <div className="flex items-start justify-between mb-5">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
@@ -85,7 +380,6 @@ function InspectionModal({ bookingId, onClose, onRelease }: {
           </button>
         </div>
 
-        {/* Insurance provider note */}
         <div className="bg-blue-50 rounded-2xl p-4 mb-5 border border-blue-100">
           <div className="flex items-start gap-2.5">
             <Icons.alertCircle size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
@@ -98,7 +392,6 @@ function InspectionModal({ bookingId, onClose, onRelease }: {
           </div>
         </div>
 
-        {/* Checklist */}
         <div className="space-y-3 mb-6">
           {ITEMS.map(item => (
             <label key={item.key} className="flex items-center gap-3 cursor-pointer group">
@@ -114,7 +407,6 @@ function InspectionModal({ bookingId, onClose, onRelease }: {
           ))}
         </div>
 
-        {/* Progress bar */}
         <div className="mb-5">
           <div className="flex justify-between text-xs text-slate-400 mb-1">
             <span>{lang === 'ar' ? 'التقدم' : 'Progress'}</span>
@@ -126,7 +418,6 @@ function InspectionModal({ bookingId, onClose, onRelease }: {
           </div>
         </div>
 
-        {/* Release button */}
         <button onClick={onRelease} disabled={!allPassed}
           className={`w-full py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all
             ${allPassed ? 'text-white shadow-lg shadow-emerald-500/20 hover:opacity-90' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
@@ -147,11 +438,11 @@ function UnitModal({ unit, onClose, onSave }: {
   const p = t.properties;
 
   const [form, setForm] = useState<Partial<Unit>>(unit ?? {
-    name: '', type: 'APARTMENT', size: 0, floor: 1, beds: 1, baths: 1,
+    name: '', nameAr: '', type: 'APARTMENT', size: 0, floor: 1, beds: 1, baths: 1,
     amenities: [], channels: [], basePrice: 800, weekendSurge: 15,
     seasonalPeak: 1.3, cleaningFee: 100, securityDeposit: 1500, minStay: 2,
     city: 'Riyadh', district: 'Al-Olaya', street: '', lat: 24.7136, lng: 46.6753,
-    insuranceProvider: 'Daman', status: 'ACTIVE', photos: 0,
+    insuranceProvider: 'Daman', status: 'ACTIVE', photos: 0, uploadedPhotos: [],
   });
 
   const setF = (k: keyof Unit, v: unknown) => setForm(f => ({ ...f, [k]: v }));
@@ -167,7 +458,20 @@ function UnitModal({ unit, onClose, onSave }: {
     }));
   };
 
-  const handleDistrictChange = (district: string) => setF('district', district);
+  const handleNatAddressAutoFill = (city: string, district: string, street: string, lat: number, lng: number) => {
+    // Snap city to our known list if possible
+    const knownCity = Object.keys(SAUDI_CITIES).find(c => c.toLowerCase() === city.toLowerCase()) ?? city;
+    const coords = CITY_COORDS[knownCity] ?? { lat, lng };
+    setForm(f => ({
+      ...f,
+      city: knownCity,
+      district: district || (SAUDI_CITIES[knownCity]?.[0] ?? f.district),
+      street: street || f.street,
+      lat: coords.lat,
+      lng: coords.lng,
+    }));
+  };
+
   const toggleAmenity = (a: string) => setF('amenities', form.amenities?.includes(a) ? form.amenities.filter(x => x !== a) : [...(form.amenities ?? []), a]);
   const toggleChannel = (c: string) => setF('channels', form.channels?.includes(c) ? form.channels.filter(x => x !== c) : [...(form.channels ?? []), c]);
 
@@ -206,9 +510,14 @@ function UnitModal({ unit, onClose, onSave }: {
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">{lang === 'ar' ? 'المعلومات الأساسية' : 'Basic Info'}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
-                <label className="text-xs font-semibold text-slate-500 mb-1 block">{p.unitName}</label>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">{p.unitName} (English)</label>
                 <input value={form.name ?? ''} onChange={e => setF('name', e.target.value)}
-                  className="input w-full" placeholder={lang === 'ar' ? 'مثال: شقة 3 غرف — الدور الخامس' : 'e.g. 3BR Deluxe — Floor 5'} />
+                  className="input w-full" placeholder="e.g. 3BR Deluxe — Floor 5" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">{p.unitName} (عربي)</label>
+                <input value={(form as any).nameAr ?? ''} onChange={e => setF('nameAr' as keyof Unit, e.target.value)}
+                  className="input w-full" dir="rtl" placeholder="مثال: شقة 3 غرف فاخرة — الدور الخامس" />
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-500 mb-1 block">{p.unitType}</label>
@@ -248,69 +557,58 @@ function UnitModal({ unit, onClose, onSave }: {
             </div>
           </section>
 
-          {/* Photo upload placeholder */}
+          {/* Photo Upload */}
           <section>
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">{p.unitPhotos}</p>
-            <div className="border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center hover:border-blue-400 transition-colors cursor-pointer">
-              <Icons.upload size={24} className="text-slate-300 mx-auto mb-2" />
-              <p className="text-sm font-semibold text-slate-400">{p.uploadPhotos}</p>
-              <p className="text-xs text-slate-300 mt-1">PNG, JPG up to 10MB</p>
-              {(form.photos ?? 0) > 0 && (
-                <div className="flex items-center justify-center gap-1 mt-2">
-                  <Icons.camera size={14} className="text-blue-500" />
-                  <span className="text-xs font-bold text-blue-600">{form.photos} {lang === 'ar' ? 'صورة مرفوعة' : 'photos uploaded'}</span>
-                </div>
-              )}
-            </div>
+            <PhotoUploader
+              photos={(form as any).uploadedPhotos ?? []}
+              onPhotosChange={urls => setForm(f => ({ ...f, uploadedPhotos: urls, photos: urls.length }))}
+              lang={lang}
+            />
           </section>
 
           {/* Location */}
           <section>
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">{p.location}</p>
+
+            {/* National Address auto-fill */}
+            <NationalAddressField onAutoFill={handleNatAddressAutoFill} lang={lang} />
+
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
-              {/* City dropdown */}
               <div>
                 <label className="text-xs font-semibold text-slate-500 mb-1 block">{lang === 'ar' ? 'المدينة' : 'City'}</label>
-                <select
-                  className="input w-full bg-white"
-                  value={form.city ?? 'Riyadh'}
-                  onChange={e => handleCityChange(e.target.value)}
-                >
+                <select className="input w-full bg-white" value={form.city ?? 'Riyadh'} onChange={e => handleCityChange(e.target.value)}>
                   {Object.keys(SAUDI_CITIES).map(city => (
                     <option key={city} value={city}>{city}</option>
                   ))}
                 </select>
               </div>
-              {/* Neighbourhood dropdown */}
               <div>
                 <label className="text-xs font-semibold text-slate-500 mb-1 block">{lang === 'ar' ? 'الحي' : 'Neighbourhood'}</label>
-                <select
-                  className="input w-full bg-white"
-                  value={form.district ?? ''}
-                  onChange={e => handleDistrictChange(e.target.value)}
-                >
+                <select className="input w-full bg-white" value={form.district ?? ''} onChange={e => setF('district', e.target.value)}>
                   {(SAUDI_CITIES[form.city ?? 'Riyadh'] ?? []).map(n => (
                     <option key={n} value={n}>{n}</option>
                   ))}
                 </select>
               </div>
-              {/* Street */}
               <div>
                 <label className="text-xs font-semibold text-slate-500 mb-1 block">{lang === 'ar' ? 'الشارع' : 'Street'}</label>
                 <input value={form.street ?? ''} onChange={e => setF('street', e.target.value)} className="input w-full" />
               </div>
             </div>
-            <OSMMap lat={form.lat ?? 24.7136} lng={form.lng ?? 46.6753} name={form.name ?? (lang === 'ar' ? 'موقع الوحدة' : 'Unit Location')} />
-            <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
-              <Icons.mapPin size={12} /> {p.locationDesc}
-            </p>
+
+            <InteractiveMap
+              lat={form.lat ?? 24.7136}
+              lng={form.lng ?? 46.6753}
+              name={lang === 'ar' ? ((form as any).nameAr || form.name || 'موقع الوحدة') : (form.name || 'Unit Location')}
+              onCoordsChange={(lat, lng) => setForm(f => ({ ...f, lat, lng }))}
+              lang={lang}
+            />
           </section>
 
           {/* Pricing Engine */}
           <section>
-            <div className="flex items-center gap-2 mb-3">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{p.pricingEngine}</p>
-            </div>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">{p.pricingEngine}</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               {[
                 { label: p.basePrice,       key: 'basePrice',        prefix: 'SAR' },
@@ -362,13 +660,12 @@ function UnitModal({ unit, onClose, onSave }: {
             <div className="flex flex-wrap gap-2">
               {CHANNEL_OPTIONS.map(ch => {
                 const active = form.channels?.includes(ch);
-                const chColor: Record<string, string> = { 'Booking.com': '#003580', 'Airbnb': '#FF5A5F', 'Gathern': '#00a651', 'Direct': '#F59E0B' };
                 return (
                   <button key={ch} onClick={() => toggleChannel(ch)}
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all
                       ${active ? 'text-white' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}
-                    style={active ? { background: chColor[ch], borderColor: chColor[ch] } : {}}>
-                    <span className="w-2 h-2 rounded-full" style={{ background: active ? 'rgba(255,255,255,0.6)' : chColor[ch] }} />
+                    style={active ? { background: CHANNEL_COLOR[ch], borderColor: CHANNEL_COLOR[ch] } : {}}>
+                    <span className="w-2 h-2 rounded-full" style={{ background: active ? 'rgba(255,255,255,0.6)' : CHANNEL_COLOR[ch] }} />
                     {ch}
                   </button>
                 );
@@ -385,8 +682,7 @@ function UnitModal({ unit, onClose, onSave }: {
         {/* Sticky footer */}
         <div className="sticky bottom-0 bg-white/95 backdrop-blur-sm border-t border-slate-100 px-6 py-4 flex gap-3 justify-end">
           <button onClick={onClose} className="btn-ghost px-5">{p.cancel}</button>
-          <button onClick={() => onSave(form)}
-            className="btn-primary px-6">
+          <button onClick={() => onSave(form)} className="btn-primary px-6">
             <Icons.check size={15} /> {p.saveUnit}
           </button>
         </div>
@@ -401,17 +697,30 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
   const { markDone } = useJourney();
   const p = t.properties;
 
-  const [units, setUnits] = useState(UNITS);
+  const [units, setUnits] = useState<Unit[]>(UNITS as Unit[]);
   const [showModal, setShowModal]   = useState(false);
   const [editUnit, setEditUnit]     = useState<Partial<Unit> | undefined>();
   const [inspBkg,  setInspBkg]      = useState<string | null>(null);
   const [released, setReleased]     = useState<Record<string, boolean>>({});
   const [filter, setFilter]         = useState<'ALL'|'ACTIVE'|'MAINTENANCE'>('ALL');
+  const [shareUnit, setShareUnit]   = useState<Unit | null>(null);
+  // Kill switch state per unit per channel
+  const [killSwitches, setKillSwitches] = useState<Record<string, Record<string, boolean>>>({});
+
+  const getKillSwitch = (unitId: string, channel: string) => {
+    return killSwitches[unitId]?.[channel] !== false; // default = open (true)
+  };
+  const toggleKillSwitch = (unitId: string, channel: string) => {
+    setKillSwitches(prev => ({
+      ...prev,
+      [unitId]: {
+        ...(prev[unitId] ?? {}),
+        [channel]: !getKillSwitch(unitId, channel),
+      },
+    }));
+  };
 
   const filtered = filter === 'ALL' ? units : units.filter(u => u.status === filter);
-
-  const getInsurance = (unitName: string) =>
-    INSURANCE_RECORDS.find(r => r.unit === unitName.split('—')[0]?.trim().split(' — ')[0] || r.unit === unitName);
 
   const openAdd  = () => { setEditUnit(undefined); setShowModal(true); };
   const openEdit = (u: Unit) => { setEditUnit(u); setShowModal(true); };
@@ -420,7 +729,7 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
       setUnits(us => us.map(u => u.id === form.id ? { ...u, ...form } as Unit : u));
     } else {
       setUnits(us => [...us, { ...form, id: 'u' + Date.now(), propertyId: 'p1', propertyName: 'New Property', occupancy: 0, revenue: 0, photos: 0, color: '#3B82F6' } as Unit]);
-      markDone(2); // ✅ Journey Step 2: Add Unit
+      markDone(2);
     }
     setShowModal(false);
   };
@@ -447,10 +756,10 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
       {/* KPI row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: lang === 'ar' ? 'إجمالي الوحدات' : 'Total Units',    value: totalUnits,                               icon: <Icons.building size={16} />,    accent: '#3B82F6' },
-          { label: lang === 'ar' ? 'الوحدات النشطة' : 'Active Units',   value: activeUnits,                              icon: <Icons.check size={16} />,       accent: '#10B981' },
-          { label: lang === 'ar' ? 'متوسط الإشغال' : 'Avg Occupancy',  value: `${avgOcc}%`,                             icon: <Icons.analytics size={16} />,   accent: '#8B5CF6' },
-          { label: lang === 'ar' ? 'إجمالي الإيرادات' : 'Total Revenue', value: `SAR ${totalRev.toLocaleString()}`,      icon: <Icons.financials size={16} />,  accent: '#F59E0B' },
+          { label: lang === 'ar' ? 'إجمالي الوحدات' : 'Total Units',    value: totalUnits,                          icon: <Icons.building size={16} />,    accent: '#3B82F6' },
+          { label: lang === 'ar' ? 'الوحدات النشطة' : 'Active Units',   value: activeUnits,                         icon: <Icons.check size={16} />,       accent: '#10B981' },
+          { label: lang === 'ar' ? 'متوسط الإشغال' : 'Avg Occupancy',  value: `${avgOcc}%`,                        icon: <Icons.analytics size={16} />,   accent: '#8B5CF6' },
+          { label: lang === 'ar' ? 'إجمالي الإيرادات' : 'Total Revenue', value: `SAR ${totalRev.toLocaleString()}`, icon: <Icons.financials size={16} />,  accent: '#F59E0B' },
         ].map(s => (
           <div key={s.label} className="card p-5">
             <div className="flex items-start justify-between mb-2">
@@ -481,34 +790,29 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
         {filtered.map(unit => {
           const ins = INSURANCE_RECORDS.find(r => r.bookingId && unit.name.includes(r.unit));
           const insStatus: InsuranceStatus = released[unit.id] ? 'RELEASED' : (ins?.status as InsuranceStatus) ?? 'HELD';
-
-          // Pick a stable image for this unit based on its index
           const unitImages = PROPERTY_IMAGES[unit.type] ?? PROPERTY_IMAGES.APARTMENT;
-          const unitImg = unitImages[units.indexOf(unit) % unitImages.length];
+          const unitImg = (unit as any).uploadedPhotos?.[0] ?? unitImages[units.indexOf(unit) % unitImages.length];
+          const displayName = lang === 'ar' ? ((unit as any).nameAr || unit.name) : unit.name;
 
           return (
             <div key={unit.id} className="card overflow-hidden hover:shadow-lg transition-shadow">
               {/* Property photo */}
               <div className="relative h-36 overflow-hidden bg-slate-100">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={unitImg}
-                  alt={unit.name}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
+                <img src={unitImg} alt={unit.name} className="w-full h-full object-cover" loading="lazy" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                 <div className="absolute bottom-2 start-3 flex items-center gap-1.5">
                   <span className="text-white text-xs font-bold drop-shadow">{unit.city}</span>
                   <span className="text-white/60 text-xs">·</span>
                   <span className="text-white/80 text-xs">{unit.district}</span>
                 </div>
-                <div className="absolute top-2 end-2">
+                <div className="absolute top-2 end-2 flex items-center gap-2">
                   <span className={`badge text-[10px] ${STATUS_STYLE[unit.status]}`}>
                     {unit.status === 'ACTIVE' ? p.active : unit.status === 'MAINTENANCE' ? p.maintenance : p.inactive}
                   </span>
                 </div>
               </div>
+
               {/* Unit header */}
               <div className="px-5 pt-4 pb-4 flex items-start gap-3 border-b border-slate-50">
                 <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
@@ -516,14 +820,22 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
                   <Icons.building size={17} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-extrabold text-slate-900 leading-none">{unit.name}</p>
-                  <p className="text-xs text-slate-400 mt-1">
-                    {unit.beds}BR / {unit.baths}BA · {unit.size}m²
-                  </p>
+                  <p className="font-extrabold text-slate-900 leading-none">{displayName}</p>
+                  <p className="text-xs text-slate-400 mt-1">{unit.beds}BR / {unit.baths}BA · {unit.size}m²</p>
                 </div>
-                <button onClick={() => openEdit(unit)} className="btn-ghost text-xs py-1.5 px-3 flex-shrink-0">
-                  {lang === 'ar' ? 'تعديل' : 'Edit'}
-                </button>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* Share button */}
+                  <button
+                    onClick={() => setShareUnit(unit)}
+                    title={lang === 'ar' ? 'مشاركة' : 'Share'}
+                    className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-blue-100 hover:text-blue-600 transition-all"
+                  >
+                    <Icons.share size={13} />
+                  </button>
+                  <button onClick={() => openEdit(unit)} className="btn-ghost text-xs py-1.5 px-3">
+                    {lang === 'ar' ? 'تعديل' : 'Edit'}
+                  </button>
+                </div>
               </div>
 
               {/* Stats */}
@@ -549,22 +861,41 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
                 </div>
               </div>
 
-              {/* Channels + Insurance */}
-              <div className="px-5 py-3.5 flex items-center justify-between flex-wrap gap-3">
-                {/* Channel dots */}
-                <div className="flex items-center gap-2">
+              {/* Channel Kill Switches */}
+              <div className="px-5 py-3.5 border-b border-slate-50">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5">
+                  {lang === 'ar' ? 'توفر القنوات' : 'Channel Availability'}
+                </p>
+                <div className="flex flex-wrap gap-2">
                   {unit.channels.map(ch => {
-                    const chColor: Record<string, string> = { 'Booking.com': '#003580', 'Airbnb': '#FF5A5F', 'Gathern': '#00a651', 'Direct': '#F59E0B' };
+                    const isOpen = getKillSwitch(unit.id, ch);
                     return (
-                      <span key={ch} title={ch} className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg"
-                        style={{ background: chColor[ch] + '18', color: chColor[ch] }}>
-                        ● {ch}
-                      </span>
+                      <button
+                        key={ch}
+                        onClick={() => toggleKillSwitch(unit.id, ch)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition-all select-none
+                          ${isOpen
+                            ? 'text-white'
+                            : 'bg-slate-50 text-slate-400 border-slate-200'}`}
+                        style={isOpen ? { background: CHANNEL_COLOR[ch], borderColor: CHANNEL_COLOR[ch] } : {}}
+                        title={`${ch}: ${isOpen ? (lang === 'ar' ? 'مفتوح — انقر للإغلاق' : 'Open — click to close') : (lang === 'ar' ? 'مغلق — انقر للفتح' : 'Closed — click to open')}`}
+                      >
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isOpen ? 'bg-white/70' : 'bg-slate-300'}`} />
+                        {ch}
+                        <span className={`text-[9px] ms-0.5 font-bold ${isOpen ? 'opacity-75' : 'text-slate-400'}`}>
+                          {isOpen ? (lang === 'ar' ? '● مفتوح' : '● ON') : (lang === 'ar' ? '○ مغلق' : '○ OFF')}
+                        </span>
+                      </button>
                     );
                   })}
                 </div>
+                <p className="text-[10px] text-slate-400 mt-1.5">
+                  {lang === 'ar' ? 'انقر على أي قناة لفتح أو إغلاق التوفر فوراً' : 'Click any channel to instantly open/close availability'}
+                </p>
+              </div>
 
-                {/* Insurance badge */}
+              {/* Insurance badge */}
+              <div className="px-5 py-3.5 flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-2">
                   <span className={`badge text-[10px] flex items-center gap-1 ${INS_STYLE[insStatus] ?? INS_STYLE.HELD}`}>
                     <Icons.shield size={11} />
@@ -579,9 +910,21 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
                 </div>
               </div>
 
-              {/* OSM Map */}
+              {/* OSM Map (updated dynamically via lat/lng) */}
               <div className="px-5 pb-5">
-                <OSMMap lat={unit.lat} lng={unit.lng} name={unit.name} />
+                <div className="relative w-full h-40 rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+                  <iframe
+                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${unit.lng - 0.03},${unit.lat - 0.02},${unit.lng + 0.03},${unit.lat + 0.02}&layer=mapnik&marker=${unit.lat},${unit.lng}`}
+                    title={unit.name}
+                    width="100%" height="100%"
+                    style={{ border: 0, display: 'block' }}
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute bottom-2 start-2 bg-white/90 backdrop-blur-sm rounded-lg px-2.5 py-1 shadow text-xs font-bold text-slate-700 pointer-events-none">
+                    {unit.city} · {unit.district}
+                  </div>
+                </div>
               </div>
             </div>
           );
@@ -609,7 +952,6 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
           </div>
         </div>
 
-        {/* Insurance records table */}
         <div style={{ direction: 'ltr' }}>
           <table className="w-full data-table">
             <thead className="bg-slate-50/70 border-b border-slate-100">
@@ -650,11 +992,7 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
 
       {/* Modals */}
       {showModal && (
-        <UnitModal
-          unit={editUnit}
-          onClose={() => setShowModal(false)}
-          onSave={handleSave}
-        />
+        <UnitModal unit={editUnit} onClose={() => setShowModal(false)} onSave={handleSave} />
       )}
       {inspBkg && (
         <InspectionModal
@@ -662,6 +1000,9 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
           onClose={() => setInspBkg(null)}
           onRelease={() => { setReleased(r => ({ ...r, [inspBkg]: true })); setInspBkg(null); }}
         />
+      )}
+      {shareUnit && (
+        <ShareUnitModal unit={shareUnit} onClose={() => setShareUnit(null)} lang={lang} />
       )}
     </div>
   );
