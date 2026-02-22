@@ -3,12 +3,24 @@
 import { useState } from 'react';
 import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
+import { useJourney } from '@/lib/journey-context';
 import { CHANNEL_SYNC_STATUS, CHANNEL_BREAKDOWN } from '@/lib/mock-data';
 
 export default function ChannelsPage() {
   const { t } = useLang();
+  const { markDone } = useJourney();
   const [pushing, setPushing] = useState(false);
   const [pushed,  setPushed]  = useState(false);
+  // Per-channel sync state: channelName → 'idle' | 'syncing' | 'done'
+  const [syncState, setSyncState] = useState<Record<string, 'idle'|'syncing'|'done'>>({});
+
+  const forceSync = async (channelName: string) => {
+    setSyncState(s => ({ ...s, [channelName]: 'syncing' }));
+    await new Promise(r => setTimeout(r, 1600));
+    setSyncState(s => ({ ...s, [channelName]: 'done' }));
+    markDone(3); // ✅ Journey Step 3: Connect Channels
+    setTimeout(() => setSyncState(s => ({ ...s, [channelName]: 'idle' })), 3000);
+  };
   const [form, setForm] = useState({
     dateFrom: '2026-03-01', dateTo: '2026-03-31',
     price: '1350', minStay: '2',
@@ -82,10 +94,24 @@ export default function ChannelsPage() {
             </div>
             <div className="flex items-center justify-between pt-3 border-t border-slate-50">
               <p className="text-xs text-slate-400">
-                {t.channels.lastSync}: <span className="font-semibold text-slate-600">{ch.lastSync}</span>
+                {t.channels.lastSync}:{' '}
+                <span className="font-semibold text-slate-600">
+                  {syncState[ch.channel] === 'done' ? 'just now' : ch.lastSync}
+                </span>
               </p>
-              <button className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors">
-                <Icons.refresh size={12} /> {t.channels.forceSync}
+              <button
+                onClick={() => forceSync(ch.channel)}
+                disabled={syncState[ch.channel] === 'syncing'}
+                className="flex items-center gap-1 text-xs font-bold transition-colors disabled:opacity-60
+                  text-blue-600 hover:text-blue-700"
+              >
+                {syncState[ch.channel] === 'syncing' ? (
+                  <><span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /> Syncing…</>
+                ) : syncState[ch.channel] === 'done' ? (
+                  <><Icons.check size={12} className="text-emerald-500" /> Synced</>
+                ) : (
+                  <><Icons.refresh size={12} /> {t.channels.forceSync}</>
+                )}
               </button>
             </div>
             {/* Insurance sync indicator */}

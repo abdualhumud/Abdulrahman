@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Icons } from '@/lib/icons';
 import { UNITS, INSURANCE_RECORDS } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
+import { useJourney } from '@/lib/journey-context';
 import { SAUDI_CITIES, CITY_COORDS, PROPERTY_IMAGES } from '@/lib/saudi-cities';
 
 type Unit = typeof UNITS[number];
@@ -397,6 +398,7 @@ function UnitModal({ unit, onClose, onSave }: {
 /* ── Main Page ────────────────────────────────────────────────────── */
 export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { t, lang } = useLang();
+  const { markDone } = useJourney();
   const p = t.properties;
 
   const [units, setUnits] = useState(UNITS);
@@ -418,6 +420,7 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
       setUnits(us => us.map(u => u.id === form.id ? { ...u, ...form } as Unit : u));
     } else {
       setUnits(us => [...us, { ...form, id: 'u' + Date.now(), propertyId: 'p1', propertyName: 'New Property', occupancy: 0, revenue: 0, photos: 0, color: '#3B82F6' } as Unit]);
+      markDone(2); // ✅ Journey Step 2: Add Unit
     }
     setShowModal(false);
   };

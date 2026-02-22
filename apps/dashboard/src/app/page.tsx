@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { LanguageProvider } from '@/lib/language-context';
-import { JourneyProvider }  from '@/lib/journey-context';
+import { JourneyProvider, useJourney } from '@/lib/journey-context';
 import Sidebar        from '@/components/layout/Sidebar';
 import TopBar         from '@/components/layout/TopBar';
 import JourneyBanner  from '@/components/layout/JourneyBanner';
@@ -22,8 +22,8 @@ type Page = 'overview' | 'properties' | 'bookings' | 'calendar' | 'channels' | '
 function App() {
   const [activePage, setActivePage] = useState<Page>('overview');
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const { markDone } = useJourney();
 
-  // Show onboarding once per session (localStorage key)
   useEffect(() => {
     const done = localStorage.getItem('rems-onboarding-done');
     if (!done) setShowOnboarding(true);
@@ -31,6 +31,7 @@ function App() {
 
   const completeOnboarding = () => {
     localStorage.setItem('rems-onboarding-done', '1');
+    markDone(1);                  // ✅ Journey Step 1: Register
     setShowOnboarding(false);
     setActivePage('properties');
   };
@@ -39,13 +40,12 @@ function App() {
 
   // Called when a booking checkout triggers a cleaning request
   const handleCheckoutCleaning = (_unit: string, _bookingId: string) => {
-    // Navigate to cleaning page to show the new request
     setActivePage('cleaning');
   };
 
   const renderPage = () => {
     switch (activePage) {
-      case 'overview':    return <OverviewPage />;
+      case 'overview':    return <OverviewPage onNavigate={navigate} />;
       case 'properties':  return <PropertiesPage onNavigate={navigate} />;
       case 'bookings':    return <BookingsPage onCheckoutCleaning={handleCheckoutCleaning} />;
       case 'calendar':    return <CalendarPage />;
@@ -54,30 +54,30 @@ function App() {
       case 'inbox':       return <InboxPage />;
       case 'analytics':   return <AnalyticsPage />;
       case 'financials':  return <FinancialsPage />;
-      default:            return <OverviewPage />;
+      default:            return <OverviewPage onNavigate={navigate} />;
     }
   };
 
   if (showOnboarding) return <OnboardingPage onComplete={completeOnboarding} />;
 
   return (
-    <JourneyProvider>
-      <div className="flex h-screen bg-slate-50 overflow-hidden">
-        <Sidebar activePage={activePage} onNavigate={navigate} />
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <TopBar activePage={activePage} onNavigate={navigate} />
-          <JourneyBanner onNavigate={navigate} />
-          <main className="flex-1 overflow-auto">{renderPage()}</main>
-        </div>
+    <div className="flex h-screen bg-slate-50 overflow-hidden">
+      <Sidebar activePage={activePage} onNavigate={navigate} />
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <TopBar activePage={activePage} onNavigate={navigate} />
+        <JourneyBanner onNavigate={navigate} />
+        <main className="flex-1 overflow-auto">{renderPage()}</main>
       </div>
-    </JourneyProvider>
+    </div>
   );
 }
 
 export default function Home() {
   return (
     <LanguageProvider>
-      <App />
+      <JourneyProvider>
+        <App />
+      </JourneyProvider>
     </LanguageProvider>
   );
 }

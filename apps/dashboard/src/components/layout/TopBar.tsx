@@ -42,10 +42,14 @@ export default function TopBar({ activePage, onNavigate }: Props) {
       {/* Right cluster */}
       <div className="flex items-center gap-2 flex-shrink-0">
 
-        {/* Notifications dot */}
-        <button className="relative w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">
+        {/* Notifications → inbox */}
+        <button
+          onClick={() => onNavigate('inbox')}
+          title={lang === 'ar' ? 'صندوق الوارد' : 'Inbox'}
+          className="relative w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
+        >
           <Icons.inbox size={16} />
-          <span className="absolute top-1 end-1 w-2 h-2 bg-red-500 rounded-full border border-white" />
+          <span className="absolute top-1 end-1 w-2 h-2 bg-red-500 rounded-full border border-white animate-pulse" />
         </button>
 
         {/* Quick-add */}

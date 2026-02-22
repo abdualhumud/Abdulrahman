@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
-import { CALENDAR_EVENTS, RECENT_BOOKINGS } from '@/lib/mock-data';
+import { CALENDAR_EVENTS, RECENT_BOOKINGS, INSURANCE_RECORDS, CLEANING_REQUESTS } from '@/lib/mock-data';
 
 const DAYS  = Array.from({ length: 28 }, (_, i) => i + 1);
 const TODAY = 22;
@@ -29,6 +29,27 @@ export default function CalendarPage() {
   const selectedBooking = selected
     ? RECENT_BOOKINGS.find(b => b.guest === selected.guest)
     : null;
+
+  const selectedInsurance = selectedBooking
+    ? INSURANCE_RECORDS.find(r => r.bookingId === selectedBooking.id)
+    : null;
+
+  const selectedCleaning = selectedBooking
+    ? CLEANING_REQUESTS.find(r => r.bookingId === selectedBooking.id)
+    : null;
+
+  const INS_STYLE: Record<string, string> = {
+    HELD:               'bg-blue-100 text-blue-700',
+    PENDING_INSPECTION: 'bg-amber-100 text-amber-700',
+    RELEASED:           'bg-emerald-100 text-emerald-700',
+  };
+  const CLEAN_STYLE: Record<string, string> = {
+    PENDING:         'bg-amber-100 text-amber-700',
+    ASSIGNED:        'bg-blue-100 text-blue-700',
+    IN_PROGRESS:     'bg-purple-100 text-purple-700',
+    COMPLETED:       'bg-orange-100 text-orange-700',
+    INSPECTION_DONE: 'bg-emerald-100 text-emerald-700',
+  };
 
   const chStyle = selected ? (CHANNELS[selected.channel] ?? { bg: '#F1F5F9', text: '#475569', dot: '#94A3B8' }) : null;
 
@@ -196,7 +217,7 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            {/* Booking details from RECENT_BOOKINGS if matched */}
+            {/* Booking details */}
             {selectedBooking && (
               <>
                 <div>
@@ -221,6 +242,71 @@ export default function CalendarPage() {
                   <p className="text-xs font-mono text-slate-500">{selectedBooking.id}</p>
                 </div>
               </>
+            )}
+
+            {/* Insurance Status */}
+            {selectedInsurance && (
+              <div className="pt-3 border-t border-slate-100">
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <Icons.shield size={10} /> {t.insurance.title}
+                </p>
+                <div className="bg-slate-50 rounded-xl p-3 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500">Provider</span>
+                    <span className="text-xs font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full">
+                      {selectedInsurance.provider}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500">Deposit</span>
+                    <span className="text-xs font-bold text-slate-900" style={{ direction: 'ltr' }}>
+                      SAR {selectedInsurance.depositAmount.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500">Status</span>
+                    <span className={`badge text-[10px] ${INS_STYLE[selectedInsurance.status] ?? ''}`}>
+                      {selectedInsurance.status === 'HELD' ? t.insurance.depositHeld :
+                       selectedInsurance.status === 'RELEASED' ? t.insurance.depositReleased :
+                       t.insurance.depositPending}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Cleaning History */}
+            {selectedCleaning && (
+              <div className="pt-3 border-t border-slate-100">
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <Icons.cleaning size={10} /> {t.cleaning.title}
+                </p>
+                <div className="bg-slate-50 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500">Status</span>
+                    <span className={`badge text-[10px] ${CLEAN_STYLE[selectedCleaning.status] ?? ''}`}>
+                      {t.cleaning[`status_${selectedCleaning.status}` as keyof typeof t.cleaning]}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500">Provider</span>
+                    <span className="text-xs font-semibold text-slate-700">
+                      {selectedCleaning.providerType === 'INTERNAL' ? t.cleaning.internal : t.cleaning.external}
+                    </span>
+                  </div>
+                  {/* Last chat message */}
+                  {selectedCleaning.messages.length > 0 && (
+                    <div className="mt-1 px-2 py-1.5 bg-white rounded-lg border border-slate-100">
+                      <p className="text-[10px] text-slate-400 mb-0.5">
+                        {selectedCleaning.messages[selectedCleaning.messages.length - 1].from}
+                      </p>
+                      <p className="text-[11px] text-slate-700 leading-snug line-clamp-2">
+                        {selectedCleaning.messages[selectedCleaning.messages.length - 1].text}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
           </div>
 
