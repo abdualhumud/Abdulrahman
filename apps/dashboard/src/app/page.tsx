@@ -2,19 +2,22 @@
 
 import { useState, useEffect } from 'react';
 import { LanguageProvider } from '@/lib/language-context';
+import { JourneyProvider }  from '@/lib/journey-context';
 import Sidebar        from '@/components/layout/Sidebar';
 import TopBar         from '@/components/layout/TopBar';
+import JourneyBanner  from '@/components/layout/JourneyBanner';
 import OnboardingPage from '@/components/dashboard/OnboardingPage';
 import OverviewPage   from '@/components/dashboard/OverviewPage';
 import BookingsPage   from '@/components/dashboard/BookingsPage';
 import CalendarPage   from '@/components/dashboard/CalendarPage';
 import ChannelsPage   from '@/components/dashboard/ChannelsPage';
+import CleaningPage   from '@/components/dashboard/CleaningPage';
 import InboxPage      from '@/components/dashboard/InboxPage';
 import AnalyticsPage  from '@/components/dashboard/AnalyticsPage';
 import FinancialsPage from '@/components/dashboard/FinancialsPage';
 import PropertiesPage from '@/components/dashboard/PropertiesPage';
 
-type Page = 'overview' | 'properties' | 'bookings' | 'calendar' | 'channels' | 'inbox' | 'analytics' | 'financials';
+type Page = 'overview' | 'properties' | 'bookings' | 'calendar' | 'channels' | 'cleaning' | 'inbox' | 'analytics' | 'financials';
 
 function App() {
   const [activePage, setActivePage] = useState<Page>('overview');
@@ -34,13 +37,20 @@ function App() {
 
   const navigate = (p: string) => setActivePage(p as Page);
 
+  // Called when a booking checkout triggers a cleaning request
+  const handleCheckoutCleaning = (_unit: string, _bookingId: string) => {
+    // Navigate to cleaning page to show the new request
+    setActivePage('cleaning');
+  };
+
   const renderPage = () => {
     switch (activePage) {
       case 'overview':    return <OverviewPage />;
       case 'properties':  return <PropertiesPage onNavigate={navigate} />;
-      case 'bookings':    return <BookingsPage />;
+      case 'bookings':    return <BookingsPage onCheckoutCleaning={handleCheckoutCleaning} />;
       case 'calendar':    return <CalendarPage />;
       case 'channels':    return <ChannelsPage />;
+      case 'cleaning':    return <CleaningPage />;
       case 'inbox':       return <InboxPage />;
       case 'analytics':   return <AnalyticsPage />;
       case 'financials':  return <FinancialsPage />;
@@ -51,13 +61,16 @@ function App() {
   if (showOnboarding) return <OnboardingPage onComplete={completeOnboarding} />;
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
-      <Sidebar activePage={activePage} onNavigate={navigate} />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <TopBar activePage={activePage} onNavigate={navigate} />
-        <main className="flex-1 overflow-auto">{renderPage()}</main>
+    <JourneyProvider>
+      <div className="flex h-screen bg-slate-50 overflow-hidden">
+        <Sidebar activePage={activePage} onNavigate={navigate} />
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <TopBar activePage={activePage} onNavigate={navigate} />
+          <JourneyBanner onNavigate={navigate} />
+          <main className="flex-1 overflow-auto">{renderPage()}</main>
+        </div>
       </div>
-    </div>
+    </JourneyProvider>
   );
 }
 

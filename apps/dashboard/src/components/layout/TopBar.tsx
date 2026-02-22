@@ -9,6 +9,7 @@ const PAGE_TITLES: Record<string, { en: string; ar: string; icon: keyof typeof i
   calendar:    { en: 'Master Calendar',     ar: 'التقويم الرئيسي'   , icon: 'calendar'    },
   bookings:    { en: 'Bookings',            ar: 'الحجوزات'           , icon: 'bookings'    },
   channels:    { en: 'Channel Manager',     ar: 'مدير القنوات'       , icon: 'channels'    },
+  cleaning:    { en: 'Cleaning & Housekeeping', ar: 'التنظيف والتدبير', icon: 'cleaning'   },
   inbox:       { en: 'Inbox',              ar: 'صندوق الوارد'       , icon: 'inbox'       },
   analytics:   { en: 'Analytics',          ar: 'التحليلات'          , icon: 'analytics'   },
   financials:  { en: 'Financials',         ar: 'المالية'            , icon: 'financials'  },

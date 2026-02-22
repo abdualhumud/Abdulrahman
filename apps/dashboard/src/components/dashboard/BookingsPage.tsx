@@ -12,14 +12,24 @@ const STATUS_STYLE: Record<string, string> = {
   PENDING:     'bg-amber-50 text-amber-700 border border-amber-200',
 };
 
-export default function BookingsPage() {
+interface Props {
+  onCheckoutCleaning?: (unitName: string, bookingId: string) => void;
+}
+
+export default function BookingsPage({ onCheckoutCleaning }: Props) {
   const { t } = useLang();
   const STATUSES = ['ALL', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'PENDING'];
   const [filter, setFilter] = useState('ALL');
   const [search, setSearch] = useState('');
+  const [localStatuses, setLocalStatuses] = useState<Record<string, string>>({});
+  const [justCheckedOut, setJustCheckedOut] = useState<string | null>(null);
+
+  const getStatus = (b: typeof RECENT_BOOKINGS[number]) =>
+    localStatuses[b.id] ?? b.status;
 
   const rows = RECENT_BOOKINGS.filter(b => {
-    const s = filter === 'ALL' || b.status === filter;
+    const st = getStatus(b);
+    const s = filter === 'ALL' || st === filter;
     const q = !search ||
       b.guest.toLowerCase().includes(search.toLowerCase()) ||
       b.id.toLowerCase().includes(search.toLowerCase()) ||
@@ -28,9 +38,9 @@ export default function BookingsPage() {
   });
 
   const stats = {
-    confirmed: RECENT_BOOKINGS.filter(b => b.status === 'CONFIRMED').length,
-    checkedIn: RECENT_BOOKINGS.filter(b => b.status === 'CHECKED_IN').length,
-    pending:   RECENT_BOOKINGS.filter(b => b.status === 'PENDING').length,
+    confirmed: RECENT_BOOKINGS.filter(b => getStatus(b) === 'CONFIRMED').length,
+    checkedIn: RECENT_BOOKINGS.filter(b => getStatus(b) === 'CHECKED_IN').length,
+    pending:   RECENT_BOOKINGS.filter(b => getStatus(b) === 'PENDING').length,
     revenue:   RECENT_BOOKINGS.reduce((s, b) => s + b.amount, 0),
   };
 
@@ -38,6 +48,16 @@ export default function BookingsPage() {
     if (s === 'ALL') return t.common.all;
     return t.status[s as keyof typeof t.status] ?? s.replace('_', ' ');
   };
+
+  function handleCheckOut(b: typeof RECENT_BOOKINGS[number]) {
+    setLocalStatuses(prev => ({ ...prev, [b.id]: 'CHECKED_OUT' }));
+    setJustCheckedOut(b.id);
+    // Auto-trigger cleaning request notification
+    if (onCheckoutCleaning) {
+      onCheckoutCleaning(b.unit, b.id);
+    }
+    setTimeout(() => setJustCheckedOut(null), 3000);
+  }
 
   return (
     <div className="p-6 space-y-5">
@@ -48,6 +68,23 @@ export default function BookingsPage() {
         </div>
         <button className="btn-primary"><Icons.plus size={16} /> {t.bookings.newBooking}</button>
       </div>
+
+      {/* Checkout notification banner */}
+      {justCheckedOut && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-2xl">
+          <Icons.cleaning size={16} className="text-blue-600 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-bold text-blue-800">{t.cleaning.autoTrigger}</p>
+            <p className="text-xs text-blue-600">{t.cleaning.status_PENDING} — {t.cleaning.unitHidden}</p>
+          </div>
+          <button
+            onClick={() => onCheckoutCleaning?.('', justCheckedOut)}
+            className="text-xs font-bold text-blue-700 underline underline-offset-2 hover:text-blue-900"
+          >
+            {t.cleaning.title} →
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
@@ -94,64 +131,79 @@ export default function BookingsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {rows.map(b => (
-              <tr key={b.id} className="hover:bg-slate-50/60 transition-colors group">
-                <td className="font-mono text-xs text-slate-500 font-semibold">{b.id}</td>
-                <td>
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 bg-indigo-50 text-indigo-600">
-                      {b.guest.charAt(0)}
-                    </div>
-                    <span className="font-semibold text-slate-800">{b.guest}</span>
-                  </div>
-                </td>
-                <td>
-                  <p className="text-slate-700 font-medium text-xs">{b.property}</p>
-                  <p className="text-slate-400 text-xs">{b.unit}</p>
-                </td>
-                <td><span className="text-xs font-bold" style={{ color: b.channelColor }}>● {b.channel}</span></td>
-                <td className="text-xs text-slate-600 font-mono">{b.checkIn}</td>
-                <td className="text-xs text-slate-600 font-mono">{b.checkOut}</td>
-                <td className="text-center font-semibold text-slate-700">{b.nights}</td>
-                <td className="font-bold text-slate-900">{b.amount.toLocaleString()}</td>
-                <td>
-                  <span className={`badge ${STATUS_STYLE[b.status] ?? 'bg-slate-100 text-slate-500'}`}>
-                    {t.status[b.status as keyof typeof t.status] ?? b.status}
-                  </span>
-                </td>
-                <td>
-                  {(() => {
-                    const ins = INSURANCE_RECORDS.find(r => r.bookingId === b.id);
-                    if (!ins) return <span className="text-slate-300 text-xs">—</span>;
-                    const styleMap: Record<string, string> = {
-                      HELD:               'bg-blue-50 text-blue-700 border border-blue-200',
-                      PENDING_INSPECTION: 'bg-amber-50 text-amber-700 border border-amber-200',
-                      RELEASED:           'bg-emerald-50 text-emerald-700 border border-emerald-200',
-                    };
-                    return (
-                      <div className="flex flex-col gap-0.5">
-                        <span className={`badge text-[10px] flex items-center gap-1 ${styleMap[ins.status]}`}>
-                          <Icons.shield size={10} />
-                          {ins.status === 'HELD' ? t.insurance.depositHeld :
-                           ins.status === 'RELEASED' ? t.insurance.depositReleased : t.insurance.depositPending}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-semibold" style={{ direction: 'ltr' }}>
-                          SAR {ins.depositAmount.toLocaleString()} · {ins.provider}
-                        </span>
+            {rows.map(b => {
+              const st = getStatus(b);
+              return (
+                <tr key={b.id} className={`hover:bg-slate-50/60 transition-colors group ${justCheckedOut === b.id ? 'bg-blue-50/40' : ''}`}>
+                  <td className="font-mono text-xs text-slate-500 font-semibold">{b.id}</td>
+                  <td>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 bg-indigo-50 text-indigo-600">
+                        {b.guest.charAt(0)}
                       </div>
-                    );
-                  })()}
-                </td>
-                <td>
-                  <button className="opacity-0 group-hover:opacity-100 transition-opacity btn-ghost py-1.5 px-2.5 text-xs">
-                    <Icons.eye size={13} /> {t.bookings.view}
-                  </button>
-                </td>
-              </tr>
-            ))}
+                      <span className="font-semibold text-slate-800">{b.guest}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <p className="text-slate-700 font-medium text-xs">{b.property}</p>
+                    <p className="text-slate-400 text-xs">{b.unit}</p>
+                  </td>
+                  <td><span className="text-xs font-bold" style={{ color: b.channelColor }}>● {b.channel}</span></td>
+                  <td className="text-xs text-slate-600 font-mono">{b.checkIn}</td>
+                  <td className="text-xs text-slate-600 font-mono">{b.checkOut}</td>
+                  <td className="text-center font-semibold text-slate-700">{b.nights}</td>
+                  <td className="font-bold text-slate-900">{b.amount.toLocaleString()}</td>
+                  <td>
+                    <span className={`badge ${STATUS_STYLE[st] ?? 'bg-slate-100 text-slate-500'}`}>
+                      {t.status[st as keyof typeof t.status] ?? st}
+                    </span>
+                  </td>
+                  <td>
+                    {(() => {
+                      const ins = INSURANCE_RECORDS.find(r => r.bookingId === b.id);
+                      if (!ins) return <span className="text-slate-300 text-xs">—</span>;
+                      const styleMap: Record<string, string> = {
+                        HELD:               'bg-blue-50 text-blue-700 border border-blue-200',
+                        PENDING_INSPECTION: 'bg-amber-50 text-amber-700 border border-amber-200',
+                        RELEASED:           'bg-emerald-50 text-emerald-700 border border-emerald-200',
+                      };
+                      return (
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`badge text-[10px] flex items-center gap-1 ${styleMap[ins.status]}`}>
+                            <Icons.shield size={10} />
+                            {ins.status === 'HELD' ? t.insurance.depositHeld :
+                             ins.status === 'RELEASED' ? t.insurance.depositReleased : t.insurance.depositPending}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-semibold" style={{ direction: 'ltr' }}>
+                            SAR {ins.depositAmount.toLocaleString()} · {ins.provider}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </td>
+                  <td>
+                    <div className="flex items-center gap-1.5">
+                      <button className="opacity-0 group-hover:opacity-100 transition-opacity btn-ghost py-1.5 px-2.5 text-xs">
+                        <Icons.eye size={13} /> {t.bookings.view}
+                      </button>
+                      {/* Check Out button — only for CHECKED_IN */}
+                      {st === 'CHECKED_IN' && (
+                        <button
+                          onClick={() => handleCheckOut(b)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500 text-white text-xs font-bold hover:bg-amber-600"
+                        >
+                          <Icons.arrowRight size={12} />
+                          Check Out
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-16 text-center">
+                <td colSpan={11} className="py-16 text-center">
                   <p className="text-slate-300 text-3xl mb-2">📭</p>
                   <p className="text-slate-400 text-sm font-medium">{t.bookings.noResults}</p>
                 </td>

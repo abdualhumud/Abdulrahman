@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Icons } from '@/lib/icons';
 import { UNITS, INSURANCE_RECORDS } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
+import { SAUDI_CITIES, CITY_COORDS, PROPERTY_IMAGES } from '@/lib/saudi-cities';
 
 type Unit = typeof UNITS[number];
 type InsuranceStatus = 'HELD' | 'PENDING_INSPECTION' | 'RELEASED';
@@ -23,33 +24,23 @@ const INS_STYLE: Record<InsuranceStatus, string> = {
   RELEASED:           'bg-emerald-50 text-emerald-700 border border-emerald-200',
 };
 
-/* ── Map placeholder (no API key needed) ─────────────────────────── */
-function MapPlaceholder({ lat, lng, name }: { lat: number; lng: number; name: string }) {
+/* ── OpenStreetMap iframe (no API key needed) ─────────────────────── */
+function OSMMap({ lat, lng, name }: { lat: number; lng: number; name: string }) {
+  const zoom = 14;
+  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.03},${lat - 0.02},${lng + 0.03},${lat + 0.02}&layer=mapnik&marker=${lat},${lng}`;
   return (
-    <div className="relative w-full h-40 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 flex items-center justify-center">
-      {/* Grid pattern mimicking a map */}
-      <svg className="absolute inset-0 w-full h-full opacity-20" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#94A3B8" strokeWidth="0.5"/>
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#grid)"/>
-      </svg>
-      {/* Roads */}
-      <svg className="absolute inset-0 w-full h-full opacity-30">
-        <line x1="50%" y1="0" x2="50%" y2="100%" stroke="#64748B" strokeWidth="8"/>
-        <line x1="0" y1="50%" x2="100%" y2="50%" stroke="#64748B" strokeWidth="8"/>
-        <line x1="25%" y1="0" x2="25%" y2="100%" stroke="#94A3B8" strokeWidth="3"/>
-        <line x1="75%" y1="0" x2="75%" y2="100%" stroke="#94A3B8" strokeWidth="3"/>
-      </svg>
-      {/* Pin */}
-      <div className="relative z-10 flex flex-col items-center gap-1">
-        <div className="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-600/40 ring-4 ring-blue-600/20">
-          <Icons.mapPin size={18} className="text-white" />
-        </div>
-        <div className="bg-white rounded-lg px-2 py-1 shadow-md text-xs font-bold text-slate-800 max-w-[140px] truncate">{name}</div>
-        <p className="text-[10px] text-slate-500 font-mono" style={{ direction: 'ltr' }}>{lat.toFixed(4)}, {lng.toFixed(4)}</p>
+    <div className="relative w-full h-44 rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+      <iframe
+        src={src}
+        title={name}
+        width="100%"
+        height="100%"
+        style={{ border: 0, display: 'block' }}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+      />
+      <div className="absolute bottom-2 start-2 bg-white/90 backdrop-blur-sm rounded-lg px-2.5 py-1 shadow text-xs font-bold text-slate-700 max-w-[160px] truncate pointer-events-none">
+        {name}
       </div>
     </div>
   );
@@ -158,11 +149,24 @@ function UnitModal({ unit, onClose, onSave }: {
     name: '', type: 'APARTMENT', size: 0, floor: 1, beds: 1, baths: 1,
     amenities: [], channels: [], basePrice: 800, weekendSurge: 15,
     seasonalPeak: 1.3, cleaningFee: 100, securityDeposit: 1500, minStay: 2,
-    city: '', district: '', street: '', lat: 24.7136, lng: 46.6753,
+    city: 'Riyadh', district: 'Al-Olaya', street: '', lat: 24.7136, lng: 46.6753,
     insuranceProvider: 'Daman', status: 'ACTIVE', photos: 0,
   });
 
   const setF = (k: keyof Unit, v: unknown) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleCityChange = (city: string) => {
+    const coords = CITY_COORDS[city];
+    setForm(f => ({
+      ...f,
+      city,
+      district: SAUDI_CITIES[city]?.[0] ?? '',
+      lat: coords?.lat ?? f.lat,
+      lng: coords?.lng ?? f.lng,
+    }));
+  };
+
+  const handleDistrictChange = (district: string) => setF('district', district);
   const toggleAmenity = (a: string) => setF('amenities', form.amenities?.includes(a) ? form.amenities.filter(x => x !== a) : [...(form.amenities ?? []), a]);
   const toggleChannel = (c: string) => setF('channels', form.channels?.includes(c) ? form.channels.filter(x => x !== c) : [...(form.channels ?? []), c]);
 
@@ -263,18 +267,39 @@ function UnitModal({ unit, onClose, onSave }: {
           <section>
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">{p.location}</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
-              {[
-                { label: lang === 'ar' ? 'المدينة' : 'City',     key: 'city' },
-                { label: lang === 'ar' ? 'الحي' : 'District',    key: 'district' },
-                { label: lang === 'ar' ? 'الشارع' : 'Street',    key: 'street' },
-              ].map(f => (
-                <div key={f.key}>
-                  <label className="text-xs font-semibold text-slate-500 mb-1 block">{f.label}</label>
-                  <input value={(form as any)[f.key] ?? ''} onChange={e => setF(f.key as keyof Unit, e.target.value)} className="input w-full" />
-                </div>
-              ))}
+              {/* City dropdown */}
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">{lang === 'ar' ? 'المدينة' : 'City'}</label>
+                <select
+                  className="input w-full bg-white"
+                  value={form.city ?? 'Riyadh'}
+                  onChange={e => handleCityChange(e.target.value)}
+                >
+                  {Object.keys(SAUDI_CITIES).map(city => (
+                    <option key={city} value={city}>{city}</option>
+                  ))}
+                </select>
+              </div>
+              {/* Neighbourhood dropdown */}
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">{lang === 'ar' ? 'الحي' : 'Neighbourhood'}</label>
+                <select
+                  className="input w-full bg-white"
+                  value={form.district ?? ''}
+                  onChange={e => handleDistrictChange(e.target.value)}
+                >
+                  {(SAUDI_CITIES[form.city ?? 'Riyadh'] ?? []).map(n => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </div>
+              {/* Street */}
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">{lang === 'ar' ? 'الشارع' : 'Street'}</label>
+                <input value={form.street ?? ''} onChange={e => setF('street', e.target.value)} className="input w-full" />
+              </div>
             </div>
-            <MapPlaceholder lat={form.lat ?? 24.7136} lng={form.lng ?? 46.6753} name={form.name ?? (lang === 'ar' ? 'موقع الوحدة' : 'Unit Location')} />
+            <OSMMap lat={form.lat ?? 24.7136} lng={form.lng ?? 46.6753} name={form.name ?? (lang === 'ar' ? 'موقع الوحدة' : 'Unit Location')} />
             <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
               <Icons.mapPin size={12} /> {p.locationDesc}
             </p>
@@ -454,24 +479,42 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
           const ins = INSURANCE_RECORDS.find(r => r.bookingId && unit.name.includes(r.unit));
           const insStatus: InsuranceStatus = released[unit.id] ? 'RELEASED' : (ins?.status as InsuranceStatus) ?? 'HELD';
 
+          // Pick a stable image for this unit based on its index
+          const unitImages = PROPERTY_IMAGES[unit.type] ?? PROPERTY_IMAGES.APARTMENT;
+          const unitImg = unitImages[units.indexOf(unit) % unitImages.length];
+
           return (
             <div key={unit.id} className="card overflow-hidden hover:shadow-lg transition-shadow">
+              {/* Property photo */}
+              <div className="relative h-36 overflow-hidden bg-slate-100">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={unitImg}
+                  alt={unit.name}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                <div className="absolute bottom-2 start-3 flex items-center gap-1.5">
+                  <span className="text-white text-xs font-bold drop-shadow">{unit.city}</span>
+                  <span className="text-white/60 text-xs">·</span>
+                  <span className="text-white/80 text-xs">{unit.district}</span>
+                </div>
+                <div className="absolute top-2 end-2">
+                  <span className={`badge text-[10px] ${STATUS_STYLE[unit.status]}`}>
+                    {unit.status === 'ACTIVE' ? p.active : unit.status === 'MAINTENANCE' ? p.maintenance : p.inactive}
+                  </span>
+                </div>
+              </div>
               {/* Unit header */}
-              <div className="px-5 pt-5 pb-4 flex items-start gap-3 border-b border-slate-50">
+              <div className="px-5 pt-4 pb-4 flex items-start gap-3 border-b border-slate-50">
                 <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
                   style={{ background: unit.color + '18', color: unit.color }}>
                   <Icons.building size={17} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-extrabold text-slate-900 leading-none">{unit.name}</p>
-                    <span className={`badge text-[10px] ${STATUS_STYLE[unit.status]}`}>
-                      {unit.status === 'ACTIVE' ? p.active : unit.status === 'MAINTENANCE' ? p.maintenance : p.inactive}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                    <Icons.mapPin size={11} /> {unit.city} · {unit.district}
-                    <span className="mx-1">·</span>
+                  <p className="font-extrabold text-slate-900 leading-none">{unit.name}</p>
+                  <p className="text-xs text-slate-400 mt-1">
                     {unit.beds}BR / {unit.baths}BA · {unit.size}m²
                   </p>
                 </div>
@@ -533,9 +576,9 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
                 </div>
               </div>
 
-              {/* Map mini */}
+              {/* OSM Map */}
               <div className="px-5 pb-5">
-                <MapPlaceholder lat={unit.lat} lng={unit.lng} name={unit.name} />
+                <OSMMap lat={unit.lat} lng={unit.lng} name={unit.name} />
               </div>
             </div>
           );

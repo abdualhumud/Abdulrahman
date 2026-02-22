@@ -5,18 +5,19 @@ import { Icons } from '@/lib/icons';
 import { OWNER } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
 
-const NAV_IDS = ['overview','properties','calendar','bookings','channels','inbox','analytics','financials'] as const;
+const NAV_IDS = ['overview','properties','calendar','bookings','channels','cleaning','inbox','analytics','financials'] as const;
 const NAV_ICONS = {
   overview:   Icons.overview,
   properties: Icons.properties,
   calendar:   Icons.calendar,
   bookings:   Icons.bookings,
   channels:   Icons.channels,
+  cleaning:   Icons.cleaning,
   inbox:      Icons.inbox,
   analytics:  Icons.analytics,
   financials: Icons.financials,
 };
-const NAV_BADGES: Record<string, number> = { bookings: 1, inbox: 2 };
+const NAV_BADGES: Record<string, number> = { bookings: 1, inbox: 2, cleaning: 1 };
 
 const PROPS_QUICK = [
   { name: { en: 'Riyadh Apt.',    ar: 'شقة الرياض'    }, occ: 82, color: '#10B981' },
