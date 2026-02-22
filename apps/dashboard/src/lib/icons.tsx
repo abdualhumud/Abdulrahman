@@ -43,4 +43,11 @@ export const Icons = {
   globe:       (p: IconProps) => <Icon size={p.size} className={p.className} d={['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z','M2 12h20','M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z']} />,
   bank:        (p: IconProps) => <Icon size={p.size} className={p.className} d={['M3 21h18','M3 10h18','M5 6l7-3 7 3','M4 10v11','M20 10v11','M8 14v3','M12 14v3','M16 14v3']} />,
   creditCard:  (p: IconProps) => <Icon size={p.size} className={p.className} d={['M1 4h22v16H1z','M1 10h22']} />,
+  cleaning:    (p: IconProps) => <Icon size={p.size} className={p.className} d={['M3 22l6.5-6.5','M15 8l1 1','M4 12l1.5-1.5','M20.5 3.5a2.121 2.121 0 0 0-3 0L6 15l3 3 11.5-11.5a2.121 2.121 0 0 0 0-3z']} />,
+  sparkles:    (p: IconProps) => <Icon size={p.size} className={p.className} d={['M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z','M19 15l.75 2.25L22 18l-2.25.75L19 21l-.75-2.25L16 18l2.25-.75z','M5 3l.75 2.25L8 6l-2.25.75L5 9l-.75-2.25L2 6l2.25-.75z']} />,
+  truck:       (p: IconProps) => <Icon size={p.size} className={p.className} d={['M1 3h15v13H1z','M16 8h4l3 3v5h-7V8z','M5.5 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z','M18.5 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z']} />,
+  userCheck:   (p: IconProps) => <Icon size={p.size} className={p.className} d={['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2','M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z','M16 11l2 2 4-4']} />,
+  zap:         (p: IconProps) => <Icon size={p.size} className={p.className} d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />,
+  arrowRight:  (p: IconProps) => <Icon size={p.size} className={p.className} d={['M5 12h14','M12 5l7 7-7 7']} />,
+  flag:        (p: IconProps) => <Icon size={p.size} className={p.className} d={['M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z','M4 22v-7']} />,
 };

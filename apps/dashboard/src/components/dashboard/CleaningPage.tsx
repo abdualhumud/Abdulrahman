@@ -1,0 +1,432 @@
+'use client';
+
+import { useState } from 'react';
+import { Icons } from '@/lib/icons';
+import { useLang } from '@/lib/language-context';
+import {
+  CLEANING_REQUESTS, CLEANING_PROVIDERS,
+  type CleaningStatus,
+} from '@/lib/mock-data';
+
+type ProviderFilter = 'ALL' | 'INTERNAL' | 'EXTERNAL';
+
+const STATUS_ORDER: CleaningStatus[] = [
+  'PENDING', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'INSPECTION_DONE',
+];
+
+const STATUS_COLOR: Record<CleaningStatus, string> = {
+  PENDING:         'bg-amber-100 text-amber-700',
+  ASSIGNED:        'bg-blue-100 text-blue-700',
+  IN_PROGRESS:     'bg-purple-100 text-purple-700',
+  COMPLETED:       'bg-orange-100 text-orange-700',
+  INSPECTION_DONE: 'bg-emerald-100 text-emerald-700',
+};
+
+const STATUS_DOT: Record<CleaningStatus, string> = {
+  PENDING:         'bg-amber-400',
+  ASSIGNED:        'bg-blue-500',
+  IN_PROGRESS:     'bg-purple-500',
+  COMPLETED:       'bg-orange-400',
+  INSPECTION_DONE: 'bg-emerald-500',
+};
+
+export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: (unitName: string) => void }) {
+  const { t, lang } = useLang();
+  const tc = t.cleaning;
+
+  // Local mutable state built from mock (so actions work without a backend)
+  const [requests, setRequests] = useState(
+    CLEANING_REQUESTS.map(r => ({ ...r, messages: [...r.messages] }))
+  );
+  const [selectedId, setSelectedId]     = useState<string>(CLEANING_REQUESTS[0].id);
+  const [providerFilter, setFilter]     = useState<ProviderFilter>('ALL');
+  const [chatInput, setChatInput]       = useState('');
+  const [showAssign, setShowAssign]     = useState(false);
+
+  const selected = requests.find(r => r.id === selectedId)!;
+
+  // ── KPIs ────────────────────────────────────────────────────────────────
+  const activeCount    = requests.filter(r => r.status !== 'INSPECTION_DONE').length;
+  const completedCount = CLEANING_PROVIDERS.reduce((s, p) => s + p.completedToday, 0);
+  const onlineCount    = CLEANING_PROVIDERS.filter(p => p.available).length;
+
+  // ── Actions ─────────────────────────────────────────────────────────────
+  function advanceStatus(id: string) {
+    setRequests(prev => prev.map(r => {
+      if (r.id !== id) return r;
+      const idx = STATUS_ORDER.indexOf(r.status);
+      const next = STATUS_ORDER[Math.min(idx + 1, STATUS_ORDER.length - 1)];
+      const sysMsg = {
+        ASSIGNED:        `✅ Provider assigned. Status → Assigned.`,
+        IN_PROGRESS:     `🧹 Cleaning started. Unit hidden from OTA channels.`,
+        COMPLETED:       `✅ Cleaning marked complete. Awaiting inspection.`,
+        INSPECTION_DONE: `✅ Inspection passed. Deposit SAR ${r.depositAmount.toLocaleString()} queued for release.`,
+      }[next as string];
+      return {
+        ...r,
+        status: next,
+        messages: sysMsg
+          ? [...r.messages, { from: 'SYSTEM', text: sysMsg, time: new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' }) }]
+          : r.messages,
+      };
+    }));
+  }
+
+  function assignProvider(requestId: string, providerId: string) {
+    const provider = CLEANING_PROVIDERS.find(p => p.id === providerId)!;
+    setRequests(prev => prev.map(r => {
+      if (r.id !== requestId) return r;
+      return {
+        ...r,
+        providerId,
+        providerType: provider.type,
+        status: 'ASSIGNED' as CleaningStatus,
+        messages: [
+          ...r.messages,
+          { from: 'SYSTEM', text: `📋 ${provider.name} assigned to ${r.unitName}.`, time: new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' }) },
+        ],
+      };
+    }));
+    setShowAssign(false);
+  }
+
+  function sendMessage() {
+    if (!chatInput.trim()) return;
+    const msg = chatInput.trim();
+    setChatInput('');
+    setRequests(prev => prev.map(r => {
+      if (r.id !== selectedId) return r;
+      return {
+        ...r,
+        messages: [...r.messages, { from: 'MANAGER', text: msg, time: new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' }) }],
+      };
+    }));
+  }
+
+  // ── Filtered providers for assign modal ─────────────────────────────────
+  const filteredProviders = CLEANING_PROVIDERS.filter(p =>
+    providerFilter === 'ALL' || p.type === providerFilter
+  );
+
+  const assignedProvider = selected?.providerId
+    ? CLEANING_PROVIDERS.find(p => p.id === selected.providerId)
+    : null;
+
+  // ── Next action label ───────────────────────────────────────────────────
+  function nextActionLabel(status: CleaningStatus): string {
+    return {
+      PENDING:         tc.startCleaning,
+      ASSIGNED:        tc.startCleaning,
+      IN_PROGRESS:     tc.markDone,
+      COMPLETED:       tc.runInspection,
+      INSPECTION_DONE: tc.releaseDeposit,
+    }[status];
+  }
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden bg-slate-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+
+      {/* ── Header ───────────────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 bg-white border-b border-slate-100 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-extrabold text-slate-900">{tc.title}</h1>
+            <p className="text-xs text-slate-500 mt-0.5">{tc.subtitle}</p>
+          </div>
+          <button
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20"
+            onClick={() => {/* future: open new request modal */}}
+          >
+            <Icons.plus size={14} />
+            {tc.newRequest}
+          </button>
+        </div>
+
+        {/* KPI strip */}
+        <div className="grid grid-cols-4 gap-3 mt-4">
+          {[
+            { icon: Icons.cleaning,   label: tc.activeReq,       value: activeCount,    color: 'text-blue-600',    bg: 'bg-blue-50'    },
+            { icon: Icons.sparkles,   label: tc.completedToday,  value: completedCount, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+            { icon: Icons.clock,      label: tc.avgDuration,     value: '48 min',       color: 'text-purple-600',  bg: 'bg-purple-50'  },
+            { icon: Icons.userCheck,  label: tc.providersOnline, value: `${onlineCount}/${CLEANING_PROVIDERS.length}`, color: 'text-amber-600', bg: 'bg-amber-50' },
+          ].map(({ icon: Icon, label, value, color, bg }) => (
+            <div key={label} className="flex items-center gap-3 bg-white rounded-xl px-4 py-3 border border-slate-100">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${bg}`}>
+                <Icon size={17} className={color} />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 leading-none mb-1">{label}</p>
+                <p className="text-lg font-extrabold text-slate-900 leading-none">{value}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Main split layout ─────────────────────────────────────────────── */}
+      <div className="flex flex-1 min-h-0 gap-0">
+
+        {/* ── Left: Request list ──────────────────────────────────────────── */}
+        <div className="w-80 flex-shrink-0 border-e border-slate-200 bg-white flex flex-col overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 flex-shrink-0">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              {tc.activeReq} ({requests.length})
+            </p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
+            {requests.map(req => (
+              <button
+                key={req.id}
+                onClick={() => setSelectedId(req.id)}
+                className={`w-full text-start px-4 py-3.5 hover:bg-slate-50 transition-all ${selectedId === req.id ? 'bg-blue-50 border-e-2 border-blue-500' : ''}`}
+              >
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <span className="text-xs font-bold text-slate-800 truncate leading-tight">{req.unitName}</span>
+                  {req.priority === 'HIGH' && (
+                    <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-[10px] font-bold rounded-full flex-shrink-0">
+                      {tc.priority_HIGH}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400 mb-2">{req.property}</p>
+                <div className="flex items-center justify-between">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 ${STATUS_COLOR[req.status]}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[req.status]}`} />
+                    {tc[`status_${req.status}` as keyof typeof tc]}
+                  </span>
+                  <span className="text-[10px] text-slate-400">{req.checkoutTime}</span>
+                </div>
+                {/* OTA visibility indicator */}
+                {req.status === 'IN_PROGRESS' && (
+                  <p className="text-[10px] text-orange-500 font-semibold mt-1.5 flex items-center gap-1">
+                    <Icons.alertCircle size={10} />
+                    {tc.unitHidden}
+                  </p>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Right: Detail + chat ────────────────────────────────────────── */}
+        {selected && (
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+            {/* Detail header */}
+            <div className="flex-shrink-0 bg-white border-b border-slate-100 px-5 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${STATUS_COLOR[selected.status]}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[selected.status]}`} />
+                      {tc[`status_${selected.status}` as keyof typeof tc]}
+                    </span>
+                    {selected.priority === 'HIGH' && (
+                      <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs font-bold rounded-full flex items-center gap-1">
+                        <Icons.zap size={10} />
+                        {tc.priority_HIGH}
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="font-extrabold text-slate-900 text-base truncate">{selected.unitName}</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">{selected.property} · Checkout {selected.checkoutDate} at {selected.checkoutTime}</p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {selected.status === 'PENDING' && (
+                    <button
+                      onClick={() => setShowAssign(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 text-blue-700 text-xs font-bold hover:bg-blue-50 transition-all"
+                    >
+                      <Icons.userCheck size={12} />
+                      {tc.assign}
+                    </button>
+                  )}
+                  {selected.status !== 'INSPECTION_DONE' && (
+                    <button
+                      onClick={() => advanceStatus(selected.id)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all shadow-sm"
+                    >
+                      <Icons.arrowRight size={12} />
+                      {nextActionLabel(selected.status)}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Provider + deposit row */}
+              <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100">
+                {/* Provider info */}
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center">
+                    {selected.providerType === 'INTERNAL'
+                      ? <Icons.user size={13} className="text-slate-500" />
+                      : <Icons.truck size={13} className="text-slate-500" />
+                    }
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400 leading-none">{tc.providerType}</p>
+                    <p className="text-xs font-bold text-slate-700">
+                      {assignedProvider ? assignedProvider.name : (
+                        selected.providerType === 'INTERNAL' ? tc.internal : tc.external
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Deposit info */}
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
+                    <Icons.shield size={13} className="text-amber-500" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400 leading-none">Security Deposit</p>
+                    <p className="text-xs font-bold text-slate-700" style={{ direction: 'ltr' }}>
+                      SAR {selected.depositAmount.toLocaleString()}
+                      {selected.status !== 'INSPECTION_DONE' && (
+                        <span className="text-amber-600 font-normal ms-1">· HELD</span>
+                      )}
+                      {selected.status === 'INSPECTION_DONE' && (
+                        <span className="text-emerald-600 font-normal ms-1">· RELEASED</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {/* OTA status */}
+                <div className="ms-auto flex items-center gap-1.5">
+                  {(selected.status === 'IN_PROGRESS' || selected.status === 'ASSIGNED') ? (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                      <span className="text-xs text-orange-600 font-semibold">{tc.unitHidden}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <span className="text-xs text-emerald-600 font-semibold">{tc.unitVisible}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ── Chat ──────────────────────────────────────────────────── */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+              {selected.messages.map((msg, i) => {
+                const isSystem  = msg.from === 'SYSTEM';
+                const isManager = msg.from === 'MANAGER';
+                return (
+                  <div key={i} className={`flex ${isSystem ? 'justify-center' : isManager ? 'justify-end' : 'justify-start'}`}>
+                    {isSystem ? (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-full max-w-md">
+                        <Icons.zap size={11} className="text-slate-400 flex-shrink-0" />
+                        <p className="text-[11px] text-slate-500 font-medium">{msg.text}</p>
+                        <span className="text-[10px] text-slate-400 flex-shrink-0">{msg.time}</span>
+                      </div>
+                    ) : (
+                      <div className={`max-w-xs ${isManager ? 'items-end' : 'items-start'} flex flex-col gap-0.5`}>
+                        <span className="text-[10px] text-slate-400 px-1">
+                          {msg.from} · {msg.time}
+                        </span>
+                        <div className={`px-3 py-2 rounded-2xl text-sm leading-snug ${
+                          isManager
+                            ? 'bg-blue-600 text-white rounded-tr-sm'
+                            : 'bg-white border border-slate-200 text-slate-800 rounded-tl-sm shadow-sm'
+                        }`}>
+                          {msg.text}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Chat input */}
+            <div className="flex-shrink-0 bg-white border-t border-slate-100 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && sendMessage()}
+                  placeholder={tc.chatPlaceholder}
+                  className="flex-1 text-sm px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-200 bg-slate-50"
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={!chatInput.trim()}
+                  className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  {tc.sendMessage}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Assign Modal ──────────────────────────────────────────────────── */}
+      {showAssign && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowAssign(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h3 className="font-extrabold text-slate-900">{tc.assign} Provider</h3>
+              <button onClick={() => setShowAssign(false)} className="text-slate-400 hover:text-slate-700">
+                <Icons.x size={18} />
+              </button>
+            </div>
+
+            {/* Filter tabs */}
+            <div className="flex gap-1 p-3 bg-slate-50 border-b border-slate-100">
+              {(['ALL', 'INTERNAL', 'EXTERNAL'] as ProviderFilter[]).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    providerFilter === f ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {f === 'ALL' ? t.common.all : f === 'INTERNAL' ? tc.internal : tc.external}
+                </button>
+              ))}
+            </div>
+
+            <div className="divide-y divide-slate-50 max-h-72 overflow-y-auto">
+              {filteredProviders.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => assignProvider(selectedId, p.id)}
+                  disabled={!p.available}
+                  className={`w-full flex items-center gap-3 px-5 py-3 text-start hover:bg-slate-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${p.type === 'INTERNAL' ? 'bg-blue-100' : 'bg-purple-100'}`}>
+                    {p.type === 'INTERNAL'
+                      ? <Icons.user size={15} className="text-blue-600" />
+                      : <Icons.truck size={15} className="text-purple-600" />
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-800 truncate">{p.name}</p>
+                    <p className="text-xs text-slate-400">{p.role} · {p.completedToday} {tc.todayDone}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="flex items-center gap-1">
+                      <Icons.star size={11} className="text-amber-400" />
+                      <span className="text-xs font-bold text-slate-700">{p.rating}</span>
+                    </div>
+                    <span className={`text-[10px] font-bold ${p.available ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {p.available ? tc.available : tc.busy}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

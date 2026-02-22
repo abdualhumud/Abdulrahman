@@ -318,6 +318,63 @@ export const INSURANCE_RECORDS = [
   { bookingId: 'BK-1091', guest: 'Mohammed Al-Otaibi',unit:'Unit A',   provider: 'Daman', depositAmount: 2000, status: 'HELD',              checkoutDate: '2026-02-26' },
 ];
 
+// ── Cleaning Providers ─────────────────────────────────────────────────
+export const CLEANING_PROVIDERS = [
+  { id: 'cp1', type: 'INTERNAL' as const, name: 'Saleh Al-Qahtani',   role: 'Senior Cleaner',  available: true,  rating: 4.9, completedToday: 2 },
+  { id: 'cp2', type: 'INTERNAL' as const, name: 'Nora Al-Shammari',   role: 'Housekeeper',     available: true,  rating: 4.7, completedToday: 1 },
+  { id: 'cp3', type: 'INTERNAL' as const, name: 'Ahmed Al-Yami',      role: 'Maintenance Tech', available: false, rating: 4.8, completedToday: 3 },
+  { id: 'cp4', type: 'EXTERNAL' as const, name: 'Clean Pro KSA',      role: 'Cleaning Company', available: true,  rating: 4.6, completedToday: 0 },
+  { id: 'cp5', type: 'EXTERNAL' as const, name: 'Sparkle Services',   role: 'Cleaning Company', available: true,  rating: 4.5, completedToday: 0 },
+];
+
+// ── Cleaning Requests (auto-generated from checkouts) ──────────────────
+export type CleaningStatus = 'PENDING'|'ASSIGNED'|'IN_PROGRESS'|'COMPLETED'|'INSPECTION_DONE';
+export const CLEANING_REQUESTS = [
+  {
+    id: 'cr1', bookingId: 'BK-1089', unitId: 'u4',
+    unitName: 'Chalet 1 — 4BR Heritage', property: 'Diriyah Heritage Chalet',
+    checkoutDate: '2026-02-23', checkoutTime: '12:00',
+    status: 'PENDING' as CleaningStatus,
+    providerType: 'INTERNAL' as const, providerId: null as string | null,
+    depositBookingId: 'BK-1089', depositAmount: 3000,
+    priority: 'HIGH',
+    messages: [
+      { from: 'SYSTEM', text: '🔔 Checkout detected — Khalid Al-Dosari — BK-1089. Cleaning request created.', time: '12:01' },
+    ],
+  },
+  {
+    id: 'cr2', bookingId: 'BK-1088', unitId: 'u6',
+    unitName: 'Desert Studio — 1BR Eco', property: 'AlUla Desert Studio',
+    checkoutDate: '2026-02-21', checkoutTime: '11:00',
+    status: 'INSPECTION_DONE' as CleaningStatus,
+    providerType: 'INTERNAL' as const, providerId: 'cp1',
+    depositBookingId: 'BK-1088', depositAmount: 1000,
+    priority: 'NORMAL',
+    messages: [
+      { from: 'SYSTEM',   text: '🔔 Checkout detected — Emma Wilson — BK-1088. Cleaning request created.',  time: '11:01' },
+      { from: 'MANAGER',  text: 'Saleh, please clean Studio by 2pm. Guest leaving 5-star review — keep it spotless.', time: '11:05' },
+      { from: 'Saleh',    text: 'On my way now. Will be done by 1:30pm inshaAllah.', time: '11:20' },
+      { from: 'Saleh',    text: '✅ Cleaning complete. Linen changed, bathroom sanitized, mini bar restocked.', time: '13:25' },
+      { from: 'SYSTEM',   text: '✅ Inspection checklist passed. Deposit SAR 1,000 released to guest.', time: '13:45' },
+    ],
+  },
+  {
+    id: 'cr3', bookingId: 'BK-1087', unitId: 'u2',
+    unitName: 'Unit B — 2BR Classic', property: 'Riyadh Luxury Apartment',
+    checkoutDate: '2026-02-18', checkoutTime: '10:00',
+    status: 'COMPLETED' as CleaningStatus,
+    providerType: 'EXTERNAL' as const, providerId: 'cp4',
+    depositBookingId: 'BK-1087', depositAmount: 1500,
+    priority: 'NORMAL',
+    messages: [
+      { from: 'SYSTEM',   text: '🔔 Checkout detected — Fatima Al-Zahrani — BK-1087. Cleaning request created.', time: '10:01' },
+      { from: 'MANAGER',  text: 'Clean Pro KSA — please send team to Unit B, 3rd floor. Priority: same-day next guest at 6pm.', time: '10:15' },
+      { from: 'Clean Pro',text: 'Team dispatched. ETA 45 mins.', time: '10:20' },
+      { from: 'Clean Pro',text: '✅ Cleaned and ready. Photos uploaded to portal.', time: '12:10' },
+    ],
+  },
+];
+
 export const DAILY_OCCUPANCY = [
   { day: 'Feb 15', rate: 75 }, { day: 'Feb 16', rate: 75 },
   { day: 'Feb 17', rate: 75 }, { day: 'Feb 18', rate: 50 },
