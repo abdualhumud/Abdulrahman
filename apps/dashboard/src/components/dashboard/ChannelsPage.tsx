@@ -6,13 +6,44 @@ import { useLang } from '@/lib/language-context';
 import { useJourney } from '@/lib/journey-context';
 import { CHANNEL_SYNC_STATUS, CHANNEL_BREAKDOWN } from '@/lib/mock-data';
 
+/* ── Branded channel logo badges ────────────────────────────── */
+function ChannelLogo({ channel }: { channel: string }) {
+  if (channel === 'Booking.com') return (
+    <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
+      style={{ background: '#003580' }}>
+      <span className="text-white font-extrabold text-sm tracking-tighter leading-none">B.</span>
+    </div>
+  );
+  if (channel === 'Airbnb') return (
+    <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
+      style={{ background: '#FF5A5F' }}>
+      <span className="text-white font-extrabold text-sm leading-none">✦</span>
+    </div>
+  );
+  if (channel === 'Gathern') return (
+    <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
+      style={{ background: '#00a651' }}>
+      <span className="text-white font-extrabold text-xs tracking-tight leading-none">G</span>
+    </div>
+  );
+  return (
+    <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 bg-slate-200">
+      <span className="text-slate-600 font-extrabold text-sm">{channel.charAt(0)}</span>
+    </div>
+  );
+}
+
+const UNIT_TYPES = ['APARTMENT', 'VILLA', 'CHALET', 'STUDIO'] as const;
+
 export default function ChannelsPage() {
   const { t } = useLang();
   const { markDone } = useJourney();
   const [pushing, setPushing] = useState(false);
   const [pushed,  setPushed]  = useState(false);
+
   // Per-channel sync state: channelName → 'idle' | 'syncing' | 'done'
   const [syncState, setSyncState] = useState<Record<string, 'idle'|'syncing'|'done'>>({});
+
   // Kill switch per channel: true = open/active, false = closed/paused
   const [killSwitch, setKillSwitch] = useState<Record<string, boolean>>({
     'Booking.com': true, 'Airbnb': true, 'Gathern': true,
@@ -34,7 +65,9 @@ export default function ChannelsPage() {
     markDone(3); // ✅ Journey Step 3: Connect Channels
     setTimeout(() => setSyncState(s => ({ ...s, [channelName]: 'idle' })), 3000);
   };
+
   const [form, setForm] = useState({
+    unitType: 'APARTMENT' as typeof UNIT_TYPES[number],
     dateFrom: '2026-03-01', dateTo: '2026-03-31',
     price: '1350', minStay: '2',
     channels: { booking: true, airbnb: true, gathern: true },
@@ -47,6 +80,13 @@ export default function ChannelsPage() {
     await new Promise(r => setTimeout(r, 1800));
     setPushing(false); setPushed(true);
     setTimeout(() => setPushed(false), 4000);
+  };
+
+  const unitTypeLabel: Record<typeof UNIT_TYPES[number], string> = {
+    APARTMENT: t.properties.unitType_apt,
+    VILLA:     t.properties.unitType_villa,
+    CHALET:    t.properties.unitType_chalet,
+    STUDIO:    t.properties.unitType_studio,
   };
 
   return (
@@ -79,9 +119,7 @@ export default function ChannelsPage() {
               </div>
             )}
             <div className="flex items-center gap-3 mb-5">
-              <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0" style={{ background: ch.bg }}>
-                {ch.logo}
-              </div>
+              <ChannelLogo channel={ch.channel} />
               <div className="flex-1">
                 <p className={`font-bold text-base leading-none ${ch.color}`}>{ch.channel}</p>
                 <div className="flex items-center gap-1.5 mt-1">
@@ -109,7 +147,7 @@ export default function ChannelsPage() {
               <p className="text-xs text-slate-400">
                 {t.channels.lastSync}:{' '}
                 <span className="font-semibold text-slate-600">
-                  {syncState[ch.channel] === 'done' ? 'just now' : ch.lastSync}
+                  {syncState[ch.channel] === 'done' ? (t.lang === 'ar' ? 'الآن' : 'just now') : ch.lastSync}
                 </span>
               </p>
               <button
@@ -119,9 +157,9 @@ export default function ChannelsPage() {
                   text-blue-600 hover:text-blue-700"
               >
                 {syncState[ch.channel] === 'syncing' ? (
-                  <><span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /> Syncing…</>
+                  <><span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /> {t.lang === 'ar' ? 'جارٍ…' : 'Syncing…'}</>
                 ) : syncState[ch.channel] === 'done' ? (
-                  <><Icons.check size={12} className="text-emerald-500" /> Synced</>
+                  <><Icons.check size={12} className="text-emerald-500" /> {t.lang === 'ar' ? 'تم' : 'Synced'}</>
                 ) : (
                   <><Icons.refresh size={12} /> {t.channels.forceSync}</>
                 )}
@@ -169,7 +207,7 @@ export default function ChannelsPage() {
         );})}
       </div>
 
-      {/* Rate Parity */}
+      {/* Rate Parity Manager */}
       <div className="card p-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center">
@@ -180,6 +218,26 @@ export default function ChannelsPage() {
             <p className="text-xs text-slate-400 mt-0.5">{t.channels.rateDesc}</p>
           </div>
           <span className="ms-auto badge bg-amber-50 text-amber-600 border border-amber-100">{t.channels.multiPush}</span>
+        </div>
+
+        {/* Unit Type Selector — must be set first */}
+        <div className="mb-5">
+          <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+            {t.properties.unitType}
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {UNIT_TYPES.map(ut => (
+              <button key={ut} type="button"
+                onClick={() => setForm(p => ({ ...p, unitType: ut }))}
+                className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
+                  form.unitType === ut
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300'
+                }`}>
+                {unitTypeLabel[ut]}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
@@ -237,7 +295,7 @@ export default function ChannelsPage() {
           {pushing ? (
             <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> {activeCount} {t.channels.channels2}…</>
           ) : (
-            <><Icons.send size={16} /> {t.channels.pushBtn} {t.common.sar} {parseInt(form.price || '0').toLocaleString()} {t.channels.nightTo} {activeCount} {t.channels.channels2}</>
+            <><Icons.send size={16} /> {t.channels.pushBtn} {t.common.sar} {parseInt(form.price || '0').toLocaleString()} {t.channels.nightTo} {activeCount} {t.channels.channels2} · {unitTypeLabel[form.unitType]}</>
           )}
         </button>
       </div>

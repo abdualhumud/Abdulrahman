@@ -104,40 +104,83 @@ function PhotoUploader({ photos, onPhotosChange, lang }: {
   );
 }
 
-/* ── Interactive OSM Map with coordinate inputs ───────────────────── */
+/* ── Interactive OSM Map with click-to-pin ────────────────────────── */
 function InteractiveMap({ lat, lng, name, onCoordsChange, lang }: {
   lat: number; lng: number; name: string;
   onCoordsChange: (lat: number, lng: number) => void;
   lang: string;
 }) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [localLat, setLocalLat] = useState(String(lat));
   const [localLng, setLocalLng] = useState(String(lng));
   const [mapKey, setMapKey] = useState(0);
+  const [pinFeedback, setPinFeedback] = useState(false);
 
-  const applyCoords = () => {
-    const newLat = parseFloat(localLat);
-    const newLng = parseFloat(localLng);
+  const applyCoords = (newLat: number, newLng: number) => {
     if (!isNaN(newLat) && !isNaN(newLng)) {
+      setLocalLat(newLat.toFixed(5));
+      setLocalLng(newLng.toFixed(5));
       onCoordsChange(newLat, newLng);
       setMapKey(k => k + 1);
     }
+  };
+
+  const handleManualApply = () => {
+    applyCoords(parseFloat(localLat), parseFloat(localLng));
+  };
+
+  // Click-to-pin: transparent div overlay captures clicks and converts
+  // pixel position → approximate geographic coordinates using bbox formula.
+  const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const relX = e.clientX - rect.left;
+    const relY = e.clientY - rect.top;
+    // bbox: lng ± 0.03 wide, lat ± 0.02 tall (0.06° × 0.04°)
+    const lngClick = (lng - 0.03) + (relX / rect.width)  * 0.06;
+    const latClick = (lat + 0.02) - (relY / rect.height) * 0.04;
+    applyCoords(parseFloat(latClick.toFixed(5)), parseFloat(lngClick.toFixed(5)));
+    setPinFeedback(true);
+    setTimeout(() => setPinFeedback(false), 1800);
   };
 
   const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.03},${lat - 0.02},${lng + 0.03},${lat + 0.02}&layer=mapnik&marker=${lat},${lng}`;
 
   return (
     <div>
-      {/* Map iframe */}
-      <div className="relative w-full h-44 rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+      {/* Map iframe + click-to-pin overlay */}
+      <div ref={containerRef} className="relative w-full h-44 rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
         <iframe key={mapKey} src={src} title={name} width="100%" height="100%"
           style={{ border: 0, display: 'block' }} loading="lazy" referrerPolicy="no-referrer" />
-        <div className="absolute bottom-2 start-2 bg-white/90 backdrop-blur-sm rounded-lg px-2.5 py-1 shadow text-xs font-bold text-slate-700 max-w-[160px] truncate pointer-events-none">
+
+        {/* Transparent overlay — captures mouse events, shows crosshair cursor */}
+        <div
+          className="absolute inset-0 z-10"
+          style={{ cursor: 'crosshair' }}
+          onClick={handleMapClick}
+          title={lang === 'ar' ? 'انقر لوضع الدبوس' : 'Click to place pin'}
+        />
+
+        {/* Pin-updated feedback toast */}
+        {pinFeedback && (
+          <div className="absolute top-2 start-2 z-20 bg-emerald-600/90 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-lg pointer-events-none flex items-center gap-1.5">
+            <Icons.mapPin size={11} />
+            {lang === 'ar' ? 'تم تثبيت الدبوس' : 'Pin updated'}
+          </div>
+        )}
+
+        <div className="absolute bottom-2 start-2 z-20 bg-white/90 backdrop-blur-sm rounded-lg px-2.5 py-1 shadow text-xs font-bold text-slate-700 max-w-[160px] truncate pointer-events-none">
           {name}
         </div>
       </div>
 
-      {/* Coordinate inputs */}
-      <div className="flex items-end gap-2 mt-3">
+      <p className="text-[11px] text-blue-600 font-semibold mt-1.5 flex items-center gap-1">
+        <Icons.mapPin size={11} />
+        {lang === 'ar' ? 'انقر مباشرة على الخريطة لتحريك دبوس الموقع' : 'Click directly on the map to reposition the pin'}
+      </p>
+
+      {/* Manual coordinate inputs */}
+      <div className="flex items-end gap-2 mt-2">
         <div className="flex-1">
           <label className="text-xs font-semibold text-slate-500 mb-1 block">
             {lang === 'ar' ? 'خط العرض' : 'Latitude'}
@@ -161,17 +204,13 @@ function InteractiveMap({ lat, lng, name, onCoordsChange, lang }: {
           />
         </div>
         <button
-          onClick={applyCoords}
+          onClick={handleManualApply}
           className="btn-primary px-4 py-2 flex-shrink-0 flex items-center gap-1.5 text-xs"
         >
           <Icons.mapPin size={13} />
           {lang === 'ar' ? 'تحديث' : 'Update Pin'}
         </button>
       </div>
-      <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1">
-        <Icons.mapPin size={11} />
-        {lang === 'ar' ? 'أدخل الإحداثيات لتحريك الدبوس على الخريطة' : 'Enter coordinates above to reposition the map pin'}
-      </p>
     </div>
   );
 }

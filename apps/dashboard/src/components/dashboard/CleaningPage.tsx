@@ -41,7 +41,19 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
   const [selectedId, setSelectedId]     = useState<string>(CLEANING_REQUESTS[0].id);
   const [providerFilter, setFilter]     = useState<ProviderFilter>('ALL');
   const [chatInput, setChatInput]       = useState('');
-  const [showAssign, setShowAssign]     = useState(false);
+  const [showAssign,  setShowAssign]    = useState(false);
+
+  // ── New Request modal ────────────────────────────────────────────────
+  const [showNewReq,   setShowNewReq]  = useState(false);
+  const [newReqSaving, setNewReqSaving]= useState(false);
+  const [newReqDone,   setNewReqDone]  = useState(false);
+  const [newReqForm,   setNewReqForm]  = useState({
+    unit: 'Riyadh — Unit A',
+    priority: 'NORMAL' as 'NORMAL' | 'HIGH',
+    notes: '',
+    autoDispatch: true,
+    providerId: '',
+  });
 
   const selected = requests.find(r => r.id === selectedId)!;
 
@@ -103,6 +115,56 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
     }));
   }
 
+  // ── Submit new request ──────────────────────────────────────────────────
+  async function submitNewRequest() {
+    setNewReqSaving(true);
+    await new Promise(r => setTimeout(r, 1400));
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' });
+
+    let assignedProv = null;
+    let initialStatus: CleaningStatus = 'PENDING';
+    if (newReqForm.autoDispatch) {
+      assignedProv = CLEANING_PROVIDERS.find(p => p.available) ?? null;
+      if (assignedProv) initialStatus = 'ASSIGNED';
+    } else if (newReqForm.providerId) {
+      assignedProv = CLEANING_PROVIDERS.find(p => p.id === newReqForm.providerId) ?? null;
+      if (assignedProv) initialStatus = 'ASSIGNED';
+    }
+
+    const systemMsgs: { from: string; text: string; time: string }[] = [
+      { from: 'SYSTEM', text: `📋 New cleaning request created for ${newReqForm.unit}.`, time: timeStr },
+    ];
+    if (assignedProv) {
+      systemMsgs.push({ from: 'SYSTEM', text: `✅ ${assignedProv.name} auto-dispatched.`, time: timeStr });
+    }
+    if (newReqForm.notes) {
+      systemMsgs.push({ from: 'MANAGER', text: newReqForm.notes, time: timeStr });
+    }
+
+    const newReq = {
+      id:           `CLN-${String(Math.floor(Math.random() * 9000) + 1000)}`,
+      bookingId:    `BK-${String(Math.floor(Math.random() * 9000) + 1000)}`,
+      unitName:     newReqForm.unit,
+      property:     newReqForm.unit.split('—')[0]?.trim() ?? newReqForm.unit,
+      guestName:    'New Request',
+      status:       initialStatus,
+      priority:     newReqForm.priority,
+      providerType: (assignedProv?.type ?? 'INTERNAL') as 'INTERNAL' | 'EXTERNAL',
+      providerId:   assignedProv?.id ?? '',
+      checkoutDate: `2026-02-${Math.min(now.getDate() + 1, 28)}`,
+      checkoutTime: '12:00',
+      depositAmount: 1500,
+      messages:     systemMsgs,
+    };
+
+    setRequests(prev => [newReq as any, ...prev]);
+    setSelectedId(newReq.id);
+    setNewReqSaving(false);
+    setNewReqDone(true);
+    setTimeout(() => setShowNewReq(false), 1800);
+  }
+
   // ── Filtered providers for assign modal ─────────────────────────────────
   const filteredProviders = CLEANING_PROVIDERS.filter(p =>
     providerFilter === 'ALL' || p.type === providerFilter
@@ -135,7 +197,12 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
           </div>
           <button
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20"
-            onClick={() => {/* future: open new request modal */}}
+            onClick={() => {
+              setNewReqForm({ unit: 'Riyadh — Unit A', priority: 'NORMAL', notes: '', autoDispatch: true, providerId: '' });
+              setNewReqSaving(false);
+              setNewReqDone(false);
+              setShowNewReq(true);
+            }}
           >
             <Icons.plus size={14} />
             {tc.newRequest}
@@ -367,6 +434,105 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
           </div>
         )}
       </div>
+
+      {/* ── New Request Modal ─────────────────────────────────────────────── */}
+      {showNewReq && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
+          onClick={() => !newReqSaving && setShowNewReq(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <p className="font-extrabold text-slate-900">{tc.newReqTitle}</p>
+              <button onClick={() => setShowNewReq(false)} className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200">
+                <Icons.x size={14} />
+              </button>
+            </div>
+            <div className="px-6 pb-6 pt-4 space-y-4">
+              {newReqDone ? (
+                <div className="flex flex-col items-center gap-3 py-6">
+                  <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center">
+                    <Icons.check size={28} className="text-emerald-600" />
+                  </div>
+                  <p className="font-bold text-emerald-700 text-center">{tc.newReqCreated}</p>
+                </div>
+              ) : (
+                <>
+                  {/* Unit */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">{tc.newReqUnit}</label>
+                    <select className="input" value={newReqForm.unit}
+                      onChange={e => setNewReqForm(p => ({ ...p, unit: e.target.value }))}>
+                      {['Riyadh — Unit A','Riyadh — Unit B','Riyadh — Unit C','Jeddah Villa','Diriyah — C1','Diriyah — C2','AlUla Studio'].map(u => (
+                        <option key={u}>{u}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Priority */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{tc.newReqPriority}</label>
+                    <div className="flex gap-3">
+                      {(['NORMAL','HIGH'] as const).map(p => (
+                        <button key={p} type="button"
+                          onClick={() => setNewReqForm(f => ({ ...f, priority: p }))}
+                          className={`flex-1 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
+                            newReqForm.priority === p
+                              ? p === 'HIGH'
+                                ? 'border-red-500 bg-red-50 text-red-700'
+                                : 'border-blue-500 bg-blue-50 text-blue-700'
+                              : 'border-slate-200 bg-slate-50 text-slate-500'
+                          }`}>
+                          {p === 'HIGH' ? `⚡ ${tc.priority_HIGH}` : `● ${tc.priority_NORMAL}`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">{tc.newReqNotes}</label>
+                    <textarea className="input resize-none" rows={2} value={newReqForm.notes}
+                      onChange={e => setNewReqForm(p => ({ ...p, notes: e.target.value }))} />
+                  </div>
+
+                  {/* Auto-dispatch */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{tc.newReqProvider}</label>
+                    <label className="flex items-center gap-3 bg-emerald-50 rounded-xl p-3 cursor-pointer border border-emerald-100"
+                      onClick={() => setNewReqForm(p => ({ ...p, autoDispatch: !p.autoDispatch }))}>
+                      <span className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${newReqForm.autoDispatch ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
+                        {newReqForm.autoDispatch && <Icons.check size={12} className="text-white" />}
+                      </span>
+                      <span className="text-xs font-semibold text-emerald-700">{tc.newReqAutoDispatch}</span>
+                    </label>
+                    {!newReqForm.autoDispatch && (
+                      <select className="input mt-2" value={newReqForm.providerId}
+                        onChange={e => setNewReqForm(p => ({ ...p, providerId: e.target.value }))}>
+                        <option value="">{lang === 'ar' ? '— اختر مزوداً —' : '— Select Provider —'}</option>
+                        {CLEANING_PROVIDERS.filter(p => p.available).map(p => (
+                          <option key={p.id} value={p.id}>{p.name} ({p.type})</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-3 pt-2">
+                    <button onClick={() => setShowNewReq(false)}
+                      className="flex-1 btn-ghost justify-center py-2.5">{t.common.cancel}</button>
+                    <button onClick={submitNewRequest} disabled={newReqSaving}
+                      className="flex-1 btn-primary justify-center py-2.5 disabled:opacity-50">
+                      {newReqSaving
+                        ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> {t.common.loading}</>
+                        : <><Icons.plus size={15} /> {tc.newReqSubmit}</>
+                      }
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Assign Modal ──────────────────────────────────────────────────── */}
       {showAssign && (

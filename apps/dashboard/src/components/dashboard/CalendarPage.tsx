@@ -13,6 +13,8 @@ const UNITS = [
   'Jeddah Villa', 'Diriyah — C1', 'Diriyah — C2', 'AlUla Studio',
 ];
 
+const BOOKING_CHANNELS = ['Booking.com', 'Airbnb', 'Gathern', 'Direct'];
+
 const CHANNELS: Record<string, { bg: string; text: string; dot: string }> = {
   'Booking.com': { bg: '#EEF2FF', text: '#1D4ED8', dot: '#003580' },
   'Airbnb':      { bg: '#FFF1F2', text: '#BE123C', dot: '#FF5A5F' },
@@ -20,23 +22,71 @@ const CHANNELS: Record<string, { bg: string; text: string; dot: string }> = {
   'Direct':      { bg: '#FFFBEB', text: '#B45309', dot: '#F59E0B' },
 };
 
-type CalEvent = typeof CALENDAR_EVENTS[number];
+type CalEvent  = typeof CALENDAR_EVENTS[number];
+type ModalType = null | 'booking' | 'maint' | 'open';
+type ModalStep = 'idle' | 'saving' | 'done';
+
+const INITIAL_BOOKING = {
+  guestName: '', guestId: '', guestPhone: '',
+  unit: UNITS[0], checkIn: '2026-02-25', checkOut: '2026-02-27',
+  price: '1200', channel: 'Direct',
+};
+const INITIAL_MAINT = {
+  unit: UNITS[0], from: '2026-02-25', to: '2026-02-27', reason: '',
+};
+const INITIAL_OPEN = {
+  unit: UNITS[0], from: '2026-02-25', to: '2026-02-27',
+};
 
 export default function CalendarPage() {
   const { t, lang } = useLang();
+
+  /* ── Calendar event selection ─────────────────────────── */
   const [selected, setSelected] = useState<CalEvent | null>(null);
 
-  const selectedBooking = selected
-    ? RECENT_BOOKINGS.find(b => b.guest === selected.guest)
-    : null;
+  /* ── Modal state ──────────────────────────────────────── */
+  const [modal,   setModal]   = useState<ModalType>(null);
+  const [step,    setStep]    = useState<ModalStep>('idle');
+  const [syncMsg, setSyncMsg] = useState('');
 
-  const selectedInsurance = selectedBooking
-    ? INSURANCE_RECORDS.find(r => r.bookingId === selectedBooking.id)
-    : null;
+  const [bookingForm, setBookingForm] = useState(INITIAL_BOOKING);
+  const [maintForm,   setMaintForm]   = useState(INITIAL_MAINT);
+  const [openForm,    setOpenForm]    = useState(INITIAL_OPEN);
 
-  const selectedCleaning = selectedBooking
-    ? CLEANING_REQUESTS.find(r => r.bookingId === selectedBooking.id)
-    : null;
+  const closeModal = () => { setModal(null); setStep('idle'); setSyncMsg(''); };
+
+  /* ── Booking submit ───────────────────────────────────── */
+  const submitBooking = async () => {
+    setStep('saving');
+    await new Promise(r => setTimeout(r, 1600));
+    setStep('done');
+    setTimeout(closeModal, 2500);
+  };
+
+  /* ── Maintenance block submit ─────────────────────────── */
+  const submitMaint = async () => {
+    setStep('saving');
+    setSyncMsg(t.calendar.maintCreated);
+    await new Promise(r => setTimeout(r, 1800));
+    setSyncMsg(t.calendar.maintSynced);
+    setStep('done');
+    setTimeout(closeModal, 2200);
+  };
+
+  /* ── Open blocked dates submit ────────────────────────── */
+  const submitOpen = async () => {
+    setStep('saving');
+    setSyncMsg(t.calendar.openCreated);
+    await new Promise(r => setTimeout(r, 1800));
+    setStep('done');
+    setTimeout(closeModal, 2200);
+  };
+
+  /* ── Booking side-panel helpers ───────────────────────── */
+  const selectedBooking   = selected ? RECENT_BOOKINGS.find(b => b.guest === selected.guest) : null;
+  const selectedInsurance = selectedBooking ? INSURANCE_RECORDS.find(r => r.bookingId === selectedBooking.id) : null;
+  const selectedCleaning  = selectedBooking ? CLEANING_REQUESTS.find(r => r.bookingId === selectedBooking.id) : null;
+  const chStyle = selected ? (CHANNELS[selected.channel] ?? { bg: '#F1F5F9', text: '#475569', dot: '#94A3B8' }) : null;
 
   const INS_STYLE: Record<string, string> = {
     HELD:               'bg-blue-100 text-blue-700',
@@ -51,12 +101,36 @@ export default function CalendarPage() {
     INSPECTION_DONE: 'bg-emerald-100 text-emerald-700',
   };
 
-  const chStyle = selected ? (CHANNELS[selected.channel] ?? { bg: '#F1F5F9', text: '#475569', dot: '#94A3B8' }) : null;
+  /* ── Shared modal wrapper ─────────────────────────────── */
+  const ModalWrap = ({ children, title }: { children: React.ReactNode; title: string }) => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <p className="font-extrabold text-slate-900">{title}</p>
+          <button onClick={closeModal}
+            className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
+            <Icons.x size={14} />
+          </button>
+        </div>
+        <div className="px-6 pb-6 pt-4 space-y-4 max-h-[80vh] overflow-y-auto">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+
+  /* ── Field helper ─────────────────────────────────────── */
+  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
+    <div>
+      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">{label}</label>
+      {children}
+    </div>
+  );
 
   return (
     <div className="flex h-full overflow-hidden" style={{ direction: lang === 'ar' ? 'rtl' : 'ltr' }}>
 
-      {/* ── Main calendar area ────────────────────────────────────────── */}
+      {/* ── Main calendar area ──────────────────────────────────────── */}
       <div className="flex-1 min-w-0 overflow-auto p-6 space-y-5">
         <div className="flex items-start justify-between">
           <div>
@@ -141,27 +215,43 @@ export default function CalendarPage() {
           </table>
         </div>
 
+        {/* ── Action cards ──────────────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[
-            { label: t.calendar.blockMaint,  desc: t.calendar.blockMaintDesc, Icon: Icons.refresh, style: 'bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700',   iconBg: 'bg-slate-200 text-slate-600' },
-            { label: t.calendar.addBooking,  desc: t.calendar.addBookingDesc, Icon: Icons.plus,    style: 'bg-blue-50 border border-blue-100 hover:bg-blue-100 text-blue-700',       iconBg: 'bg-blue-200 text-blue-700' },
-            { label: t.calendar.openDates,   desc: t.calendar.openDatesDesc,  Icon: Icons.check,   style: 'bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 text-emerald-700', iconBg: 'bg-emerald-200 text-emerald-700' },
-          ].map(a => (
-            <button key={a.label} className={`rounded-2xl p-5 text-start transition-all ${a.style}`}>
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${a.iconBg}`}>
-                <a.Icon size={17} />
-              </div>
-              <p className="font-bold text-sm">{a.label}</p>
-              <p className="text-xs opacity-60 mt-1 leading-relaxed">{a.desc}</p>
-            </button>
-          ))}
+          <button
+            onClick={() => { setMaintForm(INITIAL_MAINT); setStep('idle'); setSyncMsg(''); setModal('maint'); }}
+            className="rounded-2xl p-5 text-start transition-all bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 hover:shadow-sm">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3 bg-slate-200 text-slate-600">
+              <Icons.refresh size={17} />
+            </div>
+            <p className="font-bold text-sm">{t.calendar.blockMaint}</p>
+            <p className="text-xs opacity-60 mt-1 leading-relaxed">{t.calendar.blockMaintDesc}</p>
+          </button>
+
+          <button
+            onClick={() => { setBookingForm(INITIAL_BOOKING); setStep('idle'); setModal('booking'); }}
+            className="rounded-2xl p-5 text-start transition-all bg-blue-50 border border-blue-100 hover:bg-blue-100 text-blue-700 hover:shadow-sm">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3 bg-blue-200 text-blue-700">
+              <Icons.plus size={17} />
+            </div>
+            <p className="font-bold text-sm">{t.calendar.addBooking}</p>
+            <p className="text-xs opacity-60 mt-1 leading-relaxed">{t.calendar.addBookingDesc}</p>
+          </button>
+
+          <button
+            onClick={() => { setOpenForm(INITIAL_OPEN); setStep('idle'); setSyncMsg(''); setModal('open'); }}
+            className="rounded-2xl p-5 text-start transition-all bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 text-emerald-700 hover:shadow-sm">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3 bg-emerald-200 text-emerald-700">
+              <Icons.check size={17} />
+            </div>
+            <p className="font-bold text-sm">{t.calendar.openDates}</p>
+            <p className="text-xs opacity-60 mt-1 leading-relaxed">{t.calendar.openDatesDesc}</p>
+          </button>
         </div>
       </div>
 
-      {/* ── Booking Detail Side Panel ─────────────────────────────────── */}
+      {/* ── Booking Detail Side Panel ──────────────────────────────── */}
       {selected && chStyle && (
         <div className="w-72 flex-shrink-0 bg-white border-s border-slate-200 flex flex-col overflow-hidden shadow-lg">
-          {/* Header */}
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between"
             style={{ background: chStyle.bg }}>
             <div className="flex items-center gap-2">
@@ -174,9 +264,7 @@ export default function CalendarPage() {
             </button>
           </div>
 
-          {/* Content */}
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
-            {/* Guest */}
             <div>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{t.table.guest}</p>
               <div className="flex items-center gap-2.5">
@@ -187,7 +275,6 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            {/* Unit */}
             <div>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{t.calendar.unit}</p>
               <div className="flex items-center gap-1.5">
@@ -196,7 +283,6 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            {/* Dates */}
             <div>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{t.table.dates}</p>
               <div className="bg-slate-50 rounded-xl px-3 py-2 space-y-1" style={{ direction: 'ltr' }}>
@@ -217,7 +303,6 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            {/* Booking details */}
             {selectedBooking && (
               <>
                 <div>
@@ -244,7 +329,6 @@ export default function CalendarPage() {
               </>
             )}
 
-            {/* Insurance Status */}
             {selectedInsurance && (
               <div className="pt-3 border-t border-slate-100">
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2 flex items-center gap-1">
@@ -266,7 +350,7 @@ export default function CalendarPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-slate-500">Status</span>
                     <span className={`badge text-[10px] ${INS_STYLE[selectedInsurance.status] ?? ''}`}>
-                      {selectedInsurance.status === 'HELD' ? t.insurance.depositHeld :
+                      {selectedInsurance.status === 'HELD'     ? t.insurance.depositHeld :
                        selectedInsurance.status === 'RELEASED' ? t.insurance.depositReleased :
                        t.insurance.depositPending}
                     </span>
@@ -275,7 +359,6 @@ export default function CalendarPage() {
               </div>
             )}
 
-            {/* Cleaning History */}
             {selectedCleaning && (
               <div className="pt-3 border-t border-slate-100">
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2 flex items-center gap-1">
@@ -294,7 +377,6 @@ export default function CalendarPage() {
                       {selectedCleaning.providerType === 'INTERNAL' ? t.cleaning.internal : t.cleaning.external}
                     </span>
                   </div>
-                  {/* Last chat message */}
                   {selectedCleaning.messages.length > 0 && (
                     <div className="mt-1 px-2 py-1.5 bg-white rounded-lg border border-slate-100">
                       <p className="text-[10px] text-slate-400 mb-0.5">
@@ -310,13 +392,212 @@ export default function CalendarPage() {
             )}
           </div>
 
-          {/* Footer action */}
           <div className="px-5 py-4 border-t border-slate-100">
             <button className="w-full btn-primary text-sm justify-center">
               <Icons.eye size={14} /> {t.bookings.view}
             </button>
           </div>
         </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* ── Manual Booking Modal ────────────────────────────────────── */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {modal === 'booking' && (
+        <ModalWrap title={t.calendar.manualBookingTitle}>
+          {step === 'done' ? (
+            <div className="flex flex-col items-center gap-3 py-6">
+              <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center">
+                <Icons.check size={28} className="text-emerald-600" />
+              </div>
+              <p className="font-bold text-emerald-700 text-center">{t.calendar.bookingCreated}</p>
+            </div>
+          ) : (
+            <>
+              <Field label={t.calendar.guestName}>
+                <input className="input" value={bookingForm.guestName}
+                  onChange={e => setBookingForm(p => ({ ...p, guestName: e.target.value }))} />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label={t.calendar.guestId}>
+                  <input className="input" value={bookingForm.guestId}
+                    onChange={e => setBookingForm(p => ({ ...p, guestId: e.target.value }))} />
+                </Field>
+                <Field label={t.calendar.guestPhone}>
+                  <input className="input" type="tel" value={bookingForm.guestPhone}
+                    onChange={e => setBookingForm(p => ({ ...p, guestPhone: e.target.value }))}
+                    style={{ direction: 'ltr' }} />
+                </Field>
+              </div>
+              <Field label={t.calendar.selectUnit}>
+                <select className="input" value={bookingForm.unit}
+                  onChange={e => setBookingForm(p => ({ ...p, unit: e.target.value }))}>
+                  {UNITS.map(u => <option key={u}>{u}</option>)}
+                </select>
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label={t.calendar.checkIn}>
+                  <input className="input" type="date" value={bookingForm.checkIn}
+                    onChange={e => setBookingForm(p => ({ ...p, checkIn: e.target.value }))}
+                    style={{ direction: 'ltr' }} />
+                </Field>
+                <Field label={t.calendar.checkOut}>
+                  <input className="input" type="date" value={bookingForm.checkOut}
+                    onChange={e => setBookingForm(p => ({ ...p, checkOut: e.target.value }))}
+                    style={{ direction: 'ltr' }} />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label={t.calendar.totalPrice}>
+                  <input className="input" type="number" value={bookingForm.price}
+                    onChange={e => setBookingForm(p => ({ ...p, price: e.target.value }))}
+                    style={{ direction: 'ltr' }} />
+                </Field>
+                <Field label={t.calendar.channel}>
+                  <select className="input" value={bookingForm.channel}
+                    onChange={e => setBookingForm(p => ({ ...p, channel: e.target.value }))}>
+                    {BOOKING_CHANNELS.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button onClick={closeModal}
+                  className="flex-1 btn-ghost justify-center py-2.5">{t.common.cancel}</button>
+                <button onClick={submitBooking} disabled={step === 'saving' || !bookingForm.guestName}
+                  className="flex-1 btn-primary justify-center py-2.5 disabled:opacity-50">
+                  {step === 'saving'
+                    ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving…</>
+                    : <><Icons.check size={15} /> {t.calendar.submitBooking}</>
+                  }
+                </button>
+              </div>
+            </>
+          )}
+        </ModalWrap>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* ── Maintenance Block Modal ─────────────────────────────────── */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {modal === 'maint' && (
+        <ModalWrap title={t.calendar.maintTitle}>
+          {step === 'done' ? (
+            <div className="flex flex-col items-center gap-3 py-6">
+              <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center">
+                <Icons.check size={28} className="text-emerald-600" />
+              </div>
+              <p className="font-bold text-emerald-700 text-center">{syncMsg}</p>
+            </div>
+          ) : step === 'saving' ? (
+            <div className="flex flex-col items-center gap-4 py-8">
+              <span className="w-10 h-10 border-4 border-slate-300 border-t-blue-600 rounded-full animate-spin" />
+              <p className="text-sm text-slate-600 font-semibold text-center">{syncMsg}</p>
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                {lang === 'ar' ? 'جارٍ المزامنة مع القنوات…' : 'Syncing with channels…'}
+              </div>
+            </div>
+          ) : (
+            <>
+              <Field label={t.calendar.maintUnit}>
+                <select className="input" value={maintForm.unit}
+                  onChange={e => setMaintForm(p => ({ ...p, unit: e.target.value }))}>
+                  {UNITS.map(u => <option key={u}>{u}</option>)}
+                </select>
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label={t.calendar.maintFrom}>
+                  <input className="input" type="date" value={maintForm.from}
+                    onChange={e => setMaintForm(p => ({ ...p, from: e.target.value }))}
+                    style={{ direction: 'ltr' }} />
+                </Field>
+                <Field label={t.calendar.maintTo}>
+                  <input className="input" type="date" value={maintForm.to}
+                    onChange={e => setMaintForm(p => ({ ...p, to: e.target.value }))}
+                    style={{ direction: 'ltr' }} />
+                </Field>
+              </div>
+              <Field label={t.calendar.maintReason}>
+                <textarea className="input resize-none" rows={2} value={maintForm.reason}
+                  onChange={e => setMaintForm(p => ({ ...p, reason: e.target.value }))} />
+              </Field>
+              <label className="flex items-start gap-3 bg-amber-50 rounded-xl p-3 cursor-pointer">
+                <span className="w-4 h-4 mt-0.5 rounded border-2 border-amber-400 bg-amber-400 flex items-center justify-center flex-shrink-0">
+                  <Icons.check size={10} className="text-white" />
+                </span>
+                <span className="text-xs text-amber-700 font-medium leading-snug">{t.calendar.maintSync}</span>
+              </label>
+              <div className="flex gap-3 pt-2">
+                <button onClick={closeModal}
+                  className="flex-1 btn-ghost justify-center py-2.5">{t.common.cancel}</button>
+                <button onClick={submitMaint}
+                  className="flex-1 justify-center py-2.5 flex items-center gap-2 rounded-xl font-bold text-sm bg-slate-800 text-white hover:bg-slate-900 transition-colors">
+                  <Icons.refresh size={15} /> {t.calendar.submitMaint}
+                </button>
+              </div>
+            </>
+          )}
+        </ModalWrap>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* ── Open Blocked Dates Modal ────────────────────────────────── */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {modal === 'open' && (
+        <ModalWrap title={t.calendar.openTitle}>
+          {step === 'done' ? (
+            <div className="flex flex-col items-center gap-3 py-6">
+              <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center">
+                <Icons.check size={28} className="text-emerald-600" />
+              </div>
+              <p className="font-bold text-emerald-700 text-center">{t.calendar.openCreated}</p>
+            </div>
+          ) : step === 'saving' ? (
+            <div className="flex flex-col items-center gap-4 py-8">
+              <span className="w-10 h-10 border-4 border-slate-300 border-t-emerald-600 rounded-full animate-spin" />
+              <p className="text-sm text-slate-600 font-semibold text-center">{syncMsg}</p>
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                {lang === 'ar' ? 'جارٍ المزامنة مع القنوات…' : 'Re-opening on all channels…'}
+              </div>
+            </div>
+          ) : (
+            <>
+              <Field label={t.calendar.openUnit}>
+                <select className="input" value={openForm.unit}
+                  onChange={e => setOpenForm(p => ({ ...p, unit: e.target.value }))}>
+                  {UNITS.map(u => <option key={u}>{u}</option>)}
+                </select>
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label={t.calendar.openFrom}>
+                  <input className="input" type="date" value={openForm.from}
+                    onChange={e => setOpenForm(p => ({ ...p, from: e.target.value }))}
+                    style={{ direction: 'ltr' }} />
+                </Field>
+                <Field label={t.calendar.openTo}>
+                  <input className="input" type="date" value={openForm.to}
+                    onChange={e => setOpenForm(p => ({ ...p, to: e.target.value }))}
+                    style={{ direction: 'ltr' }} />
+                </Field>
+              </div>
+              <label className="flex items-start gap-3 bg-emerald-50 rounded-xl p-3 cursor-pointer">
+                <span className="w-4 h-4 mt-0.5 rounded border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                  <Icons.check size={10} className="text-white" />
+                </span>
+                <span className="text-xs text-emerald-700 font-medium leading-snug">{t.calendar.openSync}</span>
+              </label>
+              <div className="flex gap-3 pt-2">
+                <button onClick={closeModal}
+                  className="flex-1 btn-ghost justify-center py-2.5">{t.common.cancel}</button>
+                <button onClick={submitOpen}
+                  className="flex-1 btn-primary justify-center py-2.5">
+                  <Icons.check size={15} /> {t.calendar.submitOpen}
+                </button>
+              </div>
+            </>
+          )}
+        </ModalWrap>
       )}
     </div>
   );
