@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Icons } from '@/lib/icons';
 import { UNITS, INSURANCE_RECORDS } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
@@ -104,112 +104,157 @@ function PhotoUploader({ photos, onPhotosChange, lang }: {
   );
 }
 
-/* ── Interactive OSM Map with click-to-pin ────────────────────────── */
-function InteractiveMap({ lat, lng, name, onCoordsChange, lang }: {
+/* ── Leaflet interactive map (CDN, no npm install needed) ────────────── */
+function LeafletPinMap({ lat, lng, name, onCoordsChange, lang }: {
   lat: number; lng: number; name: string;
   onCoordsChange: (lat: number, lng: number) => void;
   lang: string;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [localLat, setLocalLat] = useState(String(lat));
-  const [localLng, setLocalLng] = useState(String(lng));
-  const [mapKey, setMapKey] = useState(0);
+  const containerRef  = useRef<HTMLDivElement>(null);
+  const mapRef        = useRef<any>(null);
+  const markerRef     = useRef<any>(null);
+  const initLatRef    = useRef(lat);
+  const initLngRef    = useRef(lng);
+  const [coords, setCoords]           = useState({ lat, lng });
   const [pinFeedback, setPinFeedback] = useState(false);
+  const [loading, setLoading]         = useState(true);
 
-  const applyCoords = (newLat: number, newLng: number) => {
-    if (!isNaN(newLat) && !isNaN(newLng)) {
-      setLocalLat(newLat.toFixed(5));
-      setLocalLng(newLng.toFixed(5));
-      onCoordsChange(newLat, newLng);
-      setMapKey(k => k + 1);
-    }
-  };
-
-  const handleManualApply = () => {
-    applyCoords(parseFloat(localLat), parseFloat(localLng));
-  };
-
-  // Click-to-pin: transparent div overlay captures clicks and converts
-  // pixel position → approximate geographic coordinates using bbox formula.
-  const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const relX = e.clientX - rect.left;
-    const relY = e.clientY - rect.top;
-    // bbox: lng ± 0.03 wide, lat ± 0.02 tall (0.06° × 0.04°)
-    const lngClick = (lng - 0.03) + (relX / rect.width)  * 0.06;
-    const latClick = (lat + 0.02) - (relY / rect.height) * 0.04;
-    applyCoords(parseFloat(latClick.toFixed(5)), parseFloat(lngClick.toFixed(5)));
+  const updatePin = useCallback((newLat: number, newLng: number) => {
+    setCoords({ lat: newLat, lng: newLng });
+    onCoordsChange(newLat, newLng);
     setPinFeedback(true);
     setTimeout(() => setPinFeedback(false), 1800);
-  };
+  }, [onCoordsChange]);
 
-  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.03},${lat - 0.02},${lng + 0.03},${lat + 0.02}&layer=mapnik&marker=${lat},${lng}`;
+  const initLeafletMap = useCallback(() => {
+    if (!containerRef.current || mapRef.current) return;
+    const L = (window as any).L;
+    if (!L) return;
+
+    // Fix broken default marker icon paths (common Leaflet + bundler issue)
+    delete L.Icon.Default.prototype._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+      iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+      shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    });
+
+    const initLat = initLatRef.current;
+    const initLng = initLngRef.current;
+
+    const map = L.map(containerRef.current, {
+      zoomControl: true,
+      attributionControl: false,
+    }).setView([initLat, initLng], 15);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+    }).addTo(map);
+
+    const marker = L.marker([initLat, initLng], { draggable: true }).addTo(map);
+
+    marker.on('dragend', () => {
+      const pos = marker.getLatLng();
+      updatePin(pos.lat, pos.lng);
+    });
+
+    map.on('click', (e: any) => {
+      marker.setLatLng(e.latlng);
+      updatePin(e.latlng.lat, e.latlng.lng);
+    });
+
+    mapRef.current    = map;
+    markerRef.current = marker;
+    setLoading(false);
+  }, [updatePin]);
+
+  // Load Leaflet CSS + JS from CDN once per session
+  useEffect(() => {
+    const onLoad = () => initLeafletMap();
+
+    if ((window as any).L) {
+      initLeafletMap();
+    } else {
+      if (!document.getElementById('leaflet-css')) {
+        const link    = document.createElement('link');
+        link.id       = 'leaflet-css';
+        link.rel      = 'stylesheet';
+        link.href     = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(link);
+      }
+      const existingScript = document.getElementById('leaflet-js') as HTMLScriptElement | null;
+      if (!existingScript) {
+        const script    = document.createElement('script');
+        script.id       = 'leaflet-js';
+        script.src      = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.onload   = onLoad;
+        document.head.appendChild(script);
+      } else if ((window as any).L) {
+        onLoad();
+      } else {
+        existingScript.addEventListener('load', onLoad);
+        return () => existingScript.removeEventListener('load', onLoad);
+      }
+    }
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current    = null;
+        markerRef.current = null;
+      }
+    };
+  }, [initLeafletMap]);
+
+  // Smooth pan + marker move when parent changes lat/lng (e.g., city dropdown)
+  useEffect(() => {
+    if (mapRef.current && markerRef.current) {
+      mapRef.current.flyTo([lat, lng], 15, { duration: 0.8 });
+      markerRef.current.setLatLng([lat, lng]);
+      setCoords({ lat, lng });
+    }
+  }, [lat, lng]);
 
   return (
     <div>
-      {/* Map iframe + click-to-pin overlay */}
-      <div ref={containerRef} className="relative w-full h-44 rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
-        <iframe key={mapKey} src={src} title={name} width="100%" height="100%"
-          style={{ border: 0, display: 'block' }} loading="lazy" referrerPolicy="no-referrer" />
+      <div className="relative w-full rounded-2xl overflow-hidden border border-slate-200 shadow-sm" style={{ height: 220 }}>
+        {/* Loading skeleton */}
+        {loading && (
+          <div className="absolute inset-0 bg-slate-100 flex items-center justify-center z-10">
+            <div className="flex flex-col items-center gap-2">
+              <span className="w-8 h-8 border-4 border-slate-200 border-t-blue-500 rounded-full animate-spin" />
+              <p className="text-xs text-slate-400 font-semibold">
+                {lang === 'ar' ? 'جارٍ تحميل الخريطة…' : 'Loading map…'}
+              </p>
+            </div>
+          </div>
+        )}
+        {/* Leaflet mount point */}
+        <div ref={containerRef} className="w-full h-full" style={{ zIndex: 0 }} />
 
-        {/* Transparent overlay — captures mouse events, shows crosshair cursor */}
-        <div
-          className="absolute inset-0 z-10"
-          style={{ cursor: 'crosshair' }}
-          onClick={handleMapClick}
-          title={lang === 'ar' ? 'انقر لوضع الدبوس' : 'Click to place pin'}
-        />
-
-        {/* Pin-updated feedback toast */}
+        {/* Pin feedback toast */}
         {pinFeedback && (
-          <div className="absolute top-2 start-2 z-20 bg-emerald-600/90 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-lg pointer-events-none flex items-center gap-1.5">
+          <div className="absolute top-2 start-2 z-[500] bg-emerald-600/90 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-lg pointer-events-none flex items-center gap-1.5">
             <Icons.mapPin size={11} />
-            {lang === 'ar' ? 'تم تثبيت الدبوس' : 'Pin updated'}
+            {lang === 'ar' ? 'تم تحديث الدبوس' : 'Pin updated'}
           </div>
         )}
 
-        <div className="absolute bottom-2 start-2 z-20 bg-white/90 backdrop-blur-sm rounded-lg px-2.5 py-1 shadow text-xs font-bold text-slate-700 max-w-[160px] truncate pointer-events-none">
+        {/* Unit label */}
+        <div className="absolute bottom-2 start-2 z-[500] bg-white/90 backdrop-blur-sm rounded-lg px-2.5 py-1 shadow text-xs font-bold text-slate-700 max-w-[180px] truncate pointer-events-none">
           {name}
         </div>
       </div>
 
       <p className="text-[11px] text-blue-600 font-semibold mt-1.5 flex items-center gap-1">
         <Icons.mapPin size={11} />
-        {lang === 'ar' ? 'انقر مباشرة على الخريطة لتحريك دبوس الموقع' : 'Click directly on the map to reposition the pin'}
+        {lang === 'ar'
+          ? 'انقر على الخريطة أو اسحب الدبوس لتحديد الموقع بدقة'
+          : 'Click the map or drag the pin to reposition — coordinates update instantly'}
       </p>
 
-      {/* Manual coordinate inputs */}
-      <div className="flex items-end gap-2 mt-2">
-        <div className="flex-1">
-          <label className="text-xs font-semibold text-slate-500 mb-1 block">
-            {lang === 'ar' ? 'خط العرض' : 'Latitude'}
-          </label>
-          <input
-            type="number" step="0.0001"
-            value={localLat}
-            onChange={e => setLocalLat(e.target.value)}
-            className="input w-full" style={{ direction: 'ltr' }}
-          />
-        </div>
-        <div className="flex-1">
-          <label className="text-xs font-semibold text-slate-500 mb-1 block">
-            {lang === 'ar' ? 'خط الطول' : 'Longitude'}
-          </label>
-          <input
-            type="number" step="0.0001"
-            value={localLng}
-            onChange={e => setLocalLng(e.target.value)}
-            className="input w-full" style={{ direction: 'ltr' }}
-          />
-        </div>
-        <button
-          onClick={handleManualApply}
-          className="btn-primary px-4 py-2 flex-shrink-0 flex items-center gap-1.5 text-xs"
-        >
-          <Icons.mapPin size={13} />
-          {lang === 'ar' ? 'تحديث' : 'Update Pin'}
-        </button>
+      <div className="flex items-center gap-2 mt-1 text-xs text-slate-400" style={{ direction: 'ltr' }}>
+        <Icons.mapPin size={11} className="text-slate-300" />
+        <span className="font-mono">{coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}</span>
       </div>
     </div>
   );
@@ -636,7 +681,7 @@ function UnitModal({ unit, onClose, onSave }: {
               </div>
             </div>
 
-            <InteractiveMap
+            <LeafletPinMap
               lat={form.lat ?? 24.7136}
               lng={form.lng ?? 46.6753}
               name={lang === 'ar' ? ((form as any).nameAr || form.name || 'موقع الوحدة') : (form.name || 'Unit Location')}
@@ -730,6 +775,201 @@ function UnitModal({ unit, onClose, onSave }: {
   );
 }
 
+/* ── Unit Detail Panel (slide-in sidebar) ──────────────────────────── */
+const AMENITY_ICON: Record<string, string> = {
+  wifi: '📶', ac: '❄️', kitchen: '🍳', tv: '📺',
+  washer: '🫧', parking: '🅿️', pool: '🏊', balcony: '🌅',
+};
+
+function UnitDetailPanel({ unit, onClose, onEdit, lang }: {
+  unit: Unit; onClose: () => void; onEdit: (u: Unit) => void; lang: string;
+}) {
+  const { t } = useLang();
+  const p = t.properties;
+  const unitImages = PROPERTY_IMAGES[unit.type] ?? PROPERTY_IMAGES.APARTMENT;
+  const unitImg = (unit as any).uploadedPhotos?.[0] ?? unitImages[0];
+  const displayName = lang === 'ar' ? ((unit as any).nameAr || unit.name) : unit.name;
+
+  const CHANNEL_COLOR: Record<string, string> = {
+    'Booking.com': '#003580', 'Airbnb': '#FF385C', 'Gathern': '#00A651', 'Direct': '#F59E0B',
+  };
+
+  const STATUS_STYLE: Record<string, string> = {
+    ACTIVE:      'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    MAINTENANCE: 'bg-amber-50 text-amber-700 border border-amber-200',
+    INACTIVE:    'bg-slate-50 text-slate-500 border border-slate-200',
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/40 backdrop-blur-sm"
+      onClick={onClose}>
+      <div
+        className="bg-white h-full w-full max-w-sm shadow-2xl flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}
+        style={{ animation: 'slideIn 0.25s ease-out' }}
+      >
+        {/* Header image */}
+        <div className="relative h-44 flex-shrink-0 bg-slate-200 overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={unitImg} alt={unit.name} className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+          <button
+            onClick={onClose}
+            className="absolute top-3 end-3 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/60 transition-colors"
+          >
+            <Icons.x size={15} />
+          </button>
+          <div className="absolute bottom-3 start-4 end-4">
+            <p className="text-white font-extrabold text-base leading-tight truncate">{displayName}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`badge text-[10px] ${STATUS_STYLE[unit.status]}`}>
+                {unit.status === 'ACTIVE' ? p.active : unit.status === 'MAINTENANCE' ? p.maintenance : p.inactive}
+              </span>
+              <span className="text-white/70 text-xs">{unit.city} · {unit.district}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Quick stats */}
+          <div className="grid grid-cols-3 gap-3 p-4 border-b border-slate-100">
+            {[
+              { label: lang === 'ar' ? 'السعر الأساسي' : 'Base Rate', value: `SAR ${unit.basePrice}`, dir: 'ltr' },
+              { label: lang === 'ar' ? 'الإشغال' : 'Occupancy',       value: `${unit.occupancy}%` },
+              { label: lang === 'ar' ? 'الإيراد' : 'Revenue',          value: unit.revenue > 0 ? `SAR ${(unit.revenue / 1000).toFixed(0)}k` : '—', dir: 'ltr' },
+            ].map(s => (
+              <div key={s.label} className="text-center bg-slate-50 rounded-xl p-3">
+                <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide mb-1">{s.label}</p>
+                <p className="text-sm font-extrabold text-slate-900" style={{ direction: (s.dir as any) ?? 'inherit' }}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="p-4 space-y-4">
+            {/* Unit specs */}
+            <div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{lang === 'ar' ? 'مواصفات الوحدة' : 'Unit Specs'}</p>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                {[
+                  { label: lang === 'ar' ? 'النوع' : 'Type',    value: unit.type },
+                  { label: lang === 'ar' ? 'المساحة' : 'Area',  value: `${unit.size} m²` },
+                  { label: lang === 'ar' ? 'غرف النوم' : 'Beds', value: unit.beds },
+                  { label: lang === 'ar' ? 'دورات المياه' : 'Baths', value: unit.baths },
+                  { label: lang === 'ar' ? 'الطابق' : 'Floor',  value: unit.floor || 'Ground' },
+                  { label: lang === 'ar' ? 'الحد الأدنى للإقامة' : 'Min Stay', value: `${unit.minStay}N` },
+                ].map(s => (
+                  <div key={s.label} className="flex items-center justify-between bg-slate-50 rounded-xl px-3 py-2">
+                    <span className="text-xs text-slate-500">{s.label}</span>
+                    <span className="text-xs font-bold text-slate-900">{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Amenities */}
+            {unit.amenities.length > 0 && (
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{p.unitAmenities}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {unit.amenities.map(a => (
+                    <span key={a} className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                      <span>{AMENITY_ICON[a] ?? '✓'}</span> {a}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Pricing breakdown */}
+            <div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{p.pricingEngine}</p>
+              <div className="bg-slate-50 rounded-2xl divide-y divide-slate-100" style={{ direction: 'ltr' }}>
+                {[
+                  { label: 'Base Price',        value: `SAR ${unit.basePrice}` },
+                  { label: 'Weekend Surge',     value: `+${unit.weekendSurge}%` },
+                  { label: 'Peak Multiplier',   value: `×${unit.seasonalPeak}` },
+                  { label: 'Cleaning Fee',      value: `SAR ${unit.cleaningFee}` },
+                  { label: 'Security Deposit',  value: `SAR ${unit.securityDeposit}` },
+                ].map(r => (
+                  <div key={r.label} className="flex justify-between px-3 py-2 text-xs">
+                    <span className="text-slate-500">{r.label}</span>
+                    <span className="font-bold text-slate-900">{r.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Channels */}
+            <div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{p.channels}</p>
+              <div className="flex flex-wrap gap-2">
+                {unit.channels.length > 0 ? unit.channels.map(ch => (
+                  <span key={ch} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white"
+                    style={{ background: CHANNEL_COLOR[ch] ?? '#64748b' }}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-white/60" />{ch}
+                  </span>
+                )) : (
+                  <span className="text-xs text-slate-400 italic">{lang === 'ar' ? 'غير مرتبط بأي قناة' : 'No channels connected'}</span>
+                )}
+              </div>
+            </div>
+
+            {/* Location */}
+            <div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{p.location}</p>
+              <div className="bg-slate-50 rounded-2xl p-3 text-xs space-y-1">
+                <div className="flex gap-2"><span className="text-slate-400">{lang === 'ar' ? 'المدينة' : 'City'}:</span><span className="font-semibold text-slate-800">{unit.city}</span></div>
+                <div className="flex gap-2"><span className="text-slate-400">{lang === 'ar' ? 'الحي' : 'District'}:</span><span className="font-semibold text-slate-800">{unit.district}</span></div>
+                {unit.street && <div className="flex gap-2"><span className="text-slate-400">{lang === 'ar' ? 'الشارع' : 'Street'}:</span><span className="font-semibold text-slate-800">{unit.street}</span></div>}
+                <div className="flex gap-2 mt-1 pt-1 border-t border-slate-100" style={{ direction: 'ltr' }}>
+                  <Icons.mapPin size={11} className="text-slate-400 flex-shrink-0 mt-0.5" />
+                  <span className="font-mono text-slate-500">{unit.lat.toFixed(4)}, {unit.lng.toFixed(4)}</span>
+                </div>
+              </div>
+              {/* Small read-only map */}
+              <div className="relative h-32 rounded-2xl overflow-hidden border border-slate-200 mt-2">
+                <iframe
+                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${unit.lng - 0.02},${unit.lat - 0.015},${unit.lng + 0.02},${unit.lat + 0.015}&layer=mapnik&marker=${unit.lat},${unit.lng}`}
+                  title={unit.name} width="100%" height="100%"
+                  style={{ border: 0 }} loading="lazy" referrerPolicy="no-referrer"
+                />
+              </div>
+            </div>
+
+            {/* Insurance */}
+            <div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t.insurance.title}</p>
+              <div className="flex items-center gap-2 bg-violet-50 rounded-xl px-3 py-2.5 border border-violet-100">
+                <Icons.shield size={14} className="text-violet-600" />
+                <span className="text-xs font-bold text-violet-700">{unit.insuranceProvider}</span>
+                <span className="text-xs text-violet-500 ms-auto">{lang === 'ar' ? 'شريك معتمد' : 'Verified Partner'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Action footer */}
+        <div className="border-t border-slate-100 p-4 flex gap-3 bg-white flex-shrink-0">
+          <button onClick={onClose} className="btn-ghost flex-1 justify-center py-2.5 text-sm">
+            {lang === 'ar' ? 'إغلاق' : 'Close'}
+          </button>
+          <button onClick={() => onEdit(unit)} className="btn-primary flex-1 justify-center py-2.5 text-sm">
+            <Icons.settings size={14} /> {lang === 'ar' ? 'تعديل الوحدة' : 'Edit Unit'}
+          </button>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes slideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to   { transform: translateX(0);    opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 /* ── Main Page ────────────────────────────────────────────────────── */
 export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { t, lang } = useLang();
@@ -743,6 +983,7 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
   const [released, setReleased]     = useState<Record<string, boolean>>({});
   const [filter, setFilter]         = useState<'ALL'|'ACTIVE'|'MAINTENANCE'>('ALL');
   const [shareUnit, setShareUnit]   = useState<Unit | null>(null);
+  const [detailUnit, setDetailUnit] = useState<Unit | null>(null);
   // Kill switch state per unit per channel
   const [killSwitches, setKillSwitches] = useState<Record<string, Record<string, boolean>>>({});
 
@@ -762,7 +1003,7 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
   const filtered = filter === 'ALL' ? units : units.filter(u => u.status === filter);
 
   const openAdd  = () => { setEditUnit(undefined); setShowModal(true); };
-  const openEdit = (u: Unit) => { setEditUnit(u); setShowModal(true); };
+  const openEdit = (u: Unit) => { setDetailUnit(null); setEditUnit(u); setShowModal(true); };
   const handleSave = (form: Partial<Unit>) => {
     if (form.id) {
       setUnits(us => us.map(u => u.id === form.id ? { ...u, ...form } as Unit : u));
@@ -834,12 +1075,19 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
           const displayName = lang === 'ar' ? ((unit as any).nameAr || unit.name) : unit.name;
 
           return (
-            <div key={unit.id} className="card overflow-hidden hover:shadow-lg transition-shadow">
-              {/* Property photo */}
-              <div className="relative h-36 overflow-hidden bg-slate-100">
+            <div key={unit.id} className="card overflow-hidden hover:shadow-lg transition-all hover:-translate-y-0.5 cursor-pointer"
+              onClick={() => setDetailUnit(unit)}>
+              {/* Property photo — clicking opens detail panel */}
+              <div className="relative h-36 overflow-hidden bg-slate-100 group">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={unitImg} alt={unit.name} className="w-full h-full object-cover" loading="lazy" />
+                <img src={unitImg} alt={unit.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                {/* "View details" hover hint */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="bg-white/90 backdrop-blur-sm text-slate-800 text-xs font-bold px-4 py-2 rounded-full flex items-center gap-1.5 shadow-lg">
+                    <Icons.eye size={13} /> {lang === 'ar' ? 'عرض التفاصيل' : 'View Details'}
+                  </span>
+                </div>
                 <div className="absolute bottom-2 start-3 flex items-center gap-1.5">
                   <span className="text-white text-xs font-bold drop-shadow">{unit.city}</span>
                   <span className="text-white/60 text-xs">·</span>
@@ -862,7 +1110,7 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
                   <p className="font-extrabold text-slate-900 leading-none">{displayName}</p>
                   <p className="text-xs text-slate-400 mt-1">{unit.beds}BR / {unit.baths}BA · {unit.size}m²</p>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
                   {/* Share button */}
                   <button
                     onClick={() => setShareUnit(unit)}
@@ -901,7 +1149,7 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
               </div>
 
               {/* Channel Kill Switches */}
-              <div className="px-5 py-3.5 border-b border-slate-50">
+              <div className="px-5 py-3.5 border-b border-slate-50" onClick={e => e.stopPropagation()}>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5">
                   {lang === 'ar' ? 'توفر القنوات' : 'Channel Availability'}
                 </p>
@@ -1042,6 +1290,14 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
       )}
       {shareUnit && (
         <ShareUnitModal unit={shareUnit} onClose={() => setShareUnit(null)} lang={lang} />
+      )}
+      {detailUnit && (
+        <UnitDetailPanel
+          unit={detailUnit}
+          lang={lang}
+          onClose={() => setDetailUnit(null)}
+          onEdit={openEdit}
+        />
       )}
     </div>
   );
