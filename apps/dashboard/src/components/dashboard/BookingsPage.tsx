@@ -193,7 +193,7 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
                           className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500 text-white text-xs font-bold hover:bg-amber-600"
                         >
                           <Icons.arrowRight size={12} />
-                          Check Out
+                          {t.table.checkOut}
                         </button>
                       )}
                     </div>

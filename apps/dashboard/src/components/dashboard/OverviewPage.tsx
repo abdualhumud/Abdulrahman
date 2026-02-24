@@ -24,6 +24,7 @@ function KpiCard({ label, value, sub, trendVal, trendLabel, icon, accent, onClic
   label: string; value: string; sub?: string; trendVal?: number; trendLabel?: string;
   icon: React.ReactNode; accent: string; onClick?: () => void;
 }) {
+  const { t } = useLang();
   const up = (trendVal ?? 0) >= 0;
   return (
     <div
@@ -45,7 +46,7 @@ function KpiCard({ label, value, sub, trendVal, trendLabel, icon, accent, onClic
       )}
       {onClick && (
         <p className="flex items-center gap-0.5 mt-2 text-[10px] text-slate-300 font-semibold">
-          <Icons.arrowRight size={9} /> View details
+          <Icons.arrowRight size={9} /> {t.bookings.view}
         </p>
       )}
     </div>

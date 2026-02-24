@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 export type JourneyStep = 1 | 2 | 3 | 4;
 
@@ -29,14 +29,14 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
     } catch { /* ignore */ }
   }, []);
 
-  const markDone = (step: JourneyStep) => {
+  const markDone = useCallback((step: JourneyStep) => {
     setCompleted(prev => {
       const next = new Set(prev);
       next.add(step);
       localStorage.setItem('rems-journey', JSON.stringify([...next]));
       return next;
     });
-  };
+  }, []);
 
   return (
     <Ctx.Provider value={{ completed, markDone, currentGuide, setGuide }}>

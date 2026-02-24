@@ -886,11 +886,11 @@ function UnitDetailPanel({ unit, onClose, onEdit, lang }: {
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{p.pricingEngine}</p>
               <div className="bg-slate-50 rounded-2xl divide-y divide-slate-100" style={{ direction: 'ltr' }}>
                 {[
-                  { label: 'Base Price',        value: `SAR ${unit.basePrice}` },
-                  { label: 'Weekend Surge',     value: `+${unit.weekendSurge}%` },
-                  { label: 'Peak Multiplier',   value: `×${unit.seasonalPeak}` },
-                  { label: 'Cleaning Fee',      value: `SAR ${unit.cleaningFee}` },
-                  { label: 'Security Deposit',  value: `SAR ${unit.securityDeposit}` },
+                  { label: p.basePrice,        value: `SAR ${unit.basePrice}` },
+                  { label: p.weekendSurge,     value: `+${unit.weekendSurge}%` },
+                  { label: p.seasonalPeak,     value: `×${unit.seasonalPeak}` },
+                  { label: p.cleaningFee,      value: `SAR ${unit.cleaningFee}` },
+                  { label: p.securityDeposit,  value: `SAR ${unit.securityDeposit}` },
                 ].map(r => (
                   <div key={r.label} className="flex justify-between px-3 py-2 text-xs">
                     <span className="text-slate-500">{r.label}</span>

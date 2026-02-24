@@ -15,6 +15,7 @@ const PAGE_TITLES: Record<string, { en: string; ar: string; icon: keyof typeof i
   financials:  { en: 'Financials',         ar: 'التقارير المالية'   , icon: 'financials'  },
   properties:  { en: 'Properties & Units', ar: 'إدارة الأملاك'      , icon: 'properties'  },
   settings:    { en: 'Settings',           ar: 'الإعدادات'           , icon: 'settings'    },
+  shipments:   { en: 'Shipments',          ar: 'الشحنات'             , icon: 'truck'       },
 };
 
 interface Props {

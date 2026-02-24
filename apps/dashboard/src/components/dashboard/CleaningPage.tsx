@@ -349,7 +349,7 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
                     <Icons.shield size={13} className="text-amber-500" />
                   </div>
                   <div>
-                    <p className="text-[10px] text-slate-400 leading-none">Security Deposit</p>
+                    <p className="text-[10px] text-slate-400 leading-none">{t.insurance.title}</p>
                     <p className="text-xs font-bold text-slate-700" style={{ direction: 'ltr' }}>
                       SAR {selected.depositAmount.toLocaleString()}
                       {selected.status !== 'INSPECTION_DONE' && (

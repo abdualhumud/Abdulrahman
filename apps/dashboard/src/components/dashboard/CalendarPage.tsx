@@ -138,9 +138,9 @@ export default function CalendarPage() {
             <p className="text-sm text-slate-400 mt-1">{t.calendar.subtitle}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button className="btn-ghost py-2 px-3 text-xs"><Icons.chevronLeft size={14} /></button>
-            <div className="bg-blue-600 text-white text-sm font-bold px-4 py-2 rounded-xl">Feb 2026</div>
-            <button className="btn-ghost py-2 px-3 text-xs"><Icons.chevronRight size={14} /></button>
+            <button disabled className="btn-ghost py-2 px-3 text-xs opacity-40 cursor-not-allowed" title={lang === 'ar' ? 'البيانات ثابتة لهذا الشهر' : 'Demo data fixed to this month'}><Icons.chevronLeft size={14} /></button>
+            <div className="bg-blue-600 text-white text-sm font-bold px-4 py-2 rounded-xl">{lang === 'ar' ? 'فبراير 2026' : 'Feb 2026'}</div>
+            <button disabled className="btn-ghost py-2 px-3 text-xs opacity-40 cursor-not-allowed" title={lang === 'ar' ? 'البيانات ثابتة لهذا الشهر' : 'Demo data fixed to this month'}><Icons.chevronRight size={14} /></button>
           </div>
         </div>
 
