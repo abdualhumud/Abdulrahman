@@ -382,6 +382,168 @@ export const CLEANING_REQUESTS = [
   },
 ];
 
+// ── Rased Shipments ────────────────────────────────────────────
+export type ShipmentStatus =
+  | 'Created' | 'Confirmed' | 'AwaitingPickup' | 'PickedUp'
+  | 'ArrivedAtSortingFacility' | 'DepartedSortingFacility' | 'InTransit'
+  | 'ArrivedAtDestinationCity' | 'OutForDelivery' | 'Delivered' | 'DeliveryFailed';
+
+export type PreferredDeliveryTime = 'Morning' | 'Afternoon' | 'Evening';
+
+export interface ShipmentAddress {
+  code: string; street: string; buildingNo: string; secondaryNo: string;
+  district: string; postalCode: string; city: string;
+  location: { latitude: number; longitude: number };
+  details: string; isDefaultAddress: boolean; isNationalAddress: boolean;
+  shortAddress: string; addressName: string;
+}
+
+export interface Shipment {
+  shipmentNumber: string;
+  consigneePhoneNumber: { countryCode: string; number: string };
+  consigneeName: { firstName: string; middleName: string | null; lastName: string };
+  consigneeIdentityNumber: string;
+  senderPhoneNumber: { countryCode: string; number: string };
+  senderName: { firstName: string; middleName: string | null; lastName: string };
+  expectedDeliveryDate: string;
+  timeWindowFrom: string;
+  timeWindowTo: string;
+  preferredDeliveryTime: PreferredDeliveryTime;
+  status: ShipmentStatus;
+  address: ShipmentAddress | null;
+  createdAt: string;
+}
+
+export const SHIPMENTS: Shipment[] = [
+  {
+    shipmentNumber: 'SHP-2026-001234',
+    consigneePhoneNumber: { countryCode: '+966', number: '501234567' },
+    consigneeName: { firstName: 'أحمد', middleName: 'محمد', lastName: 'العلي' },
+    consigneeIdentityNumber: '1234567890',
+    senderPhoneNumber: { countryCode: '+966', number: '509876543' },
+    senderName: { firstName: 'شركة', middleName: null, lastName: 'الشحن السريع' },
+    expectedDeliveryDate: '2026-02-25T14:00:00Z',
+    timeWindowFrom: '2026-02-25T09:00:00Z',
+    timeWindowTo: '2026-02-25T18:00:00Z',
+    preferredDeliveryTime: 'Afternoon',
+    status: 'OutForDelivery',
+    address: {
+      code: 'ADDR-12345', street: 'شارع الملك فهد', buildingNo: '1234', secondaryNo: '5678',
+      district: 'العليا', postalCode: '12345', city: 'الرياض',
+      location: { latitude: 24.7136, longitude: 46.6753 },
+      details: 'بجوار مول الرياض', isDefaultAddress: true, isNationalAddress: true,
+      shortAddress: 'RHRY1234', addressName: 'المنزل',
+    },
+    createdAt: '2026-02-24T10:00:00Z',
+  },
+  {
+    shipmentNumber: 'SHP-2026-001235',
+    consigneePhoneNumber: { countryCode: '+966', number: '507654321' },
+    consigneeName: { firstName: 'سارة', middleName: null, lastName: 'الزهراني' },
+    consigneeIdentityNumber: '2345678901',
+    senderPhoneNumber: { countryCode: '+966', number: '509876543' },
+    senderName: { firstName: 'شركة', middleName: null, lastName: 'الشحن السريع' },
+    expectedDeliveryDate: '2026-02-26T14:00:00Z',
+    timeWindowFrom: '2026-02-26T08:00:00Z',
+    timeWindowTo: '2026-02-26T12:00:00Z',
+    preferredDeliveryTime: 'Morning',
+    status: 'InTransit',
+    address: {
+      code: 'ADDR-23456', street: 'طريق الأمير محمد بن عبدالعزيز', buildingNo: '5678', secondaryNo: '1234',
+      district: 'الروضة', postalCode: '23456', city: 'جدة',
+      location: { latitude: 21.5169, longitude: 39.1797 },
+      details: 'مقابل مستشفى الشرق', isDefaultAddress: true, isNationalAddress: true,
+      shortAddress: 'JDRY5678', addressName: 'العمل',
+    },
+    createdAt: '2026-02-23T08:00:00Z',
+  },
+  {
+    shipmentNumber: 'SHP-2026-001236',
+    consigneePhoneNumber: { countryCode: '+966', number: '503456789' },
+    consigneeName: { firstName: 'فهد', middleName: 'عبدالله', lastName: 'القحطاني' },
+    consigneeIdentityNumber: '3456789012',
+    senderPhoneNumber: { countryCode: '+966', number: '509876543' },
+    senderName: { firstName: 'شركة', middleName: null, lastName: 'الشحن السريع' },
+    expectedDeliveryDate: '2026-02-24T14:00:00Z',
+    timeWindowFrom: '2026-02-24T17:00:00Z',
+    timeWindowTo: '2026-02-24T21:00:00Z',
+    preferredDeliveryTime: 'Evening',
+    status: 'Delivered',
+    address: {
+      code: 'ADDR-34567', street: 'شارع العروبة', buildingNo: '9012', secondaryNo: '3456',
+      district: 'النخيل', postalCode: '11433', city: 'الرياض',
+      location: { latitude: 24.8138, longitude: 46.6353 },
+      details: 'فيلا رقم 12، حي النخيل', isDefaultAddress: false, isNationalAddress: true,
+      shortAddress: 'RHNK9012', addressName: 'المنزل الثاني',
+    },
+    createdAt: '2026-02-22T14:00:00Z',
+  },
+  {
+    shipmentNumber: 'SHP-2026-001237',
+    consigneePhoneNumber: { countryCode: '+966', number: '509876543' },
+    consigneeName: { firstName: 'نورة', middleName: 'سعد', lastName: 'الشمري' },
+    consigneeIdentityNumber: '4567890123',
+    senderPhoneNumber: { countryCode: '+966', number: '509876543' },
+    senderName: { firstName: 'شركة', middleName: null, lastName: 'الشحن السريع' },
+    expectedDeliveryDate: '2026-02-27T14:00:00Z',
+    timeWindowFrom: '2026-02-27T09:00:00Z',
+    timeWindowTo: '2026-02-27T18:00:00Z',
+    preferredDeliveryTime: 'Afternoon',
+    status: 'AwaitingPickup',
+    address: null,
+    createdAt: '2026-02-24T09:00:00Z',
+  },
+  {
+    shipmentNumber: 'SHP-2026-001238',
+    consigneePhoneNumber: { countryCode: '+966', number: '551234567' },
+    consigneeName: { firstName: 'عبدالعزيز', middleName: null, lastName: 'المطيري' },
+    consigneeIdentityNumber: '5678901234',
+    senderPhoneNumber: { countryCode: '+966', number: '509876543' },
+    senderName: { firstName: 'شركة', middleName: null, lastName: 'الشحن السريع' },
+    expectedDeliveryDate: '2026-02-23T14:00:00Z',
+    timeWindowFrom: '2026-02-23T09:00:00Z',
+    timeWindowTo: '2026-02-23T18:00:00Z',
+    preferredDeliveryTime: 'Morning',
+    status: 'DeliveryFailed',
+    address: {
+      code: 'ADDR-56789', street: 'شارع التخصصي', buildingNo: '2345', secondaryNo: '6789',
+      district: 'الملز', postalCode: '12625', city: 'الرياض',
+      location: { latitude: 24.6877, longitude: 46.7219 },
+      details: 'بجوار مدينة الملك فهد الطبية', isDefaultAddress: true, isNationalAddress: true,
+      shortAddress: 'RHMZ2345', addressName: 'المنزل',
+    },
+    createdAt: '2026-02-21T10:00:00Z',
+  },
+  {
+    shipmentNumber: 'SHP-2026-001239',
+    consigneePhoneNumber: { countryCode: '+966', number: '542345678' },
+    consigneeName: { firstName: 'خالد', middleName: 'عمر', lastName: 'الدوسري' },
+    consigneeIdentityNumber: '6789012345',
+    senderPhoneNumber: { countryCode: '+966', number: '509876543' },
+    senderName: { firstName: 'شركة', middleName: null, lastName: 'الشحن السريع' },
+    expectedDeliveryDate: '2026-02-26T14:00:00Z',
+    timeWindowFrom: '2026-02-26T12:00:00Z',
+    timeWindowTo: '2026-02-26T17:00:00Z',
+    preferredDeliveryTime: 'Afternoon',
+    status: 'Confirmed',
+    address: {
+      code: 'ADDR-67890', street: 'طريق الملك سلمان', buildingNo: '3456', secondaryNo: '7890',
+      district: 'الغدير', postalCode: '14261', city: 'الرياض',
+      location: { latitude: 24.7750, longitude: 46.7012 },
+      details: 'برج الفيصلية، الدور العاشر', isDefaultAddress: false, isNationalAddress: true,
+      shortAddress: 'RHGD3456', addressName: 'المكتب',
+    },
+    createdAt: '2026-02-24T07:00:00Z',
+  },
+];
+
+export const SHIPMENT_NOTIFICATIONS = [
+  { id: 'wh1', shipmentNumber: 'SHP-2026-001234', message: 'Shipment SHP-2026-001234 has been updated with a new address', time: '10:42 AM', responseStatus: 200, isRead: false },
+  { id: 'wh2', shipmentNumber: 'SHP-2026-001236', message: 'Shipment SHP-2026-001236 has been updated with a new address', time: '09:15 AM', responseStatus: 200, isRead: false },
+  { id: 'wh3', shipmentNumber: 'SHP-2026-001239', message: 'Shipment SHP-2026-001239 has been updated with a new address', time: 'Yesterday', responseStatus: 200, isRead: true },
+  { id: 'wh4', shipmentNumber: 'SHP-2026-001235', message: 'Shipment SHP-2026-001235 has been updated with a new address', time: 'Yesterday', responseStatus: 200, isRead: true },
+];
+
 export const DAILY_OCCUPANCY = [
   { day: 'Feb 15', rate: 75 }, { day: 'Feb 16', rate: 75 },
   { day: 'Feb 17', rate: 75 }, { day: 'Feb 18', rate: 50 },
