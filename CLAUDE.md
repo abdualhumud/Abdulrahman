@@ -270,17 +270,45 @@ export const Icons = {
 ### Key Exports
 
 ```ts
-OWNER             // { fullName, email, phone, plan }
-KPI_DATA          // { totalRevenue, netPayout, averageOccupancy, adr, revPAR, totalBookings, ... }
-MONTHLY_REVENUE   // [{ month: string, revenue: number }] × 12
-CHANNEL_BREAKDOWN // [{ channel, revenue, share, color }] × 5
-RECENT_BOOKINGS   // [{ id, guest, property, unit, channel, channelColor, checkIn, checkOut, nights, amount, status }]
-CHANNEL_SYNC_STATUS // [{ channel, logo, bg, lastSync, syncMethod }]
-UNITS             // [{ id, name, type, city, district, bedrooms, bathrooms, area, status, lat, lng, images[] }]
-CLEANING_REQUESTS // [{ id, unitId, guestName, bookingId, checkoutDate, status, provider, messages[], ... }]
-CLEANING_PROVIDERS // [{ id, name, type: 'INTERNAL'|'EXTERNAL', rating, available, phone }]
-INSURANCE_RECORDS  // [{ bookingId, provider, depositAmount, depositStatus: 'HELD'|'PENDING'|'RELEASED' }]
+OWNER                // { fullName, email, phone, plan }
+KPI_DATA             // { totalRevenue, netPayout, averageOccupancy, adr, revPAR, totalBookings, ... }
+MONTHLY_REVENUE      // [{ month: string, revenue: number }] × 12
+CHANNEL_BREAKDOWN    // [{ channel, revenue, share, color }] × 5
+RECENT_BOOKINGS      // [{ id, guest, property, unit, channel, channelColor, checkIn, checkOut, nights, amount, status }]
+CHANNEL_SYNC_STATUS  // [{ channel, logo, bg, lastSync, syncMethod, isConnected, bookingsToday, pending, failed }]
+UNITS                // [{ id, name, nameAr, type, city, district, street, lat, lng, beds, baths, size, floor,
+                     //    basePrice, weekendSurge, seasonalPeak, cleaningFee, securityDeposit, minStay,
+                     //    channels[], amenities[], status, occupancy, revenue, photos, insuranceProvider, color }]
+CLEANING_REQUESTS    // [{ id, unitId, guestName, bookingId, checkoutDate, status, provider, messages[], ... }]
+CLEANING_PROVIDERS   // [{ id, name, type: 'INTERNAL'|'EXTERNAL', rating, available, phone }]
+INSURANCE_RECORDS    // [{ bookingId, provider, depositAmount, status: 'HELD'|'PENDING_INSPECTION'|'RELEASED' }]
+SHIPMENTS            // [{ shipmentNumber, consigneeName, consigneePhoneNumber, consigneeIdentityNumber,
+                     //    senderName, senderPhoneNumber, expectedDeliveryDate, timeWindowFrom, timeWindowTo,
+                     //    preferredDeliveryTime, status: ShipmentStatus, address: ShipmentAddress|null, createdAt }]
+SHIPMENT_NOTIFICATIONS // [{ id, shipmentNumber, message, time, responseStatus, isRead }]
+DAILY_OCCUPANCY      // [{ day: string, rate: number }] — used in AnalyticsPage
 ```
+
+**Shipment types:**
+```ts
+export type ShipmentStatus =
+  | 'Created' | 'Confirmed' | 'AwaitingPickup' | 'PickedUp'
+  | 'ArrivedAtSortingFacility' | 'DepartedSortingFacility' | 'InTransit'
+  | 'ArrivedAtDestinationCity' | 'OutForDelivery' | 'Delivered' | 'DeliveryFailed';
+
+export type PreferredDeliveryTime = 'Morning' | 'Afternoon' | 'Evening';
+
+export interface ShipmentAddress {
+  code: string; street: string; buildingNo: string; secondaryNo: string;
+  district: string; postalCode: string; city: string;
+  location: { latitude: number; longitude: number };
+  details: string; isDefaultAddress: boolean; isNationalAddress: boolean;
+  shortAddress: string; addressName: string;
+}
+```
+
+**UNITS — key fields for Rate Parity Manager:**
+Each unit carries its own `basePrice`, `minStay`, `channels[]`, and `weekendSurge`. Always load these from the selected unit when building per-channel pricing forms — do not use a generic category-level default.
 
 ### CleaningStatus Type
 
@@ -330,6 +358,8 @@ const handleCityChange = (city: string) => {
 
 ## Maps
 
+### Read-only OSM embed (view-only, e.g. unit cards in detail panel)
+
 **No API key needed.** Use OpenStreetMap embed iframe:
 
 ```tsx
@@ -347,6 +377,89 @@ function OSMMap({ lat, lng, name }: { lat: number; lng: number; name: string }) 
 ```
 
 bbox formula: `lng ± 0.03` for width, `lat ± 0.02` for height (roughly 3×2 km view).
+
+### Interactive Leaflet map (click-to-pin, drag, flyTo) — no npm install
+
+Load Leaflet from CDN via `useEffect`. Zero new packages, works with static export.
+
+**Key pattern (`LeafletPinMap` in `PropertiesPage.tsx`):**
+
+```tsx
+function LeafletPinMap({ lat, lng, name, onCoordsChange, lang }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef       = useRef<any>(null);
+  const markerRef    = useRef<any>(null);
+  const initLatRef   = useRef(lat);   // stable initial values for initLeafletMap closure
+  const initLngRef   = useRef(lng);
+
+  const initLeafletMap = useCallback(() => {
+    if (!containerRef.current || mapRef.current) return;
+    const L = (window as any).L;
+    if (!L) return;
+
+    // Fix broken default marker icon (common Leaflet + bundler issue)
+    delete L.Icon.Default.prototype._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+      iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+      shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    });
+
+    const map = L.map(containerRef.current, { zoomControl: true, attributionControl: false })
+      .setView([initLatRef.current, initLngRef.current], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+    const marker = L.marker([initLatRef.current, initLngRef.current], { draggable: true }).addTo(map);
+    marker.on('dragend', () => { const p = marker.getLatLng(); onCoordsChange(p.lat, p.lng); });
+    map.on('click', (e: any) => { marker.setLatLng(e.latlng); onCoordsChange(e.latlng.lat, e.latlng.lng); });
+
+    mapRef.current = map; markerRef.current = marker;
+  }, [onCoordsChange]);
+
+  // Load CSS + JS once per page session
+  useEffect(() => {
+    if ((window as any).L) { initLeafletMap(); return; }
+
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link');
+      link.id = 'leaflet-css'; link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+    }
+    const existing = document.getElementById('leaflet-js') as HTMLScriptElement | null;
+    if (!existing) {
+      const script = document.createElement('script');
+      script.id = 'leaflet-js'; script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = initLeafletMap;
+      document.head.appendChild(script);
+    } else if ((window as any).L) {
+      initLeafletMap();
+    } else {
+      existing.addEventListener('load', initLeafletMap);
+      return () => existing.removeEventListener('load', initLeafletMap);
+    }
+    return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
+  }, [initLeafletMap]);
+
+  // Smooth auto-pan when city/neighbourhood dropdown changes
+  useEffect(() => {
+    if (mapRef.current && markerRef.current) {
+      mapRef.current.flyTo([lat, lng], 15, { duration: 0.8 });
+      markerRef.current.setLatLng([lat, lng]);
+    }
+  }, [lat, lng]);
+
+  return <div ref={containerRef} className="w-full h-52 rounded-2xl" style={{ zIndex: 0 }} />;
+}
+```
+
+**Critical rules:**
+- Use `useRef` for initial lat/lng (`initLatRef`, `initLngRef`) so `initLeafletMap` closure doesn't capture stale values
+- Always check `if (mapRef.current) return` to prevent double-init on re-render
+- Always remove the map in the `useEffect` cleanup: `mapRef.current.remove()`
+- Check `document.getElementById('leaflet-js')` before adding the script tag — multiple component mounts will otherwise add duplicate scripts
+- The second `useEffect` (auto-pan) depends on `[lat, lng]` from props, which changes when the city dropdown fires `handleCityChange`
+- Leaflet's z-index system uses integer z-index. Set the container `style={{ zIndex: 0 }}` and overlay toasts to `z-[500]` to sit above Leaflet's internal layers
 
 ---
 
@@ -431,8 +544,36 @@ Every interactive element must trigger a visible state change. Patterns used:
 | "Force Sync" | Async with `syncState`: idle → syncing (spinner) → done (✓) → reset after 3s |
 | "Check Out" | Optimistic status update in `localStatuses` state, then navigate |
 | Notification bell | `onClick={() => onNavigate('inbox')}` + animate-pulse dot |
+| Unit cards | `onClick={() => setDetailUnit(unit)}` on the card wrapper; `e.stopPropagation()` on nested interactive zones (kill-switch row, action buttons) |
+| Channel kill switch | Toggle button with CSS `transition-all duration-300` on the thumb position; disabled during animation via `killAnimating` state |
 
 **Dead button pattern to avoid:** Any `<button>` or clickable `<div>` without an `onClick` handler is a dead end — audit for these before shipping.
+
+**stopPropagation pattern:** When a card is fully clickable but contains nested buttons, wrap the nested interactive area in a `<div onClick={e => e.stopPropagation()}>` so inner clicks don't bubble to the card handler.
+
+```tsx
+// Card is fully clickable → opens detail panel
+<div onClick={() => setDetailUnit(unit)} className="card cursor-pointer">
+  {/* This area contains buttons — stop propagation */}
+  <div onClick={e => e.stopPropagation()}>
+    <button onClick={() => setShareUnit(unit)}>Share</button>
+    <button onClick={() => openEdit(unit)}>Edit</button>
+  </div>
+</div>
+```
+
+**Hover animation pattern for clickable cards:**
+```tsx
+className="card hover:shadow-lg transition-all hover:-translate-y-0.5 cursor-pointer"
+// Image inside scales on hover:
+<div className="group">
+  <img className="group-hover:scale-105 transition-transform duration-500" />
+  {/* Overlay hint appears on hover */}
+  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+    View Details
+  </div>
+</div>
+```
 
 ---
 
@@ -484,6 +625,129 @@ First load JS target: ~147 kB (acceptable for a dashboard app).
 
 ---
 
+## Unit Drill-Down Pattern (Detail Panel)
+
+`UnitDetailPanel` in `PropertiesPage.tsx` — a slide-in sidebar that shows full unit info without leaving the page.
+
+**Trigger:** click anywhere on a unit card → `setDetailUnit(unit)`.
+**Dismiss:** click the backdrop, the ✕ button, or the Close footer button.
+**Edit transition:** "Edit Unit" button calls `openEdit(unit)` which does `setDetailUnit(null)` then opens `UnitModal`.
+
+**Slide-in animation (pure CSS, no library):**
+```tsx
+<div style={{ animation: 'slideIn 0.25s ease-out' }}>...</div>
+
+<style>{`
+  @keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+  }
+`}</style>
+```
+
+**Structure:**
+```
+fixed inset-0 backdrop           ← click to close
+  └── max-w-sm panel (RTL: start side, LTR: end side)
+        ├── Header image h-44 (with gradient + status badge)
+        ├── flex-1 overflow-y-auto
+        │     ├── Quick stats (3-col grid)
+        │     ├── Unit specs (2-col key-value grid)
+        │     ├── Amenities (emoji chips)
+        │     ├── Pricing breakdown (LTR table)
+        │     ├── Channels (colored badges)
+        │     ├── Location (text + OSM embed iframe)
+        │     └── Insurance (violet badge)
+        └── Footer: Close | Edit Unit
+```
+
+**Why OSM iframe (not Leaflet) in the detail panel?**
+The detail panel is read-only — the user cannot move the pin here. OSM iframe is sufficient and avoids loading a second Leaflet instance. Reserve `LeafletPinMap` for the Add/Edit modal where coordinates can change.
+
+---
+
+## Channel Logo Pattern
+
+Branded SVG logos rendered inline — no image files, no external CDN for logos.
+
+```tsx
+function ChannelLogo({ channel, isActive = true }: { channel: string; isActive?: boolean }) {
+  const inactiveStyle = !isActive ? { filter: 'grayscale(100%)', opacity: 0.4 } : {};
+
+  if (channel === 'Booking.com') return (
+    <div style={{ background: '#003580', ...inactiveStyle }}
+      className="w-12 h-12 rounded-2xl flex flex-col items-center justify-center">
+      <svg width="34" height="30" viewBox="0 0 34 30" fill="none">
+        <text x="3" y="20" fontFamily="Arial Black,sans-serif" fontWeight="900" fontSize="18" fill="white">B</text>
+        <text x="17" y="20" fontFamily="Arial Black,sans-serif" fontWeight="900" fontSize="18" fill="#6699FF">.</text>
+        <text x="3" y="28" fontFamily="Arial,sans-serif" fontWeight="700" fontSize="7" fill="white" letterSpacing="1">BOOKING</text>
+      </svg>
+    </div>
+  );
+  // Airbnb: bélo SVG path in #FF385C
+  // Gathern: "G" + "GATHERN" text in #00A651
+}
+```
+
+**Active/Inactive state:**
+- Active (connected, kill-switch ON): full brand color
+- Inactive (disconnected or kill-switch OFF): `filter: grayscale(100%)` + `opacity: 0.4`
+- Apply via inline style object, not Tailwind class, to keep the logic one place
+
+**Brand colors (authoritative):**
+| Channel | Primary | Background |
+|---|---|---|
+| Booking.com | `#003580` | `#EEF2FF` |
+| Airbnb | `#FF385C` | `#FFF1F2` |
+| Gathern | `#00A651` | `#F0FDF4` |
+| Direct | `#F59E0B` | `#FFFBEB` |
+
+---
+
+## Rate Parity Manager Pattern (Unit-Specific)
+
+The Rate Parity Manager in `ChannelsPage.tsx` must operate at the **individual unit** level, not the unit-type level.
+
+**Workflow:**
+1. User types or picks from a searchable dropdown → unit auto-selected
+2. `handleUnitSelect(unit)` fires: pre-fills `minStay`, sets per-channel prices to `unit.basePrice`, enables only channels the unit is already listed on
+3. User adjusts per-channel prices and toggles channels on/off
+4. "Push" button → async 1.8s simulate → success toast scoped to unit name
+
+**Searchable dropdown pattern (no external library):**
+```tsx
+const [showDropdown, setShowDropdown] = useState(false);
+const [unitSearch, setUnitSearch]     = useState('');
+
+const filteredUnits = UNITS.filter(u =>
+  unitSearch === '' ||
+  u.name.toLowerCase().includes(unitSearch.toLowerCase()) ||
+  u.city.toLowerCase().includes(unitSearch.toLowerCase())
+);
+
+// Input opens dropdown on focus; backdrop div closes it on click-away
+{showDropdown && <div className="fixed inset-0 z-20" onClick={() => setShowDropdown(false)} />}
+```
+
+**Pre-fill on unit select:**
+```tsx
+const handleUnitSelect = (unit: Unit) => {
+  setSelectedUnitId(unit.id);
+  setUnitSearch(unit.name);           // shows unit name in the input
+  setShowDropdown(false);
+  setMinStay(String(unit.minStay));
+  const price = String(unit.basePrice);
+  setChannelPrices({ 'Booking.com': price, 'Airbnb': price, 'Gathern': price });
+  setChannelEnabled({
+    'Booking.com': unit.channels.includes('Booking.com'),
+    'Airbnb':      unit.channels.includes('Airbnb'),
+    'Gathern':     unit.channels.includes('Gathern'),
+  });
+};
+```
+
+---
+
 ## Common Pitfalls
 
 ### 1. Write tool "File has not been read yet"
@@ -508,6 +772,50 @@ Provider must be in the outermost component (`Home`), not inside `App`. Otherwis
 
 ### 6. Recharts in RTL
 Charts go backwards in RTL mode. Always wrap chart containers with `style={{ direction: 'ltr' }}`.
+
+### 7. Leaflet double-init / memory leak
+`LeafletPinMap` can mount more than once (modal open/close). Always guard:
+```tsx
+const initLeafletMap = useCallback(() => {
+  if (!containerRef.current || mapRef.current) return; // ← guard
+  ...
+}, []);
+// And clean up:
+return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
+```
+
+### 8. Leaflet marker icon broken in bundled apps
+Default Leaflet marker icon URLs break when Leaflet is loaded from CDN but the image paths are resolved by the bundler. Fix before creating any marker:
+```tsx
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
+```
+
+### 9. Leaflet z-index conflicts with modal overlays
+Leaflet internally sets high z-indexes on its layers (~400–1000). When the map is inside a modal, set the modal's backdrop z-index higher than Leaflet's tile pane:
+- Map container: `style={{ zIndex: 0 }}` (resets stacking context)
+- Toasts / overlays on top of the map: `z-[500]` (Tailwind arbitrary)
+- Modal backdrop (if any): `z-50` minimum
+
+### 10. Slide-in animation direction in RTL
+The `slideIn` keyframe uses `translateX(100%)` (slides from the right). In RTL layouts where the panel should appear from the left, use `translateX(-100%)`. Check `lang === 'ar'` to decide direction if needed.
+
+### 11. SVG `<text>` elements in logos
+SVG `<text>` elements render correctly in all modern browsers but may not show in some SVG export/screenshot tools. For critical branding, test cross-browser. As a fallback, use HTML `<span>` inside a flex div instead of SVG text nodes.
+
+### 12. Searchable dropdown with click-away
+The simplest click-away implementation is a fixed full-screen transparent `<div>` that sits behind the dropdown and fires `setShowDropdown(false)` on click. No `useEffect` + `document.addEventListener` needed.
+```tsx
+{showDropdown && (
+  <div className="fixed inset-0 z-20" onClick={() => setShowDropdown(false)} />
+)}
+<div className="absolute z-30 top-full mt-1 ...dropdown content...">
+```
+The dropdown (`z-30`) must be above the backdrop (`z-20`).
 
 ---
 
