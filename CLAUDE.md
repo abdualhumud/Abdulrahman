@@ -49,13 +49,20 @@ A bilingual (Arabic/English) SaaS property management dashboard for Saudi proper
         │   │       ├── AnalyticsPage.tsx
         │   │       └── FinancialsPage.tsx
         │   └── lib/
-        │       ├── icons.tsx          # All icons as inline SVG functions
-        │       ├── i18n.ts            # Full EN/AR translation object
-        │       ├── mock-data.ts       # All static data
-        │       ├── saudi-cities.ts    # Saudi city/neighbourhood/GPS data
+        │       ├── icons.tsx              # All icons as inline SVG functions
+        │       ├── i18n.ts                # Full EN/AR translation object
+        │       ├── mock-data.ts           # All static data
+        │       ├── saudi-cities.ts        # Saudi city/neighbourhood/GPS data
         │       ├── language-context.tsx
-        │       └── journey-context.tsx
-        └── out/                       # Static export output (gitignored)
+        │       ├── journey-context.tsx
+        │       ├── booking-com-service.ts # Booking.com Connectivity API client
+        │       ├── overlap-guard.ts       # Exclusive-lock overlap prevention engine
+        │       ├── gathern-service.ts     # Gathern REST/JSON bridge + poller
+        │       ├── airbnb-service.ts      # Airbnb Partner API (OAuth 2.0 + webhooks)
+        │       └── reservation-engine.ts  # Centralised <500ms transaction engine
+        └── tests/
+        │   └── test-integration.mjs      # 69-test plain Node.js suite (no framework)
+        └── out/                           # Static export output (gitignored)
 ```
 
 ---
@@ -224,6 +231,19 @@ export const translations = {
     },
     journey: {   // 9 keys
       title, step1, step2, step3, step4, done, current, pending, goTo, nextStep
+    },
+    channels: {  // 60+ keys — IntegrationMonitor + Airbnb + Ultimate Overlap
+      // IntegrationMonitor
+      integMonitor, authFlow, authStep1, authStep2, authStep3,
+      overlapGuard, guardUnit, guardChannel, guardCheckIn, guardCheckOut, guardSimulate,
+      syncLog, ...guardStep labels, ...log labels,
+      // Airbnb panel
+      airbnbTitle, airbnbOAuth, airbnbWebhook, airbnbIcal,
+      // Ultimate Overlap panel
+      ultimateTitle, ultimateDesc,
+      phasePreCheck, phaseLock, phaseCommit, phaseBroadcast,
+      txLog, txConfirmed, txOverlap, avgLatency, maxLatency, totalTx,
+      runDemo, running, channelBlock,
     },
   },
   ar: { /* mirror of en with Arabic strings, dir: 'rtl' as const */ }
@@ -619,9 +639,14 @@ NODE_ENV=production npm run build --prefix apps/dashboard
 
 # Check output size
 ls -la apps/dashboard/out/
+
+# Run integration tests (no transpiler needed)
+node apps/dashboard/tests/test-integration.mjs
 ```
 
 First load JS target: ~147 kB (acceptable for a dashboard app).
+
+**Test file location:** `apps/dashboard/tests/test-integration.mjs` — plain ES modules, uses `node:assert/strict`, no external dependencies. Currently 69 tests, all passing.
 
 ---
 
@@ -748,6 +773,249 @@ const handleUnitSelect = (unit: Unit) => {
 
 ---
 
+## OTA Channel Integration Services
+
+Five service modules live in `src/lib/`. All are browser-safe (no `node:` built-ins at import level) because Next.js static export bundles them for the browser.
+
+### `booking-com-service.ts` — Booking.com Connectivity API
+
+- **Protocol:** OTA 2003B XML + B.XML
+- **Auth endpoint:** `POST https://connectivity-authentication.booking.com/token-based-authentication/exchange`
+- **XML endpoint (non-PCI):** `https://supply-xml.booking.com`
+- **XML endpoint (PCI):** `https://secure-supply-xml.booking.com`
+- **Token TTL:** 1 hr; cached with 5-min pre-expiry refresh; max 30 tokens/hr
+- **OTA message builders:** `buildAvailNotifXml` (OTA_HotelAvailNotifRQ), `buildRatePlanNotifXml` (OTA_HotelRatePlanNotifRQ), `buildReadReservationsXml` (OTA_ReadRQ), `buildReservationAckXml` (OTA_HotelResNotifRQ with `ResStatus="Commit"`)
+
+Key availability block fields:
+```ts
+// Block dates: Status="Close", BookingLimit="0"
+// Open dates:  Status="Open",  BookingLimit="1"
+// InvTypeCode and RoomTypeCode both = unitId
+```
+
+### `overlap-guard.ts` — Exclusive-Lock Overlap Engine
+
+In-memory Map (`_locks`, `_bookings`). Swap for Redis `SET NX PX` in production.
+
+- **Lock constants:** TTL = 10 s, poll = 50 ms, wait timeout = 5 s
+- **Overlap formula:** `!(reqOut <= bookedIn || reqIn >= bookedOut)` (half-open intervals — adjacent bookings are NOT overlaps)
+- **Flow:** `processBookingRequest` → `acquireLock` → `checkAvailability` → commit → `releaseLock` → `broadcastAvailabilityBlock`
+- **Token protection:** `releaseLock` checks `stored.token === handle.token`; wrong-token release is silently ignored
+
+```ts
+// Adjacent booking edge case — MUST pass:
+// existing: 2026-07-01 → 2026-07-05
+// new:      2026-07-05 → 2026-07-10   ← reqOut(05) <= bookedIn(05) → NOT overlap ✓
+```
+
+### `gathern-service.ts` — Gathern REST/JSON Bridge
+
+Saudi OTA. Polling-based (no webhooks). Polling interval: 120 s.
+
+```ts
+pushGathernBlock(req, fetchFn)    // PUT /units/{id}/availability  { available, quantity: 0|1 }
+pushGathernRates(req, fetchFn)    // PUT /units/{id}/rates         { nightly_rate, cleaning_fee? }
+pullGathernReservations(...)      // GET /reservations?unit_ids=&since=&status=confirmed,...
+startGathernPoller(config)        // Returns { stop() } — clears interval on teardown
+```
+
+**Key:** `cleaning_fee` is included in rate pushes when provided (Gathern-specific field). Omit it entirely when not provided — do not send `cleaning_fee: undefined`.
+
+### `airbnb-service.ts` — Airbnb Partner API
+
+**Auth flow:** OAuth 2.0 Authorization Code (user-level consent — NOT `client_credentials`).
+
+```ts
+// Step 1: redirect user
+buildAuthorizationUrl(credentials, state)
+// → https://www.airbnb.com/oauth2/auth?client_id=&response_type=code&scope=...&state=
+
+// Step 2: exchange code on callback
+exchangeAuthorizationCode(credentials, code, fetchFn)
+// POST https://api.airbnb.com/v2/oauth2/token  Content-Type: application/x-www-form-urlencoded
+// body: grant_type=authorization_code&client_id=&client_secret=&redirect_uri=&code=
+
+// Step 3: refresh when near-expiry
+refreshAccessToken(credentials, refreshToken, fetchFn)
+// grant_type=refresh_token; keep old refreshToken if new one not returned
+```
+
+**Calendar operations** — single endpoint handles both availability and pricing:
+```ts
+pushAirbnbBlock(op, accessToken, fetchFn)
+// PUT https://api.airbnb.com/v2/calendar_operations
+// body: { listing_id, start_date, end_date, availability: 'available'|'unavailable',
+//         daily_price: SAR * 100,   ← Airbnb prices are in CENTS
+//         min_nights? }
+```
+
+**Webhook verification** — HMAC-SHA256 using Web Crypto API (browser-safe):
+```ts
+export async function verifyWebhookSignature(rawBody: string, signature: string, webhookSecret: string): Promise<void> {
+  const enc = new TextEncoder();
+  const key = await globalThis.crypto.subtle.importKey(
+    'raw', enc.encode(webhookSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const sigBytes = await globalThis.crypto.subtle.sign('HMAC', key, enc.encode(rawBody));
+  const expected = Array.from(new Uint8Array(sigBytes))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+  // Constant-time compare (timing-safe)
+  if (expected.length !== signature.length) throw new Error('Webhook signature mismatch');
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+  if (diff !== 0) throw new Error('Webhook signature mismatch');
+}
+```
+
+**CRITICAL:** Do NOT use `import { createHmac } from 'node:crypto'`. The `node:` scheme is not handled by webpack in a static Next.js export — it throws `UnhandledSchemeError` at build time. Always use `globalThis.crypto.subtle` instead.
+
+**iCal fallback** (`generateICalFeed`): RFC 5545 VCALENDAR/VEVENT for the ~15-min polling fallback when webhooks are unavailable. Date format: `YYYYMMDD` (no dashes) in `DTSTART;VALUE=DATE:`.
+
+### `reservation-engine.ts` — Centralised <500ms Transaction Engine
+
+Single source of truth for all booking confirmations across all channels.
+
+**Phase budget:**
+| Phase | Budget | What happens |
+|---|---|---|
+| PreCheck | ≤150 ms | Local registry overlap check (in-memory, fast) |
+| Lock | ≤50 ms | Acquire exclusive lock with deadline |
+| Commit | ≤50 ms | Re-check (under lock) + write to registry |
+| Broadcast | ≤250 ms | Parallel push to Booking.com + Airbnb + Gathern |
+| **Total** | **≤500 ms** | Hard deadline — exceeded → `REJECTED_DEADLINE_EXCEEDED` |
+
+**Key API:**
+```ts
+processBooking(request, creds?)  // main entry point → TransactionRecord
+getTransactionLog()              // all TransactionRecord[]
+getMetrics()                     // { totalProcessed, confirmed, rejectedOverlap, avgDurationMs, maxDurationMs }
+getActiveLocks()                 // active lock map snapshot
+seedRegistry(bookings)           // pre-populate for testing
+_clearState()                    // reset all state (test use only)
+```
+
+**TransactionRecord shape:**
+```ts
+interface TransactionRecord {
+  id: string;          // TX-{timestamp}
+  request: BookingRequest;
+  status: 'CONFIRMED' | 'REJECTED_OVERLAP' | 'REJECTED_DEADLINE_EXCEEDED' | 'REJECTED_LOCK_TIMEOUT';
+  booking?: { internalId: string; confirmedAt: number; ... };
+  durationMs: number;
+  phases: { preCheckMs: number; lockMs: number; commitMs: number; broadcastMs: number };
+  broadcastResults?: { channel: string; success: boolean; durationMs: number }[];
+}
+```
+
+**Race condition guarantee:** Lock acquisition is exclusive per `unitId::checkIn::checkOut` key. Post-lock re-check ensures correctness even when multiple requests pass the initial PreCheck. Result: exactly **1 winner** in any N-way concurrent race for the same unit+dates.
+
+**Transaction log + metrics** are accumulated in module-level state. Call `_clearState()` at the start of each isolated test. The metrics object must be reset alongside the registry — forgetting this causes cumulative count failures across test suites.
+
+---
+
+## ChannelsPage.tsx — Integration Panels
+
+`ChannelsPage` renders four major sections in order:
+
+1. **Channel cards** — kill-switch, sync status, force-sync button
+2. **`AirbnbIntegrationPanel`** — OAuth step-by-step, webhook event reference table, Simulate Instant Book log
+3. **`UltimateOverlapPanel`** — 4-phase timeline with budget bars, 3-way concurrent race demo, transaction log table, metrics grid
+4. **`IntegrationMonitor`** — Booking.com auth accordion, OTA XML viewer, overlap guard simulator, live sync log
+5. **`RateParityManager`** — unit-specific price push (existing)
+6. Revenue breakdown chart (existing)
+
+**`AirbnbIntegrationPanel` demo pattern:**
+```tsx
+const [webhookLog, setWebhookLog] = useState<string[]>([]);
+const simulateInstantBook = () => {
+  setWebhookLog(prev => [
+    `[${new Date().toISOString()}] POST /webhooks/airbnb  X-Airbnb-Signature: sha256=...`,
+    `[${new Date().toISOString()}] ✓ HMAC-SHA256 verified`,
+    `[${new Date().toISOString()}] reservation_id: AIR-${Math.random().toString(36).slice(2,8).toUpperCase()}`,
+    ...prev,
+  ]);
+};
+```
+
+**`UltimateOverlapPanel` demo pattern:**
+```tsx
+const runDemo = async () => {
+  setIsRunning(true);
+  _clearState();
+  const channels = ['Booking.com', 'Airbnb', 'Gathern'] as const;
+  const results = await Promise.all(channels.map(ch =>
+    processBooking({ unitId: 'demo-1', channel: ch, checkIn: '2026-08-01',
+      checkOut: '2026-08-05', guestName: `${ch} Guest`, amount: 5000 })
+  ));
+  setTxLog(getTransactionLog());
+  setMetrics(getMetrics());
+  setIsRunning(false);
+};
+```
+
+---
+
+## Test Suite (`tests/test-integration.mjs`)
+
+Plain Node.js ES module — no external test framework, no TypeScript transpiler needed.
+
+```bash
+node apps/dashboard/tests/test-integration.mjs
+```
+
+**Current coverage: 69 tests across 7 suites**
+
+| Suite | Tests | What's covered |
+|---|---|---|
+| 1. Overlap Detection | 9 | `checkAvailability` edge cases, adjacent bookings |
+| 2. Lock Engine | 5 | acquire/release, wrong token, expired eviction |
+| 3. processBookingRequest | 6 | full flow, race conditions (2-way, 3-way) |
+| 4. Booking.com XML Builders | 8 | OTA 2003B XML structure + field injection |
+| 5. Token Exchange | 7 | OAuth client-credentials, cache, pre-expiry refresh |
+| 6. Gathern Bridge | 8 | REST/JSON put/pull, cleaning_fee, query params |
+| 7. E2E Callback Flow | 4 | cross-channel blocking, duplicate rejection |
+| 8. Airbnb Service | 13 | OAuth code flow, token refresh, calendar push, HMAC verify, iCal |
+| 9. Reservation Engine | 9 | <500ms timing, 5-way race, unit independence, metrics |
+
+**Harness pattern** — async-safe sequential execution:
+```js
+const _suites = [];
+let _currentSuite = null;
+
+function suite(name, fn) {
+  _currentSuite = { name, tests: [] };
+  _suites.push(_currentSuite);
+  fn();  // collect test registrations synchronously
+  _currentSuite = null;
+}
+
+function test(name, fn) { _currentSuite.tests.push({ name, fn }); }
+
+async function runAll() {
+  for (const s of _suites) {
+    for (const t of s.tests) {
+      try { await t.fn(); passed++; }
+      catch (err) { failed++; /* print error */ }
+    }
+  }
+}
+await runAll();
+```
+
+**Why sequential?** Concurrent test execution shares module-level state (`_locks`, `_bookings`, `_engMetrics`). Sequential execution guarantees each test's `clearState()` call takes effect before the next test starts.
+
+**Mocking pattern** — pass `fetchFn` as a parameter (dependency injection), never monkey-patch `global.fetch`:
+```js
+const mockFetch = async (url, opts) => {
+  capturedUrl  = url;
+  capturedBody = JSON.parse(opts.body);
+  return { ok: true, json: async () => ({ access_token: 'tok-abc', expires_in: 3600 }) };
+};
+await exchangeToken(CREDS, mockFetch);
+```
+
+---
+
 ## Common Pitfalls
 
 ### 1. Write tool "File has not been read yet"
@@ -816,6 +1084,76 @@ The simplest click-away implementation is a fixed full-screen transparent `<div>
 <div className="absolute z-30 top-full mt-1 ...dropdown content...">
 ```
 The dropdown (`z-30`) must be above the backdrop (`z-20`).
+
+### 13. `node:crypto` breaks the static Next.js build
+Any service file that `import { createHmac } from 'node:crypto'` will fail at Next.js build time with:
+```
+UnhandledSchemeError: Reading from "node:crypto" is not handled by plugins
+```
+This is because the static export bundles everything for the browser where Node built-ins don't exist. **Always use the Web Crypto API instead:**
+```ts
+// ✗ WRONG — breaks webpack in static export
+import { createHmac } from 'node:crypto';
+
+// ✓ CORRECT — works in browser and Node.js ≥ 18
+const key = await globalThis.crypto.subtle.importKey(
+  'raw', new TextEncoder().encode(secret),
+  { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+);
+const sig = await globalThis.crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body));
+```
+The same rule applies to `node:buffer`, `node:stream`, etc.
+
+### 14. Test harness async ordering — results print before tests run
+If `suite()` calls `fn()` synchronously and individual test functions are async, the results summary line prints before any tests complete:
+```js
+// ✗ WRONG — results always show "0 passed / 0 failed"
+function suite(name, fn) { fn(); }
+function test(name, fn)  { fn(); /* Promise returned, not awaited */ }
+console.log(`Results: ${passed} passed`);  // runs before tests finish
+```
+**Fix:** collect test functions into an array, then run all with `await` in sequence:
+```js
+// ✓ CORRECT
+function suite(name, fn) {
+  _currentSuite = { name, tests: [] };
+  _suites.push(_currentSuite);
+  fn();  // synchronously registers tests, does NOT execute them
+}
+function test(name, fn) { _currentSuite.tests.push({ name, fn }); }
+async function runAll() {
+  for (const s of _suites)
+    for (const t of s.tests)
+      try { await t.fn(); passed++; } catch { failed++; }
+}
+await runAll();
+console.log(`Results: ${passed} passed`);  // runs AFTER all tests finish
+```
+
+### 15. Metrics state not reset between test suites
+Module-level metrics objects (like `_engMetrics` in the reservation engine) must be explicitly reset in `clearState()`. If only the registry and locks are cleared, accumulated counts from previous suites contaminate later assertions:
+```js
+// ✗ WRONG — metrics carry over from previous tests
+function engClearState() { _engRegistry.clear(); _engLocks.clear(); }
+
+// ✓ CORRECT — reset everything
+function engClearState() {
+  _engRegistry.clear(); _engLocks.clear(); _engTxLog.length = 0;
+  _engMetrics.totalProcessed = 0; _engMetrics.confirmed = 0;
+  _engMetrics.rejectedOverlap = 0; _engMetrics.avgDurationMs = 0;
+  _engMetrics.maxDurationMs = 0;
+}
+```
+
+### 16. `avgDurationMs > 0` is flaky on fast machines
+Transactions that complete within the same millisecond produce `durationMs = 0`. Asserting `avgDurationMs > 0` will fail on fast CI runners. Assert `>= 0` instead, or add a `sleep(1)` before computing duration if the test specifically needs a non-zero value.
+
+### 17. Airbnb prices must be in cents (×100)
+Airbnb's `calendar_operations` endpoint expects `daily_price` in the smallest currency unit (cents/halalas), not the face value:
+```ts
+body.daily_price = op.nightlyPrice * 100;  // 1248 SAR → 124800
+```
+Forgetting the `× 100` means the listing shows prices 100× lower than intended.
 
 ---
 
