@@ -5,6 +5,15 @@ import { Icons } from '@/lib/icons';
 import { OWNER } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
 
+function downloadCSV(filename: string, rows: (string | number)[][]) {
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 const PAYOUT = { gross: 284750, commissions: 24813, platformFee: 25994, expenses: 2190, net: 231753 };
 
 const INVOICES = [
@@ -46,7 +55,7 @@ const INITIAL_FORM = {
 };
 
 export default function FinancialsPage() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [expenses, setExpenses]         = useState<Expense[]>(INITIAL_EXPENSES);
@@ -56,8 +65,41 @@ export default function FinancialsPage() {
   const [form,      setForm]            = useState(INITIAL_FORM);
   const [receipt,   setReceipt]         = useState<{ name: string; preview: string | null } | null>(null);
 
+  const [exportToast, setExportToast] = useState(false);
+
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
   const netPct = ((PAYOUT.net / PAYOUT.gross) * 100).toFixed(1);
+
+  const handleExport = () => {
+    const rows: (string | number)[][] = [
+      ['REMS Financial Report — February 2026'],
+      [`Generated: ${new Date().toLocaleDateString('en-SA')}`],
+      [`Owner: ${OWNER.fullName}`],
+      [],
+      ['Payout Summary'],
+      ['Gross Revenue (SAR)', 'Commissions (SAR)', 'Platform Fee (SAR)', 'Expenses (SAR)', 'Net Payout (SAR)'],
+      [PAYOUT.gross, PAYOUT.commissions, PAYOUT.platformFee, PAYOUT.expenses, PAYOUT.net],
+      [],
+      ['Invoices'],
+      ['Invoice ID', 'Booking ID', 'Guest', 'Amount (SAR)', 'VAT (SAR)', 'Total (SAR)', 'Status', 'Date'],
+      ...INVOICES.map(i => [i.id, i.booking, i.guest, i.amount, i.vat, i.total, i.status, i.date]),
+      [],
+      ['Expenses'],
+      ['Expense ID', 'Property', 'Category', 'Description', 'Amount (SAR)', 'Date'],
+      ...expenses.map(e => [e.id, e.property, e.category, e.desc, e.amount, e.date]),
+    ];
+    downloadCSV('REMS-Financials-2026-02.csv', rows);
+    setExportToast(true);
+    setTimeout(() => setExportToast(false), 3000);
+  };
+
+  const handleEmailReport = () => {
+    const subject = encodeURIComponent('REMS Financial Report — February 2026');
+    const body = encodeURIComponent(
+      `Dear ${OWNER.fullName},\n\nPlease find attached the REMS Financial Report for February 2026.\n\nSummary:\n• Gross Revenue: SAR ${PAYOUT.gross.toLocaleString()}\n• Net Payout: SAR ${PAYOUT.net.toLocaleString()}\n• Total Invoices: ${INVOICES.length}\n• Total Expenses: SAR ${totalExpenses.toLocaleString()}\n\nDownload the full CSV report from the REMS dashboard.\n\nREMS Platform`
+    );
+    window.location.href = `mailto:${OWNER.email}?subject=${subject}&body=${body}`;
+  };
 
   const categories = [
     { key: 'Maintenance', label: t.financials.expCat_maintenance },
@@ -116,15 +158,37 @@ export default function FinancialsPage() {
   return (
     <div className="p-6 space-y-5">
 
+      {/* Export toast */}
+      {exportToast && (
+        <div className="fixed top-4 end-4 z-[500] flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-2xl shadow-xl text-sm font-semibold"
+          style={{ animation: 'slideIn 0.2s ease-out' }}>
+          <Icons.check size={15} />
+          {t.financials.exportSuccess}
+        </div>
+      )}
+
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">{t.financials.title}</h1>
           <p className="text-sm text-slate-400 mt-1">{t.financials.subtitle}</p>
         </div>
-        <button onClick={openModal} className="btn-primary">
-          <Icons.plus size={15} /> {t.financials.addExpense}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleEmailReport} className="btn-ghost text-xs py-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+              <polyline points="22,6 12,13 2,6" />
+            </svg>
+            {t.financials.emailReport}
+          </button>
+          <button onClick={handleExport} className="btn-ghost text-xs py-2">
+            <Icons.download size={14} />
+            {t.financials.exportReport}
+          </button>
+          <button onClick={openModal} className="btn-primary">
+            <Icons.plus size={15} /> {t.financials.addExpense}
+          </button>
+        </div>
       </div>
 
       {/* Payout Hero Card */}

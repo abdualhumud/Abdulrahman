@@ -11,7 +11,7 @@ const PLANS = ['Basic', 'Pro', 'Enterprise'] as const;
 const INPUT = 'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-slate-300';
 
 export default function OnboardingPage({ onComplete }: { onComplete: () => void }) {
-  const { t, lang } = useLang();
+  const { t, lang, toggle } = useLang();
   const o = t.onboarding;
 
   const [step, setStep]         = useState<Step>(1);
@@ -48,13 +48,27 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center p-6" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
 
       {/* Decorative blobs */}
       <div className="absolute top-0 start-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 end-0 w-80 h-80 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="relative w-full max-w-2xl">
+
+        {/* Language toggle — top right */}
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={toggle}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all border border-white/20"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+            {lang === 'ar' ? 'English' : 'عربي'}
+          </button>
+        </div>
 
         {/* Header */}
         <div className="text-center mb-8">
@@ -128,7 +142,7 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
                   className="w-full py-2.5 rounded-xl text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-40 transition-all flex items-center justify-center gap-2">
                   {validating
                     ? <><span className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />{o.validating}</>
-                    : <>{o.crNumber} + {o.vatNumber} Verify</>}
+                    : <>{o.verifyButton}</>}
                 </button>
               )}
               {crOk && (
@@ -168,13 +182,13 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
                   <div className="w-7 h-7 bg-blue-50 rounded-lg flex items-center justify-center">
                     <Icons.creditCard size={14} className="text-blue-600" />
                   </div>
-                  <p className="text-sm font-bold text-slate-700">{lang === 'ar' ? 'التحقق البنكي' : 'Bank Verification'}</p>
+                  <p className="text-sm font-bold text-slate-700">{o.bankVerification}</p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">{o.bankName}</label>
                     <select className={INPUT + ' bg-white'} value={form.bankName} onChange={e => setForm(f => ({ ...f, bankName: e.target.value }))}>
-                      <option value="">— {lang === 'ar' ? 'اختر البنك' : 'Select bank'} —</option>
+                      <option value="">— {o.selectBank} —</option>
                       {['Al Rajhi Bank','SNB (NCB)','Riyad Bank','Arab National Bank','Banque Saudi Fransi','Saudi British Bank (SABB)'].map(b => (
                         <option key={b} value={b}>{b}</option>
                       ))}
@@ -206,7 +220,7 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
                     style={selectedPlan === plan.key ? { borderColor: plan.accent } : {}}>
                     {plan.popular && (
                       <span className="absolute -top-3 start-1/2 -translate-x-1/2 bg-blue-600 text-white text-[10px] font-bold px-3 py-0.5 rounded-full whitespace-nowrap">
-                        {lang === 'ar' ? 'الأكثر شيوعاً' : 'Most Popular'}
+                        {o.mostPopular}
                       </span>
                     )}
                     <div className="w-8 h-8 rounded-xl mb-3 flex items-center justify-center"
@@ -229,20 +243,16 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
               {/* Flow diagram summary */}
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-                  {lang === 'ar' ? 'رحلة التفعيل' : 'Activation Journey'}
+                  {o.activationJourney}
                 </p>
                 <div className="flex items-center gap-2 flex-wrap text-xs text-slate-600">
                   {[
-                    lang === 'ar' ? 'التحقق التجاري' : 'CR/VAT Verify',
-                    lang === 'ar' ? 'إعداد الملف' : 'Profile Setup',
-                    lang === 'ar' ? 'اختيار الباقة' : 'Plan Selected',
-                    lang === 'ar' ? 'إضافة عقار' : 'Add Property',
-                    lang === 'ar' ? 'ربط القنوات' : 'Connect Channels',
-                    lang === 'ar' ? 'تشغيل مباشر' : 'Go Live!',
+                    o.journeyStep1, o.journeyStep2, o.journeyStep3,
+                    o.journeyStep4, o.journeyStep5, o.journeyStep6,
                   ].map((item, i, arr) => (
                     <>
                       <span key={i} className={`font-semibold px-2 py-1 rounded-lg ${i <= 2 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{item}</span>
-                      {i < arr.length - 1 && <span className="text-slate-300" key={'a'+i}>{lang === 'ar' ? '←' : '→'}</span>}
+                      {i < arr.length - 1 && <span className="text-slate-300" key={'a'+i}>→</span>}
                     </>
                   ))}
                 </div>

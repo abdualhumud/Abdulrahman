@@ -136,7 +136,8 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
     const next = !autoTranslate;
     setAutoTranslate(next);
     if (next && selected) {
-      const targetLang = lang === 'ar' ? 'en' : 'ar';
+      // Translate INTO the current UI language so the manager can read messages
+      const targetLang = lang as 'en' | 'ar';
       const nonSystemMsgs = selected.messages.filter(m => m.from !== 'SYSTEM');
       setTranslating(true);
       const newTrans: Record<string, string> = { ...translations };
@@ -285,7 +286,9 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
                 className={`w-full text-start px-4 py-3.5 hover:bg-slate-50 transition-all ${selectedId === req.id ? 'bg-blue-50 border-e-2 border-blue-500' : ''}`}
               >
                 <div className="flex items-start justify-between gap-2 mb-1">
-                  <span className="text-xs font-bold text-slate-800 truncate leading-tight">{req.unitName}</span>
+                  <span className="text-xs font-bold text-slate-800 truncate leading-tight">
+                    {lang === 'ar' && (req as any).unitNameAr ? (req as any).unitNameAr : req.unitName}
+                  </span>
                   {req.priority === 'HIGH' && (
                     <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-[10px] font-bold rounded-full flex-shrink-0">
                       {tc.priority_HIGH}
@@ -332,7 +335,9 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
                       </span>
                     )}
                   </div>
-                  <h2 className="font-extrabold text-slate-900 text-base truncate">{selected.unitName}</h2>
+                  <h2 className="font-extrabold text-slate-900 text-base truncate">
+                    {lang === 'ar' && (selected as any).unitNameAr ? (selected as any).unitNameAr : selected.unitName}
+                  </h2>
                   <p className="text-xs text-slate-500 mt-0.5">{selected.property} · Checkout {selected.checkoutDate} at {selected.checkoutTime}</p>
                 </div>
 

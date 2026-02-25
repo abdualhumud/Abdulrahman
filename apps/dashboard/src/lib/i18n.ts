@@ -238,6 +238,7 @@ export const translations = {
       autoTranslate: 'Auto-Translate',
       translating:   'Translating…',
       translated:    'Auto-translated',
+      reservationDetails: 'Reservation Details',
     },
 
     analytics: {
@@ -302,6 +303,9 @@ export const translations = {
       expReceiptHint:     'Upload photo or PDF',
       expSave:            'Save Expense',
       expSaved:           'Expense saved successfully',
+      exportReport:       'Export Report',
+      emailReport:        'Email Report',
+      exportSuccess:      'CSV downloaded',
     },
 
     cleaning: {
@@ -410,6 +414,17 @@ export const translations = {
       verified:       'Verified',
       step:           'Step',
       of:             'of',
+      verifyButton:   'Verify CR & VAT',
+      bankVerification: 'Bank Verification',
+      selectBank:     'Select bank',
+      mostPopular:    'Most Popular',
+      activationJourney: 'Activation Journey',
+      journeyStep1:   'CR/VAT Verify',
+      journeyStep2:   'Profile Setup',
+      journeyStep3:   'Plan Selected',
+      journeyStep4:   'Add Property',
+      journeyStep5:   'Connect Channels',
+      journeyStep6:   'Go Live!',
     },
 
     properties: {
@@ -860,6 +875,7 @@ export const translations = {
       autoTranslate: 'ترجمة تلقائية',
       translating:   'جارٍ الترجمة…',
       translated:    'مُترجَم تلقائياً',
+      reservationDetails: 'تفاصيل الحجز',
     },
 
     analytics: {
@@ -924,6 +940,9 @@ export const translations = {
       expReceiptHint:     'رفع صورة أو PDF',
       expSave:            'حفظ المصروف',
       expSaved:           'تم حفظ المصروف بنجاح',
+      exportReport:       'تصدير التقرير',
+      emailReport:        'إرسال بالبريد',
+      exportSuccess:      'تم تحميل ملف CSV',
     },
 
     cleaning: {
@@ -1032,6 +1051,17 @@ export const translations = {
       verified:       'تم التحقق',
       step:           'الخطوة',
       of:             'من',
+      verifyButton:   'التحقق من السجل والضريبة',
+      bankVerification: 'التحقق البنكي',
+      selectBank:     'اختر البنك',
+      mostPopular:    'الأكثر شيوعاً',
+      activationJourney: 'رحلة التفعيل',
+      journeyStep1:   'التحقق التجاري',
+      journeyStep2:   'إعداد الملف',
+      journeyStep3:   'اختيار الباقة',
+      journeyStep4:   'إضافة عقار',
+      journeyStep5:   'ربط القنوات',
+      journeyStep6:   'تشغيل مباشر',
     },
 
     properties: {

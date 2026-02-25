@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { Icons } from '@/lib/icons';
-import { INBOX_MESSAGES } from '@/lib/mock-data';
+import { INBOX_MESSAGES, RECENT_BOOKINGS } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
 
 async function translateText(text: string, targetLang: 'en' | 'ar'): Promise<string> {
@@ -55,7 +55,8 @@ export default function InboxPage() {
       const msgText = selected.message;
       if (!translations[msgId]) {
         setTranslating(true);
-        const targetLang = lang === 'ar' ? 'en' : 'ar';
+        // Translate INTO the current UI language so the manager can read it
+        const targetLang = lang as 'en' | 'ar';
         const translated = await translateText(msgText, targetLang);
         setTranslations(prev => ({ ...prev, [msgId]: translated }));
         setTranslating(false);
@@ -64,6 +65,11 @@ export default function InboxPage() {
   }, [autoTranslate, selected, translations, lang]);
 
   const CHANNELS = ['ALL', 'Booking.com', 'Airbnb', 'Gathern'];
+
+  // Match booking for the selected conversation
+  const selectedBooking = selected
+    ? RECENT_BOOKINGS.find(b => b.id === selected.bookingId) ?? null
+    : null;
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
@@ -129,7 +135,9 @@ export default function InboxPage() {
         </div>
       </div>
 
-      {/* ── Message detail ── */}
+      {/* ── Message detail + reservation panel ── */}
+      <div className="flex-1 flex min-w-0 overflow-hidden">
+      {/* Message detail */}
       <div className="flex-1 flex flex-col min-w-0">
         {selected ? (
           <>
@@ -247,7 +255,117 @@ export default function InboxPage() {
             <p className="text-sm text-slate-300 mt-1">{t.inbox.pickMsg}</p>
           </div>
         )}
+      </div>{/* end message detail */}
+
+      {/* ── Reservation details panel ── */}
+      <div className="w-72 flex-shrink-0 bg-white border-s border-slate-100 flex flex-col overflow-y-auto">
+        <div className="px-4 py-3 border-b border-slate-100 flex-shrink-0">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.inbox.reservationDetails}</p>
+        </div>
+
+        {selectedBooking ? (
+          <div className="p-4 space-y-4">
+            {/* Guest avatar + name */}
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-base flex-shrink-0"
+                style={{ background: selectedBooking.channelColor + '18', color: selectedBooking.channelColor }}>
+                {selectedBooking.guest.charAt(0)}
+              </div>
+              <div className="min-w-0">
+                <p className="font-bold text-slate-900 text-sm truncate">{selectedBooking.guest}</p>
+                <p className="text-[11px] font-semibold mt-0.5" style={{ color: selectedBooking.channelColor }}>
+                  ● {selectedBooking.channel}
+                </p>
+              </div>
+            </div>
+
+            {/* Booking ID */}
+            <div className="bg-slate-50 rounded-xl p-3">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                {lang === 'ar' ? 'رقم الحجز' : 'Booking ID'}
+              </p>
+              <p className="font-mono text-xs font-bold text-slate-700" style={{ direction: 'ltr' }}>
+                {selectedBooking.id}
+              </p>
+            </div>
+
+            {/* Property + unit */}
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                {lang === 'ar' ? 'العقار' : 'Property'}
+              </p>
+              <div className="flex items-start gap-2">
+                <Icons.building size={14} className="text-slate-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-xs font-semibold text-slate-800">{selectedBooking.property}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">{selectedBooking.unit}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Dates */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-blue-50 rounded-xl p-2.5">
+                <p className="text-[9px] font-bold text-blue-400 uppercase tracking-wider mb-1">
+                  {lang === 'ar' ? 'الوصول' : 'Check-in'}
+                </p>
+                <p className="text-xs font-extrabold text-blue-700" style={{ direction: 'ltr' }}>
+                  {selectedBooking.checkIn}
+                </p>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-2.5">
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  {lang === 'ar' ? 'المغادرة' : 'Check-out'}
+                </p>
+                <p className="text-xs font-extrabold text-slate-700" style={{ direction: 'ltr' }}>
+                  {selectedBooking.checkOut}
+                </p>
+              </div>
+            </div>
+
+            {/* Nights */}
+            <div className="flex items-center justify-between px-3 py-2.5 bg-slate-50 rounded-xl">
+              <p className="text-xs font-semibold text-slate-500">
+                {lang === 'ar' ? 'عدد الليالي' : 'Nights'}
+              </p>
+              <p className="font-extrabold text-slate-800 text-sm">{selectedBooking.nights}</p>
+            </div>
+
+            {/* Payment */}
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                {lang === 'ar' ? 'المبلغ' : 'Payment'}
+              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xl font-extrabold text-slate-900" style={{ direction: 'ltr' }}>
+                  SAR {selectedBooking.amount.toLocaleString()}
+                </p>
+                <span className={`badge text-[10px] ${selectedBooking.statusColor}`}>
+                  {t.status[selectedBooking.status as keyof typeof t.status] ?? selectedBooking.status}
+                </span>
+              </div>
+            </div>
+
+            {/* View booking button */}
+            <button className="w-full btn-primary py-2 text-xs justify-center">
+              <Icons.bookings size={12} />
+              {t.inbox.viewBooking}
+            </button>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center p-6 text-center">
+            <div>
+              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-2">
+                <Icons.bookings size={18} className="text-slate-300" />
+              </div>
+              <p className="text-xs text-slate-400 font-medium">
+                {lang === 'ar' ? 'اختر رسالة لعرض الحجز' : 'Select a message to view booking'}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
+      </div>{/* end message detail + reservation panel wrapper */}
     </div>
   );
 }

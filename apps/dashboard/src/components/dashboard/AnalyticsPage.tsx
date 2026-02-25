@@ -36,9 +36,41 @@ const Tip = ({ active, payload, label }: any) => {
   );
 };
 
+function downloadCSV(filename: string, rows: (string | number)[][]) {
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv, ], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function AnalyticsPage() {
   const { t } = useLang();
   const totalRev = PROPS.reduce((s, p) => s + p.revenue, 0);
+
+  const handleExport = () => {
+    const rows: (string | number)[][] = [
+      ['REMS Analytics Report — February 2026'],
+      [],
+      ['Property Performance'],
+      ['Property', 'City', 'Revenue (SAR)', 'RevPAR (SAR)', 'ADR (SAR)', 'Occupancy'],
+      ...PROPS.map(p => [p.name, p.city, p.revenue, p.revpar, p.adr, `${p.occ}%`]),
+      [],
+      ['Monthly Revenue'],
+      ['Month', 'Revenue (SAR)', 'Bookings'],
+      ...MONTHLY_REVENUE.map(m => [m.month, m.revenue, m.bookings]),
+      [],
+      ['Channel Commission Breakdown'],
+      ['Channel', 'Gross Revenue (SAR)', 'Commission (SAR)', 'Net Revenue (SAR)'],
+      ...CHANNEL_BREAKDOWN.map(ch => [ch.channel, ch.revenue, ch.commission, ch.revenue - ch.commission]),
+      [],
+      ['Daily Occupancy (February 2026)'],
+      ['Day', 'Occupancy Rate (%)'],
+      ...DAILY_OCCUPANCY.map(d => [d.day, d.rate]),
+    ];
+    downloadCSV('REMS-Analytics-2026-02.csv', rows);
+  };
 
   const occLabel = (v: number) =>
     v >= 80 ? t.analytics.excellent : v >= 65 ? t.analytics.good : t.analytics.needsAttn;
@@ -52,7 +84,7 @@ export default function AnalyticsPage() {
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">{t.analytics.title}</h1>
           <p className="text-sm text-slate-400 mt-1">{t.analytics.subtitle}</p>
         </div>
-        <button className="btn-ghost text-xs py-2">
+        <button onClick={handleExport} className="btn-ghost text-xs py-2">
           <Icons.download size={14} /> {t.common.export}
         </button>
       </div>

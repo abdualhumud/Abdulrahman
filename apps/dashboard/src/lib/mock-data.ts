@@ -339,7 +339,7 @@ export type CleaningStatus = 'PENDING'|'ASSIGNED'|'IN_PROGRESS'|'COMPLETED'|'INS
 export const CLEANING_REQUESTS = [
   {
     id: 'cr1', bookingId: 'BK-1089', unitId: 'u4',
-    unitName: 'Chalet 1 — 4BR Heritage', property: 'Diriyah Heritage Chalet',
+    unitName: 'Chalet 1 — 4BR Heritage', unitNameAr: 'الشاليه 1 — تراثي 4 غرف', property: 'Diriyah Heritage Chalet',
     checkoutDate: '2026-02-23', checkoutTime: '12:00',
     status: 'PENDING' as CleaningStatus,
     providerType: 'INTERNAL' as const, providerId: null as string | null,
@@ -351,7 +351,7 @@ export const CLEANING_REQUESTS = [
   },
   {
     id: 'cr2', bookingId: 'BK-1088', unitId: 'u6',
-    unitName: 'Desert Studio — 1BR Eco', property: 'AlUla Desert Studio',
+    unitName: 'Desert Studio — 1BR Eco', unitNameAr: 'ستوديو الصحراء — استوديو 1 غرفة', property: 'AlUla Desert Studio',
     checkoutDate: '2026-02-21', checkoutTime: '11:00',
     status: 'INSPECTION_DONE' as CleaningStatus,
     providerType: 'INTERNAL' as const, providerId: 'cp1',
@@ -367,7 +367,7 @@ export const CLEANING_REQUESTS = [
   },
   {
     id: 'cr3', bookingId: 'BK-1087', unitId: 'u2',
-    unitName: 'Unit B — 2BR Classic', property: 'Riyadh Luxury Apartment',
+    unitName: 'Unit B — 2BR Classic', unitNameAr: 'الوحدة ب — كلاسيك 2 غرف', property: 'Riyadh Luxury Apartment',
     checkoutDate: '2026-02-18', checkoutTime: '10:00',
     status: 'COMPLETED' as CleaningStatus,
     providerType: 'EXTERNAL' as const, providerId: 'cp4',
