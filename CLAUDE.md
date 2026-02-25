@@ -55,6 +55,7 @@ A bilingual (Arabic/English) SaaS property management dashboard for Saudi proper
         │       ├── saudi-cities.ts        # Saudi city/neighbourhood/GPS data
         │       ├── language-context.tsx
         │       ├── journey-context.tsx
+        │       ├── spl-service.ts         # SPL National Address API client + localStorage key helper
         │       ├── booking-com-service.ts # Booking.com Connectivity API client
         │       ├── overlap-guard.ts       # Exclusive-lock overlap prevention engine
         │       ├── gathern-service.ts     # Gathern REST/JSON bridge + poller
@@ -373,6 +374,87 @@ const handleCityChange = (city: string) => {
   }));
 };
 ```
+
+---
+
+## SPL National Address API (`spl-service.ts`)
+
+Saudi Post (SPL) official address registry. Provides GPS-accurate building location data for Saudi National Addresses.
+
+**Developer portal:** `https://api.address.gov.sa`
+**Base URL:** `https://apina.address.gov.sa/NationalAddress/v3.1`
+**Auth:** `api_key` query parameter (from SPL subscription dashboard)
+**localStorage key:** `rems-spl-key` — API key stored locally in browser, never sent to third parties.
+
+### Key exports
+
+```ts
+// Interfaces
+export interface SplAddress {
+  buildingNumber: string; additionalNumber: string;
+  streetEn: string; districtEn: string; cityEn: string;
+  postCode: string; shortAddress: string; regionName: string;
+  lat: number; lng: number;
+}
+
+// Error classes
+export class SplAuthError extends Error {}      // 401/403 or INVALID_API in response
+export class SplNotFoundError extends Error {}  // success=false or empty Addresses[]
+
+// Request types
+interface SplFreetextRequest { mode: 'freetext'; query: string; apiKey: string; }
+interface SplBuildingRequest {
+  mode: 'building'; buildingNumber: string;
+  additionalNumber?: string; zipCode?: string; apiKey: string;
+}
+export type SplRequest = SplFreetextRequest | SplBuildingRequest;
+
+// Main lookup
+export async function splLookup(req: SplRequest): Promise<SplAddress[]>
+
+// API key localStorage helpers
+export function getSplApiKey(): string     // localStorage.getItem('rems-spl-key') ?? ''
+export function setSplApiKey(key: string): void
+export function clearSplApiKey(): void
+```
+
+### ObjLatLng coordinate parsing
+
+SPL returns coordinates in a non-standard format: `"objectId longitude latitude"`.
+
+```ts
+// e.g. "30829 46.71670870 24.65017630" → { lat: 24.65, lng: 46.71 }
+function parseCoords(raw: string): { lat: number; lng: number }
+```
+
+Split on whitespace: `parts[1]` = longitude, `parts[2]` = latitude.
+
+### CORS limitation & fallback strategy
+
+SPL does not publish CORS headers for browser requests. The `NationalAddressField` component handles this silently:
+
+1. **SPL available** (key set, no CORS error): official GPS-accurate result; `verified: true`
+2. **CORS/network error**: silently falls through to Nominatim (OpenStreetMap geocoding)
+3. **SplAuthError**: shows "Invalid API key" error — no fallback (key problem must be fixed)
+4. **SplNotFoundError**: shows "Address not found" error — no fallback
+
+### UnitModal integration
+
+`handleNatAddressAutoFill` accepts a `NatFillResult` (unified type covering both SPL and fallback):
+
+```ts
+type NatFillResult = {
+  city: string; district: string; street: string;
+  lat: number; lng: number;
+  verified: boolean;            // true = came from SPL official API
+  buildingNumber?: string;
+  postCode?: string;
+  shortAddress?: string;
+};
+```
+
+When `verified: true`, the Location section header shows a persistent emerald badge:
+`✓ Verified · SPL  RYYY1234` (with short address). Clears when user manually changes city dropdown.
 
 ---
 

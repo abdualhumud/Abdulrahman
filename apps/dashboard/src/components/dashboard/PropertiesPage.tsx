@@ -6,6 +6,20 @@ import { UNITS, INSURANCE_RECORDS } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
 import { useJourney } from '@/lib/journey-context';
 import { SAUDI_CITIES, CITY_COORDS, PROPERTY_IMAGES } from '@/lib/saudi-cities';
+import {
+  splLookup, getSplApiKey, setSplApiKey, clearSplApiKey,
+  SplAuthError, SplNotFoundError,
+} from '@/lib/spl-service';
+
+/** Unified result from either SPL or Nominatim fallback */
+type NatFillResult = {
+  city: string; district: string; street: string;
+  lat: number;  lng: number;
+  verified: boolean;               // true = came from official SPL API
+  buildingNumber?: string;
+  postCode?: string;
+  shortAddress?: string;
+};
 
 type Unit = typeof UNITS[number] & { nameAr?: string; channelKillSwitch?: Record<string, boolean>; uploadedPhotos?: string[] };
 type InsuranceStatus = 'HELD' | 'PENDING_INSPECTION' | 'RELEASED';
@@ -265,108 +279,342 @@ function LeafletPinMap({ lat, lng, name, onCoordsChange, lang }: {
   );
 }
 
-/* ── National Address Auto-fill ───────────────────────────────────── */
-function NationalAddressField({ onAutoFill, lang }: {
-  onAutoFill: (city: string, district: string, street: string, lat: number, lng: number) => void;
+/* ── National Address Auto-fill (SPL + Nominatim fallback) ─────────── */
+function NationalAddressField({
+  onAutoFill,
+  lang,
+}: {
+  onAutoFill: (r: NatFillResult) => void;
   lang: string;
 }) {
-  const [value, setValue] = useState('');
-  const [status, setStatus] = useState<'idle'|'searching'|'found'|'notfound'>('idle');
+  const isAr = lang === 'ar';
+
+  /* Search inputs */
+  const [mode,       setMode]      = useState<'freetext' | 'building'>('freetext');
+  const [query,      setQuery]     = useState('');
+  const [buildingNo, setBldNo]     = useState('');
+  const [addlNo,     setAddlNo]    = useState('');
+  const [zipCode,    setZip]       = useState('');
+
+  /* API key */
+  const [apiKey,        setApiKey]     = useState<string>(() => getSplApiKey());
+  const [showKeyInput,  setShowKey]    = useState(false);
+  const [tempKey,       setTempKey]    = useState('');
+
+  /* Status */
+  const [status,      setStatus]    = useState<'idle' | 'loading' | 'verified' | 'fallback' | 'error'>('idle');
+  const [verifiedMeta, setVerMeta]  = useState<{ building: string; postCode: string; shortAddr: string } | null>(null);
+  const [errorMsg,    setErrorMsg]  = useState('');
+
+  const hasKey = apiKey.trim().length > 0;
+
+  const saveKey = () => {
+    if (!tempKey.trim()) return;
+    setSplApiKey(tempKey.trim());
+    setApiKey(tempKey.trim());
+    setTempKey('');
+    setShowKey(false);
+  };
+  const disconnectKey = () => {
+    clearSplApiKey();
+    setApiKey('');
+    setVerMeta(null);
+    setStatus('idle');
+  };
+
+  /* Nominatim fallback */
+  const nominatimFallback = useCallback(async (searchText: string) => {
+    const lv = searchText.toLowerCase();
+    for (const [city, districts] of Object.entries(SAUDI_CITIES)) {
+      if (lv.includes(city.toLowerCase())) {
+        const dist   = districts.find(d => lv.includes(d.toLowerCase())) ?? districts[0];
+        const coords = CITY_COORDS[city] ?? { lat: 24.7136, lng: 46.6753 };
+        onAutoFill({ city, district: dist, street: '', lat: coords.lat, lng: coords.lng, verified: false });
+        setStatus('fallback');
+        return;
+      }
+      const dist = districts.find(d => lv.includes(d.toLowerCase()));
+      if (dist) {
+        const coords = CITY_COORDS[city] ?? { lat: 24.7136, lng: 46.6753 };
+        onAutoFill({ city, district: dist, street: '', lat: coords.lat, lng: coords.lng, verified: false });
+        setStatus('fallback');
+        return;
+      }
+    }
+    // Try Nominatim geocoding
+    try {
+      const res  = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchText + ', Saudi Arabia')}&format=json&limit=1&addressdetails=1`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+      const data = await res.json();
+      if (data[0]) {
+        const addr = data[0].address ?? {};
+        onAutoFill({
+          city:     addr.city || addr.state || 'Riyadh',
+          district: addr.suburb || addr.neighbourhood || addr.quarter || '',
+          street:   addr.road || '',
+          lat:      parseFloat(data[0].lat),
+          lng:      parseFloat(data[0].lon),
+          verified: false,
+        });
+        setStatus('fallback');
+      } else {
+        setStatus('error');
+        setErrorMsg(isAr ? 'لم يتم العثور على العنوان — حدّد الموقع يدوياً' : 'Address not found — set location manually');
+      }
+    } catch {
+      setStatus('error');
+      setErrorMsg(isAr ? 'تعذّر الاتصال — حدّد الموقع يدوياً' : 'Search failed — set location manually');
+    }
+  }, [isAr, onAutoFill]);
 
   const handleSearch = useCallback(async () => {
-    if (!value.trim()) return;
-    setStatus('searching');
+    const inputOk = mode === 'freetext' ? query.trim() : buildingNo.trim();
+    if (!inputOk) return;
+    setStatus('loading');
+    setErrorMsg('');
+    setVerMeta(null);
 
-    // Try to match against known Saudi cities/districts from static data
-    const lowerVal = value.toLowerCase();
-    let matched = false;
-    for (const [city, districts] of Object.entries(SAUDI_CITIES)) {
-      if (lowerVal.includes(city.toLowerCase())) {
-        const matchedDistrict = districts.find(d => lowerVal.includes(d.toLowerCase())) ?? districts[0];
-        const coords = CITY_COORDS[city] ?? { lat: 24.7136, lng: 46.6753 };
-        onAutoFill(city, matchedDistrict, '', coords.lat, coords.lng);
-        setStatus('found');
-        matched = true;
-        break;
-      }
-      // Try district match
-      const matchedDist = districts.find(d => lowerVal.includes(d.toLowerCase()));
-      if (matchedDist) {
-        const coords = CITY_COORDS[city] ?? { lat: 24.7136, lng: 46.6753 };
-        onAutoFill(city, matchedDist, '', coords.lat, coords.lng);
-        setStatus('found');
-        matched = true;
-        break;
-      }
-    }
-
-    if (!matched) {
-      // Fallback: try Nominatim geocoding (OpenStreetMap, no API key)
+    /* ── 1. Try SPL API (only when key is present) ── */
+    if (hasKey) {
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value + ', Saudi Arabia')}&format=json&limit=1&addressdetails=1`,
-          { headers: { 'Accept-Language': 'en' } }
-        );
-        const data = await res.json();
-        if (data[0]) {
-          const addr = data[0].address ?? {};
-          const city = addr.city || addr.state || addr.county || 'Riyadh';
-          const district = addr.suburb || addr.neighbourhood || addr.quarter || '';
-          const street = addr.road || '';
-          const lat = parseFloat(data[0].lat);
-          const lng = parseFloat(data[0].lon);
-          onAutoFill(city, district, street, lat, lng);
-          setStatus('found');
-        } else {
-          setStatus('notfound');
+        const results = mode === 'freetext'
+          ? await splLookup({ mode: 'freetext', query, apiKey })
+          : await splLookup({ mode: 'building', buildingNumber: buildingNo, additionalNumber: addlNo, zipCode, apiKey });
+
+        const r = results[0];
+        setStatus('verified');
+        setVerMeta({ building: r.buildingNumber, postCode: r.postCode, shortAddr: r.shortAddress });
+        onAutoFill({
+          city: r.cityEn, district: r.districtEn, street: r.streetEn,
+          lat:  r.lat,    lng:       r.lng,
+          verified:       true,
+          buildingNumber: r.buildingNumber,
+          postCode:       r.postCode,
+          shortAddress:   r.shortAddress,
+        });
+        return; // ← done — no fallback needed
+      } catch (err: unknown) {
+        if (err instanceof SplAuthError) {
+          setStatus('error');
+          setErrorMsg(isAr ? 'مفتاح API غير صالح — تحقق من اشتراكك في SPL' : 'Invalid SPL API key — check your subscription');
+          return;
         }
-      } catch {
-        setStatus('notfound');
+        if (err instanceof SplNotFoundError) {
+          setStatus('error');
+          setErrorMsg(isAr ? 'العنوان غير موجود في قاعدة العنوان الوطني' : 'Address not found in the National Address database');
+          return;
+        }
+        // Network / CORS error → fall through to Nominatim
+        console.warn('SPL unreachable (likely CORS), falling back to Nominatim:', (err as Error).message);
       }
     }
 
-    setTimeout(() => setStatus('idle'), 3000);
-  }, [value, onAutoFill]);
+    /* ── 2. Fallback: static city match + Nominatim ── */
+    const searchText = mode === 'freetext' ? query : `${buildingNo} ${zipCode}`;
+    await nominatimFallback(searchText);
+    if (hasKey) {
+      // Amend the status message to mention the fallback reason
+      setStatus('fallback');
+    }
+  }, [mode, query, buildingNo, addlNo, zipCode, apiKey, hasKey, isAr, onAutoFill, nominatimFallback]);
 
   return (
-    <div className="mb-3">
-      <label className="text-xs font-semibold text-slate-500 mb-1 block">
-        {lang === 'ar' ? 'العنوان الوطني (تعبئة تلقائية)' : 'Saudi National Address (Auto-fill)'}
-      </label>
-      <div className="flex gap-2">
-        <input
-          value={value}
-          onChange={e => setValue(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSearch()}
-          className="input flex-1"
-          placeholder={lang === 'ar' ? 'مثال: RYYY1234 أو شارع الملك فهد، الملز' : 'e.g. RYYY1234 or King Fahd Rd, Al-Malaz, Riyadh'}
-        />
-        <button
-          onClick={handleSearch}
-          disabled={status === 'searching'}
-          className="btn-primary px-4 flex-shrink-0 flex items-center gap-1.5 text-xs disabled:opacity-60"
-        >
-          {status === 'searching' ? (
-            <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <Icons.search size={13} />
+    <div className="mb-4 rounded-2xl border border-slate-200 overflow-hidden bg-white">
+
+      {/* ── Header bar ── */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+        <div className="flex items-center gap-2">
+          {/* Saudi Post logo mark */}
+          <div className="w-6 h-6 rounded-lg flex items-center justify-center text-white font-extrabold text-[10px]"
+            style={{ background: 'linear-gradient(135deg,#006633,#00a651)' }}>
+            SP
+          </div>
+          <span className="text-xs font-bold text-slate-700">
+            {isAr ? 'العنوان الوطني — SPL' : 'National Address Lookup — SPL'}
+          </span>
+          {hasKey && (
+            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 leading-none">
+              ✓ {isAr ? 'متصل' : 'Connected'}
+            </span>
           )}
-          {lang === 'ar' ? 'بحث' : 'Lookup'}
-        </button>
+        </div>
+        <div className="flex items-center gap-2">
+          {hasKey ? (
+            <button onClick={disconnectKey}
+              className="text-[10px] text-slate-400 hover:text-red-500 font-semibold transition-colors">
+              {isAr ? 'إلغاء الربط' : 'Disconnect'}
+            </button>
+          ) : (
+            <button onClick={() => setShowKey(v => !v)}
+              className="text-[10px] text-blue-600 hover:text-blue-800 font-bold transition-colors">
+              {isAr ? '+ ربط مفتاح SPL' : '+ Connect SPL key'}
+            </button>
+          )}
+        </div>
       </div>
-      {status === 'found' && (
-        <p className="text-xs text-emerald-600 font-semibold mt-1.5 flex items-center gap-1">
-          <Icons.check size={12} /> {lang === 'ar' ? 'تم تعبئة الموقع تلقائياً' : 'Location auto-filled from address'}
-        </p>
+
+      {/* ── API key setup panel ── */}
+      {showKeyInput && !hasKey && (
+        <div className="px-4 py-3 bg-blue-50 border-b border-blue-100 space-y-2">
+          <p className="text-[11px] text-blue-800 font-semibold">
+            {isAr
+              ? 'أدخل مفتاح API من بوابة المطورين (api.address.gov.sa) لتفعيل التحقق الرسمي.'
+              : 'Enter your SPL Subscription Key from api.address.gov.sa to enable official verification.'}
+          </p>
+          <div className="flex gap-2">
+            <input
+              value={tempKey}
+              onChange={e => setTempKey(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && saveKey()}
+              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              className="flex-1 text-xs font-mono border border-blue-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+              dir="ltr"
+            />
+            <button onClick={saveKey} disabled={!tempKey.trim()}
+              className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-xl disabled:opacity-40 hover:bg-blue-700">
+              {isAr ? 'حفظ' : 'Save'}
+            </button>
+          </div>
+          <p className="text-[10px] text-blue-500">
+            {isAr
+              ? 'يُخزَّن المفتاح محلياً في المتصفح فقط ولا يُرسل لأي خادم خارجي.'
+              : 'Stored locally in your browser only — never sent to any third party.'}
+          </p>
+        </div>
       )}
-      {status === 'notfound' && (
-        <p className="text-xs text-red-500 font-semibold mt-1.5 flex items-center gap-1">
-          <Icons.alertCircle size={12} /> {lang === 'ar' ? 'لم يتم العثور على العنوان — حدّد الموقع يدوياً' : 'Address not found — set location manually'}
-        </p>
-      )}
-      <p className="text-[11px] text-slate-400 mt-1">
-        {lang === 'ar' ? 'إدخال عنوان معروف يملأ تلقائياً المدينة والحي والإحداثيات' : 'A recognised address auto-populates city, neighbourhood & GPS coords'}
-      </p>
+
+      {/* ── Search area ── */}
+      <div className="p-4 space-y-3">
+
+        {/* Mode toggle */}
+        <div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">
+          {(['freetext', 'building'] as const).map(m => (
+            <button key={m} onClick={() => setMode(m)}
+              className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                mode === m ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}>
+              {m === 'freetext'
+                ? (isAr ? 'نص حر / رمز قصير' : 'Text / Short Code')
+                : (isAr ? 'رقم المبنى' : 'Building Number')}
+            </button>
+          ))}
+        </div>
+
+        {/* Inputs */}
+        {mode === 'freetext' ? (
+          <div className="flex gap-2">
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              placeholder={isAr ? 'مثال: RYYY1234 أو شارع الملك فهد، الملز، الرياض' : 'e.g. RYYY1234  or  King Fahd Rd, Al-Malaz, Riyadh'}
+              className="flex-1 input text-xs"
+              dir="ltr"
+            />
+            <button
+              onClick={handleSearch}
+              disabled={status === 'loading' || !query.trim()}
+              className="btn-primary px-3.5 py-2 text-xs flex items-center gap-1.5 flex-shrink-0 disabled:opacity-50"
+            >
+              {status === 'loading'
+                ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : <Icons.search size={13} />}
+              {isAr ? 'بحث' : 'Lookup'}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 mb-1 block">
+                  {isAr ? 'رقم المبنى *' : 'Building No. *'}
+                </label>
+                <input value={buildingNo} onChange={e => setBldNo(e.target.value)}
+                  className="input text-xs w-full font-mono" dir="ltr" placeholder="8228" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 mb-1 block">
+                  {isAr ? 'الرقم الإضافي' : 'Additional No.'}
+                </label>
+                <input value={addlNo} onChange={e => setAddlNo(e.target.value)}
+                  className="input text-xs w-full font-mono" dir="ltr" placeholder="2121" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 mb-1 block">
+                  {isAr ? 'الرمز البريدي' : 'Zip Code'}
+                </label>
+                <input value={zipCode} onChange={e => setZip(e.target.value)}
+                  className="input text-xs w-full font-mono" dir="ltr" placeholder="12643" />
+              </div>
+            </div>
+            <button
+              onClick={handleSearch}
+              disabled={status === 'loading' || !buildingNo.trim()}
+              className="w-full btn-primary py-2 text-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              {status === 'loading'
+                ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : <Icons.search size={13} />}
+              {isAr ? 'التحقق من العنوان الوطني' : 'Verify National Address'}
+            </button>
+          </div>
+        )}
+
+        {/* ── Status feedback ── */}
+
+        {/* VERIFIED (SPL) */}
+        {status === 'verified' && verifiedMeta && (
+          <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl px-3.5 py-3">
+            <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+              <Icons.shield size={15} className="text-emerald-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-extrabold text-emerald-800">
+                {isAr ? '✓ موثّق من العنوان الوطني (SPL)' : '✓ Verified by National Address — SPL'}
+              </p>
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5" style={{ direction: 'ltr' }}>
+                {verifiedMeta.building  && <span className="text-[11px] text-emerald-600 font-mono">Bldg {verifiedMeta.building}</span>}
+                {verifiedMeta.postCode  && <span className="text-[11px] text-emerald-600 font-mono">ZIP {verifiedMeta.postCode}</span>}
+                {verifiedMeta.shortAddr && <span className="text-[11px] text-emerald-600 font-mono">{verifiedMeta.shortAddr}</span>}
+              </div>
+              <p className="text-[10px] text-emerald-600 mt-1">
+                {isAr
+                  ? 'تم تعبئة المدينة والحي والشارع والإحداثيات من السجل الرسمي'
+                  : 'City, neighbourhood, street & GPS filled from official registry'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* FALLBACK (Nominatim / static) */}
+        {status === 'fallback' && (
+          <p className="text-xs text-blue-600 font-semibold flex items-center gap-1.5">
+            <Icons.check size={12} />
+            {hasKey
+              ? (isAr ? 'تعبئة تقريبية (OpenStreetMap) — SPL غير متاح من المتصفح' : 'Approximate fill (OpenStreetMap) — SPL unreachable from browser')
+              : (isAr ? 'تم تعبئة الموقع تقريبياً عبر OpenStreetMap' : 'Location filled via OpenStreetMap')}
+          </p>
+        )}
+
+        {/* ERROR */}
+        {status === 'error' && (
+          <p className="text-xs text-red-500 font-semibold flex items-center gap-1.5">
+            <Icons.alertCircle size={12} />
+            {errorMsg}
+          </p>
+        )}
+
+        {/* No key hint */}
+        {!hasKey && status === 'idle' && (
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            {isAr
+              ? 'ربط مفتاح SPL يتيح التحقق الرسمي. بدونه يُستخدم OpenStreetMap كبديل.'
+              : 'Connect an SPL key for official GPS-accurate verification. Without it, OpenStreetMap is used as fallback.'}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -536,8 +784,12 @@ function UnitModal({ unit, onClose, onSave }: {
 
   const setF = (k: keyof Unit, v: unknown) => setForm(f => ({ ...f, [k]: v }));
 
+  // Tracks a successful SPL verification result for the badge display
+  const [splVerified, setSplVerified] = useState<NatFillResult | null>(null);
+
   const handleCityChange = (city: string) => {
     const coords = CITY_COORDS[city];
+    setSplVerified(null); // manual change overrides SPL verification
     setForm(f => ({
       ...f,
       city,
@@ -564,17 +816,23 @@ function UnitModal({ unit, onClose, onSave }: {
     }));
   };
 
-  const handleNatAddressAutoFill = (city: string, district: string, street: string, lat: number, lng: number) => {
-    // Snap city to our known list if possible
-    const knownCity = Object.keys(SAUDI_CITIES).find(c => c.toLowerCase() === city.toLowerCase()) ?? city;
-    const coords = CITY_COORDS[knownCity] ?? { lat, lng };
+  const handleNatAddressAutoFill = (r: NatFillResult) => {
+    // Snap city string to our known city list (case-insensitive match)
+    const knownCity = Object.keys(SAUDI_CITIES).find(c => c.toLowerCase() === r.city.toLowerCase()) ?? r.city;
+    // Use exact SPL GPS when verified; fall back to city-centre coords for Nominatim results
+    const coords = r.verified
+      ? { lat: r.lat, lng: r.lng }
+      : (CITY_COORDS[knownCity] ?? { lat: r.lat, lng: r.lng });
+    if (r.verified) setSplVerified(r);
     setForm(f => ({
       ...f,
       city: knownCity,
-      district: district || (SAUDI_CITIES[knownCity]?.[0] ?? f.district),
-      street: street || f.street,
-      lat: coords.lat,
-      lng: coords.lng,
+      district:
+        SAUDI_CITIES[knownCity]?.find(d => d.toLowerCase() === r.district.toLowerCase()) ??
+        (r.district || SAUDI_CITIES[knownCity]?.[0] ?? f.district ?? ''),
+      street: r.street || f.street,
+      lat:    coords.lat,
+      lng:    coords.lng,
     }));
   };
 
@@ -675,7 +933,18 @@ function UnitModal({ unit, onClose, onSave }: {
 
           {/* Location */}
           <section>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">{p.location}</p>
+            <div className="flex items-center gap-2 mb-3">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{p.location}</p>
+              {splVerified && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 leading-none">
+                  <Icons.shield size={10} />
+                  {lang === 'ar' ? 'موثّق · SPL' : 'Verified · SPL'}
+                  {splVerified.shortAddress && (
+                    <span className="font-mono text-emerald-600 ms-0.5">{splVerified.shortAddress}</span>
+                  )}
+                </span>
+              )}
+            </div>
 
             {/* National Address auto-fill */}
             <NationalAddressField onAutoFill={handleNatAddressAutoFill} lang={lang} />
