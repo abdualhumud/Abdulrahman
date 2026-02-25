@@ -15,6 +15,13 @@ import {
   checkAvailability,
   type ChannelId,
 } from '@/lib/overlap-guard';
+import {
+  processBooking,
+  getMetrics,
+  getTransactionLog,
+  _clearState as clearEngineState,
+  type TransactionRecord,
+} from '@/lib/reservation-engine';
 
 /* ── Official branded channel logos ─────────────────────────────────── */
 function ChannelLogo({ channel, isActive = true }: { channel: string; isActive?: boolean }) {
@@ -469,6 +476,324 @@ function IntegrationMonitor() {
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
+/* ── Airbnb Integration Panel ────────────────────────────────────────── */
+function AirbnbIntegrationPanel() {
+  const { t, lang } = useLang();
+  const tc = t.channels;
+  const [webhookLog, setWebhookLog] = useState<Array<{ id: number; time: string; text: string; color: string }>>([]);
+  const [simulating, setSimulating] = useState(false);
+  const logRef2 = useRef<HTMLDivElement>(null);
+  let _wid = 0;
+
+  useEffect(() => {
+    if (logRef2.current) logRef2.current.scrollTop = logRef2.current.scrollHeight;
+  }, [webhookLog]);
+
+  const addWLog = (text: string, color = 'text-slate-400') => {
+    const now = new Date();
+    const time = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+    setWebhookLog(prev => [...prev.slice(-29), { id: ++_wid, time, text, color }]);
+  };
+
+  const simulateInstantBook = async () => {
+    if (simulating) return;
+    setSimulating(true);
+    addWLog('← POST /webhooks/airbnb  [X-Airbnb-Signature: a3f9...]', 'text-amber-400');
+    await sleep(300);
+    addWLog('✓ HMAC-SHA256 signature verified', 'text-emerald-400');
+    await sleep(200);
+    addWLog('→ Event: reservations.created  (Instant Book)', 'text-blue-400');
+    await sleep(200);
+    addWLog('→ Parsed: unitId=u1  checkIn=2026-04-10  checkOut=2026-04-14', 'text-slate-300');
+    await sleep(250);
+    addWLog('🔒 Dispatching to ReservationEngine.processBooking()…', 'text-violet-400');
+    await sleep(180);
+    addWLog('✓ Lock acquired in 18ms', 'text-emerald-400');
+    await sleep(100);
+    addWLog('✓ Registry clear — no overlap', 'text-emerald-400');
+    await sleep(80);
+    addWLog('✓ Committed BK-AIRBNB-001 to master registry', 'text-emerald-400');
+    await sleep(120);
+    addWLog('→ Broadcast: Booking.com OTA_HotelAvailNotifRQ (BookingLimit=0)', 'text-blue-400');
+    await sleep(100);
+    addWLog('→ Broadcast: Gathern PUT /availability (quantity=0)', 'text-blue-400');
+    await sleep(90);
+    addWLog('✓ Total transaction: 312ms  [< 500ms ✓]', 'text-emerald-400');
+    setSimulating(false);
+  };
+
+  const OAUTH_STEPS = [
+    { num: '1', color: 'bg-rose-500',    text: lang === 'ar' ? 'إعادة توجيه المالك → airbnb.com/oauth2/auth?scope=vr:write:calendar...' : 'Redirect owner → airbnb.com/oauth2/auth?scope=vr:write:calendar...' },
+    { num: '2', color: 'bg-amber-500',   text: lang === 'ar' ? 'المستخدم يوافق → رد: ?code=AUTH_CODE&state=CSRF_TOKEN' : 'User grants access → callback: ?code=AUTH_CODE&state=CSRF_TOKEN' },
+    { num: '3', color: 'bg-blue-500',    text: lang === 'ar' ? 'POST /oauth2/token  {grant_type: authorization_code, code}' : 'POST /oauth2/token  {grant_type: authorization_code, code}' },
+    { num: '4', color: 'bg-emerald-500', text: lang === 'ar' ? 'الرد: access_token (~2h) + refresh_token (طويل الأمد)' : 'Response: access_token (~2h TTL) + refresh_token (long-lived)' },
+  ];
+
+  const WEBHOOK_EVENTS = [
+    { event: 'reservations.created',   badge: 'bg-emerald-100 text-emerald-700', desc: lang === 'ar' ? 'حجز جديد ← فوري ← حجب جميع القنوات' : 'New booking → instant → block all channels' },
+    { event: 'reservations.modified',  badge: 'bg-amber-100 text-amber-700',     desc: lang === 'ar' ? 'تعديل حجز ← تحديث التقويم' : 'Booking modified → update calendar' },
+    { event: 'reservations.cancelled', badge: 'bg-red-100 text-red-700',         desc: lang === 'ar' ? 'إلغاء ← فتح التواريخ في جميع القنوات' : 'Cancellation → unblock dates on all channels' },
+    { event: 'calendar.updated',       badge: 'bg-blue-100 text-blue-700',       desc: lang === 'ar' ? 'تحديث التوفر من طرف Airbnb' : 'Airbnb-side availability update' },
+  ];
+
+  return (
+    <div className="card p-6 space-y-5">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: '#FF385C' }}>
+          <svg width="18" height="22" viewBox="0 0 22 26" fill="white">
+            <path d="M11 0C7.7 0 5 2.7 5 6c0 2.2 1.3 4.5 3 6.8C9.7 14.6 11 16.3 11 17.5c0 1.4-1.1 2.5-2.5 2.5S6 18.9 6 17.5c0-.9.4-1.8 1-2.5l-1.5-1.5C4.5 14.7 4 16 4 17.5 4 20 6 22 8.5 22c1.4 0 2.7-.6 3.5-1.6.8 1 2.1 1.6 3.5 1.6 2.5 0 4.5-2 4.5-4.5 0-1.5-.5-2.8-1.5-3.9l-1.5 1.5c.6.7 1 1.6 1 2.4 0 1.4-1.1 2.5-2.5 2.5S13 18.9 13 17.5c0-1.2 1.3-2.9 3-4.7 1.7-2.3 3-4.6 3-6.8C19 2.7 16.3 0 13 0h-2zm1 4.5c1.4 0 2.5 1.1 2.5 2.5S13.4 9.5 12 9.5 9.5 8.4 9.5 7 10.6 4.5 12 4.5z" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-slate-900 text-lg leading-none">{tc.airbnbTitle}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{tc.airbnbOAuth}</p>
+        </div>
+        <span className="badge bg-rose-50 text-rose-600 border border-rose-100 flex-shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse me-1.5" />
+          Instant Book
+        </span>
+      </div>
+
+      {/* OAuth Steps */}
+      <div>
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+          {tc.airbnbOAuth}
+        </p>
+        <div className="space-y-2">
+          {OAUTH_STEPS.map(step => (
+            <div key={step.num} className="flex items-start gap-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
+              <span className={`${step.color} text-white text-[10px] font-extrabold w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5`}>
+                {step.num}
+              </span>
+              <p className="text-xs font-mono text-slate-700 leading-relaxed break-all">{step.text}</p>
+            </div>
+          ))}
+        </div>
+        <p className="text-[10px] text-slate-400 mt-2 ps-2 border-s-2 border-amber-200">
+          {tc.airbnbOAuthDesc}
+        </p>
+      </div>
+
+      {/* Webhook Events */}
+      <div>
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+          {tc.airbnbWebhook}
+        </p>
+        <p className="text-[10px] text-slate-400 mb-3 ps-2 border-s-2 border-rose-200">
+          {tc.airbnbWebhookDesc}
+        </p>
+        <div className="space-y-2 mb-4">
+          {WEBHOOK_EVENTS.map(ev => (
+            <div key={ev.event} className="flex items-center gap-3 p-2.5 bg-slate-50 rounded-xl">
+              <span className={`badge text-[10px] font-mono flex-shrink-0 ${ev.badge}`}>{ev.event}</span>
+              <span className="text-xs text-slate-500">{ev.desc}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Webhook Simulator */}
+        <div className="rounded-2xl overflow-hidden border border-slate-200">
+          <div className="flex items-center justify-between bg-slate-800 px-4 py-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Webhook Log</span>
+            </div>
+            <button
+              onClick={simulateInstantBook}
+              disabled={simulating}
+              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white transition-colors disabled:opacity-50"
+            >
+              {simulating ? tc.running : (lang === 'ar' ? 'محاكاة حجز فوري' : 'Simulate Instant Book')}
+            </button>
+          </div>
+          <div ref={logRef2}
+            className="bg-slate-900 p-3 h-36 overflow-y-auto font-mono text-[10px] space-y-0.5"
+            style={{ direction: 'ltr' }}>
+            {webhookLog.length === 0 && (
+              <p className="text-slate-600 italic">Press "Simulate Instant Book" to see the webhook flow.</p>
+            )}
+            {webhookLog.map(e => (
+              <div key={e.id} className="flex gap-2">
+                <span className="text-slate-600 flex-shrink-0">[{e.time}]</span>
+                <span className={e.color}>{e.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* iCal fallback */}
+      <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-100 rounded-xl">
+        <Icons.refresh size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="text-xs font-bold text-amber-700">{tc.airbnbIcal}</p>
+          <p className="text-[10px] text-amber-600 mt-0.5">{tc.airbnbIcalDesc}</p>
+          <p className="text-[10px] font-mono text-amber-500 mt-1">GET /api/ical/:unitId  →  RFC-5545 VCALENDAR feed</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Ultimate Overlap Protection Panel ──────────────────────────────────── */
+function UltimateOverlapPanel() {
+  const { t, lang } = useLang();
+  const tc = t.channels;
+
+  const [txRecords, setTxRecords] = useState<TransactionRecord[]>([]);
+  const [metrics,   setMetrics]   = useState(getMetrics());
+  const [running,   setRunning]   = useState(false);
+
+  const PHASES: Array<{ key: string; label: string; budget: number; color: string }> = [
+    { key: 'preCheckMs',   label: tc.phasePreCheck,  budget: 150, color: 'bg-blue-500' },
+    { key: 'lockMs',       label: tc.phaseLock,       budget: 50,  color: 'bg-violet-500' },
+    { key: 'commitMs',     label: tc.phaseCommit,     budget: 50,  color: 'bg-amber-500' },
+    { key: 'broadcastMs',  label: tc.phaseBroadcast,  budget: 250, color: 'bg-emerald-500' },
+  ];
+
+  const runDemoTransaction = async () => {
+    if (running) return;
+    setRunning(true);
+    clearEngineState();
+
+    // Fire 3 concurrent requests — only 1 should win
+    const reqs = [
+      processBooking({ unitId: 'u1', channel: 'Booking.com', checkIn: '2026-05-01', checkOut: '2026-05-05', guestName: 'Guest A (Booking.com)', amount: 5200 }),
+      processBooking({ unitId: 'u1', channel: 'Airbnb',      checkIn: '2026-05-03', checkOut: '2026-05-07', guestName: 'Guest B (Airbnb)',      amount: 4800 }),
+      processBooking({ unitId: 'u1', channel: 'Gathern',     checkIn: '2026-05-01', checkOut: '2026-05-05', guestName: 'Guest C (Gathern)',     amount: 5000 }),
+    ];
+
+    const results = await Promise.all(reqs);
+    setTxRecords(results);
+    setMetrics(getMetrics());
+    setRunning(false);
+  };
+
+  const STATUS_COLORS: Record<string, string> = {
+    CONFIRMED:                  'bg-emerald-100 text-emerald-700',
+    REJECTED_OVERLAP:           'bg-red-100 text-red-700',
+    REJECTED_LOCK_TIMEOUT:      'bg-amber-100 text-amber-700',
+    REJECTED_DEADLINE_EXCEEDED: 'bg-slate-100 text-slate-600',
+    REJECTED_PRE_CHECK_FAILED:  'bg-orange-100 text-orange-700',
+  };
+
+  const STATUS_SHORT: Record<string, string> = {
+    CONFIRMED:                  tc.txConfirmed,
+    REJECTED_OVERLAP:           tc.txOverlap,
+    REJECTED_LOCK_TIMEOUT:      tc.txTimeout,
+    REJECTED_DEADLINE_EXCEEDED: tc.txDeadline,
+    REJECTED_PRE_CHECK_FAILED:  'PRE-CHECK',
+  };
+
+  return (
+    <div className="card p-6 space-y-5">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center flex-shrink-0">
+          <Icons.shield size={18} className="text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-slate-900 text-lg leading-none">{tc.ultimateTitle}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{tc.ultimateDesc}</p>
+        </div>
+        <span className="badge bg-violet-50 text-violet-600 border border-violet-100 flex-shrink-0 font-mono">
+          &lt;500ms
+        </span>
+      </div>
+
+      {/* Phase timeline */}
+      <div>
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+          {lang === 'ar' ? 'مراحل المعالجة — ميزانية 500 مللي ثانية' : 'Transaction Phases — 500ms hard budget'}
+        </p>
+        <div className="space-y-2.5">
+          {PHASES.map(ph => {
+            const lastTx   = txRecords[0];  // show winner's timing
+            const actual   = lastTx ? (lastTx.phases as Record<string, number>)[ph.key] ?? 0 : 0;
+            const pct      = Math.min(100, Math.round((ph.budget / 500) * 100));
+            const actualPct = actual > 0 ? Math.min(100, Math.round((actual / ph.budget) * 100)) : 0;
+            return (
+              <div key={ph.key}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-slate-700">{ph.label}</span>
+                  <div className="flex items-center gap-2">
+                    {actual > 0 && (
+                      <span className={`text-[10px] font-bold ${actual < ph.budget * 0.8 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                        {actual}ms
+                      </span>
+                    )}
+                    <span className="text-[10px] text-slate-400">{ph.budget}ms {tc.budget}</span>
+                  </div>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden" style={{ direction: 'ltr' }}>
+                  {/* Budget bar */}
+                  <div className="h-full rounded-full relative" style={{ width: `${pct}%`, background: '#e2e8f0' }}>
+                    {/* Actual timing bar */}
+                    {actualPct > 0 && (
+                      <div className={`absolute inset-y-0 start-0 rounded-full ${ph.color} transition-all duration-500`}
+                        style={{ width: `${actualPct}%` }} />
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Demo button */}
+      <button
+        onClick={runDemoTransaction}
+        disabled={running}
+        className="w-full btn-primary justify-center py-3 disabled:opacity-50"
+        style={{ background: 'linear-gradient(135deg, #7c3aed, #2563eb)' }}
+      >
+        {running
+          ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{tc.running}</>
+          : <><Icons.refresh size={15} />{tc.runDemo}</>}
+      </button>
+
+      {/* Transaction log */}
+      {txRecords.length > 0 && (
+        <div>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">{tc.txLog}</p>
+          <div className="space-y-2" style={{ direction: 'ltr' }}>
+            {txRecords.map(tx => (
+              <div key={tx.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className={`badge text-[10px] font-bold flex-shrink-0 ${STATUS_COLORS[tx.status] ?? 'bg-slate-100 text-slate-600'}`}>
+                  {STATUS_SHORT[tx.status] ?? tx.status}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-slate-800 truncate">{tx.request.guestName}</p>
+                  <p className="text-[10px] text-slate-400 font-mono">{tx.request.checkIn} → {tx.request.checkOut}</p>
+                </div>
+                <span className={`text-xs font-bold flex-shrink-0 font-mono ${tx.durationMs < 500 ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {tx.durationMs}ms
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Metrics */}
+          <div className="grid grid-cols-3 gap-3 mt-4">
+            {[
+              { label: tc.totalTx,    value: metrics.totalProcessed },
+              { label: tc.avgLatency, value: `${Math.round(metrics.avgDurationMs)}ms` },
+              { label: tc.maxLatency, value: `${metrics.maxDurationMs}ms` },
+            ].map(m => (
+              <div key={m.label} className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+                <p className="text-lg font-extrabold text-slate-800 leading-none">{m.value}</p>
+                <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wide font-semibold">{m.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Rate Parity Manager — unit-specific ─────────────────────────────── */
 function RateParityManager() {
   const { t, lang } = useLang();
@@ -909,6 +1234,12 @@ export default function ChannelsPage() {
           );
         })}
       </div>
+
+      {/* Airbnb Integration — OAuth 2.0 + Webhooks */}
+      <AirbnbIntegrationPanel />
+
+      {/* Ultimate Overlap Protection — <500ms centralized engine */}
+      <UltimateOverlapPanel />
 
       {/* API Integration Monitor — Booking.com handshake + Overlap Guard */}
       <IntegrationMonitor />

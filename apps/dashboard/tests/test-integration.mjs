@@ -885,6 +885,414 @@ suite('End-to-End Callback Flow — Booking.com webhook → Guard → Gathern bl
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// ──  SECTION 6: Airbnb Service  ──────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+
+const AIRBNB_CREDS = { clientId: 'ab-client', clientSecret: 'ab-secret', redirectUri: 'https://rems.sa/auth/airbnb/callback' };
+const AIRBNB_BASE_URL = 'https://api.airbnb.com/v2';
+
+// ── Pure-JS reimplementations (types stripped, same logic) ─────────────────
+
+function buildAirbnbAuthorizationUrl(credentials, state) {
+  const REQUIRED_SCOPES = 'vr:read:reservations vr:write:reservations vr:read:listings vr:write:listings vr:read:calendar vr:write:calendar';
+  const params = new URLSearchParams({
+    client_id:     credentials.clientId,
+    redirect_uri:  credentials.redirectUri,
+    response_type: 'code',
+    scope:         REQUIRED_SCOPES,
+    state,
+  });
+  return `https://www.airbnb.com/oauth2/auth?${params.toString()}`;
+}
+
+async function exchangeAirbnbCode(credentials, code, fetchFn) {
+  const response = await fetchFn('https://api.airbnb.com/v2/oauth2/token', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body:    new URLSearchParams({ grant_type: 'authorization_code', client_id: credentials.clientId, client_secret: credentials.clientSecret, redirect_uri: credentials.redirectUri, code }).toString(),
+  });
+  if (!response.ok) { const b = await response.text(); throw new Error(`HTTP ${response.status}: ${b}`); }
+  const d = await response.json();
+  return { accessToken: d.access_token, refreshToken: d.refresh_token, expiresAt: Date.now() + (d.expires_in ?? 7200) * 1000, userId: String(d.user_id ?? '') };
+}
+
+async function refreshAirbnbToken(credentials, refreshToken, fetchFn) {
+  const response = await fetchFn('https://api.airbnb.com/v2/oauth2/token', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body:    new URLSearchParams({ grant_type: 'refresh_token', client_id: credentials.clientId, client_secret: credentials.clientSecret, refresh_token: refreshToken }).toString(),
+  });
+  if (!response.ok) { const b = await response.text(); throw new Error(`Refresh failed HTTP ${response.status}: ${b}`); }
+  const d = await response.json();
+  return { accessToken: d.access_token, refreshToken: d.refresh_token ?? refreshToken, expiresAt: Date.now() + (d.expires_in ?? 7200) * 1000 };
+}
+
+async function pushAirbnbCalendarBlock(op, accessToken, fetchFn) {
+  const body = { listing_id: op.listingId, start_date: op.dateFrom, end_date: op.dateTo, availability: op.available ? 'available' : 'unavailable' };
+  if (op.nightlyPrice != null) body.daily_price = op.nightlyPrice * 100;
+  if (op.minNights != null) body.min_nights = op.minNights;
+  const response = await fetchFn(`${AIRBNB_BASE_URL}/calendar_operations`, {
+    method:  'PUT',
+    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body:    JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`Calendar block failed HTTP ${response.status}`);
+}
+
+// Webhook HMAC-SHA256 verification using Web Crypto API
+async function verifyAirbnbWebhook(rawBody, signature, webhookSecret) {
+  const enc = new TextEncoder();
+  const key = await globalThis.crypto.subtle.importKey('raw', enc.encode(webhookSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sigBytes = await globalThis.crypto.subtle.sign('HMAC', key, enc.encode(rawBody));
+  const expected = Array.from(new Uint8Array(sigBytes)).map(b => b.toString(16).padStart(2, '0')).join('');
+  // Constant-time compare
+  if (expected.length !== signature.length) throw new Error('Webhook signature mismatch');
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+  if (diff !== 0) throw new Error('Webhook signature mismatch');
+}
+
+function generateICalFeed(unitId, blockedRanges) {
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', `PRODID:-//REMS//Real Estate Management System//EN`, 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
+  for (const r of blockedRanges) {
+    lines.push('BEGIN:VEVENT', `UID:${unitId}-${r.checkIn}-${r.checkOut}@rems`, `DTSTART;VALUE=DATE:${r.checkIn.replace(/-/g,'')}`, `DTEND;VALUE=DATE:${r.checkOut.replace(/-/g,'')}`, `SUMMARY:${r.summary ?? 'BLOCKED'}`, 'END:VEVENT');
+  }
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+
+suite('Airbnb Service — OAuth 2.0 + Calendar + Webhooks', () => {
+
+  test('buildAuthorizationUrl — includes client_id, response_type=code, and all scopes', async () => {
+    const url = buildAirbnbAuthorizationUrl(AIRBNB_CREDS, 'csrf-state-123');
+    assert.ok(url.startsWith('https://www.airbnb.com/oauth2/auth?'), 'must target Airbnb OAuth endpoint');
+    assert.ok(url.includes('client_id=ab-client'),             'must include client_id');
+    assert.ok(url.includes('response_type=code'),              'must use authorization code grant');
+    assert.ok(url.includes('vr%3Awrite%3Acalendar') || url.includes('vr:write:calendar'), 'must include write:calendar scope');
+    assert.ok(url.includes('state=csrf-state-123'),            'must include CSRF state param');
+  });
+
+  test('exchangeAuthorizationCode — sends correct grant_type and code', async () => {
+    let capturedBody;
+    const mockFetch = async (url, opts) => {
+      capturedBody = Object.fromEntries(new URLSearchParams(opts.body));
+      return { ok: true, json: async () => ({ access_token: 'at-abc', refresh_token: 'rt-xyz', expires_in: 7200, user_id: 42 }) };
+    };
+    const ts = await exchangeAirbnbCode(AIRBNB_CREDS, 'AUTH-CODE-001', mockFetch);
+    assert.equal(capturedBody.grant_type,    'authorization_code', 'must use authorization_code grant');
+    assert.equal(capturedBody.code,          'AUTH-CODE-001',      'must include the auth code');
+    assert.equal(capturedBody.client_id,     'ab-client');
+    assert.equal(ts.accessToken,             'at-abc');
+    assert.equal(ts.refreshToken,            'rt-xyz');
+    assert.equal(ts.userId,                  '42');
+    assert.ok(ts.expiresAt > Date.now() + 7000_000, 'expiresAt must be ~2 hours from now');
+  });
+
+  test('refreshAccessToken — sends refresh_token grant and returns new tokens', async () => {
+    let capturedBody;
+    const mockFetch = async (url, opts) => {
+      capturedBody = Object.fromEntries(new URLSearchParams(opts.body));
+      return { ok: true, json: async () => ({ access_token: 'at-new', refresh_token: 'rt-new', expires_in: 7200 }) };
+    };
+    const ts = await refreshAirbnbToken(AIRBNB_CREDS, 'rt-old', mockFetch);
+    assert.equal(capturedBody.grant_type,   'refresh_token', 'must use refresh_token grant');
+    assert.equal(capturedBody.refresh_token, 'rt-old',       'must include the old refresh token');
+    assert.equal(ts.accessToken,             'at-new',       'must return new access token');
+    assert.equal(ts.refreshToken,            'rt-new',       'must return new refresh token when rotated');
+  });
+
+  test('refreshAccessToken — keeps old refresh_token if not rotated in response', async () => {
+    const mockFetch = async () => ({ ok: true, json: async () => ({ access_token: 'at-x', expires_in: 7200 }) });
+    const ts = await refreshAirbnbToken(AIRBNB_CREDS, 'rt-stable', mockFetch);
+    assert.equal(ts.refreshToken, 'rt-stable', 'should keep original refresh token if not returned');
+  });
+
+  test('exchangeAuthorizationCode — throws on HTTP 400 (bad code)', async () => {
+    const mockFetch = async () => ({ ok: false, status: 400, text: async () => 'invalid_grant' });
+    await assert.rejects(() => exchangeAirbnbCode(AIRBNB_CREDS, 'BAD-CODE', mockFetch), /400/);
+  });
+
+  test('pushAirbnbBlock — sends PUT to /calendar_operations with availability=unavailable', async () => {
+    let capturedUrl, capturedBody;
+    const mockFetch = async (url, opts) => { capturedUrl = url; capturedBody = JSON.parse(opts.body); return { ok: true }; };
+    await pushAirbnbCalendarBlock({ listingId: 'u1', dateFrom: '2026-06-01', dateTo: '2026-06-05', available: false }, 'at-xyz', mockFetch);
+    assert.equal(capturedUrl,              `${AIRBNB_BASE_URL}/calendar_operations`);
+    assert.equal(capturedBody.listing_id,  'u1');
+    assert.equal(capturedBody.start_date,  '2026-06-01');
+    assert.equal(capturedBody.end_date,    '2026-06-05');
+    assert.equal(capturedBody.availability, 'unavailable', 'blocked dates must have availability=unavailable');
+  });
+
+  test('pushAirbnbBlock — sets availability=available when unblocking', async () => {
+    let capturedBody;
+    const mockFetch = async (url, opts) => { capturedBody = JSON.parse(opts.body); return { ok: true }; };
+    await pushAirbnbCalendarBlock({ listingId: 'u1', dateFrom: '2026-06-01', dateTo: '2026-06-05', available: true }, 'at-xyz', mockFetch);
+    assert.equal(capturedBody.availability, 'available');
+  });
+
+  test('pushAirbnbBlock — converts SAR nightly_price to cents (×100)', async () => {
+    let capturedBody;
+    const mockFetch = async (url, opts) => { capturedBody = JSON.parse(opts.body); return { ok: true }; };
+    await pushAirbnbCalendarBlock({ listingId: 'u1', dateFrom: '2026-06-01', dateTo: '2026-06-05', available: true, nightlyPrice: 1248 }, 'at-xyz', mockFetch);
+    assert.equal(capturedBody.daily_price, 1248 * 100, 'price must be in cents (SAR × 100)');
+  });
+
+  test('pushAirbnbBlock — includes Authorization: Bearer header', async () => {
+    let capturedHeaders;
+    const mockFetch = async (url, opts) => { capturedHeaders = opts.headers; return { ok: true }; };
+    await pushAirbnbCalendarBlock({ listingId: 'u1', dateFrom: '2026-06-01', dateTo: '2026-06-05', available: false }, 'my-token', mockFetch);
+    assert.ok(capturedHeaders['Authorization'].includes('my-token'), 'must send Bearer token');
+  });
+
+  test('verifyWebhookSignature — accepts valid HMAC-SHA256 signature', async () => {
+    const secret  = 'webhook-secret-xyz';
+    const payload = '{"type":"reservations.created","listing_id":"u1"}';
+    // Compute the expected signature ourselves
+    const enc = new TextEncoder();
+    const key = await globalThis.crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const sigBytes = await globalThis.crypto.subtle.sign('HMAC', key, enc.encode(payload));
+    const signature = Array.from(new Uint8Array(sigBytes)).map(b => b.toString(16).padStart(2, '0')).join('');
+    // Should not throw
+    await verifyAirbnbWebhook(payload, signature, secret);
+  });
+
+  test('verifyWebhookSignature — rejects tampered signature', async () => {
+    await assert.rejects(
+      () => verifyAirbnbWebhook('{"type":"reservations.created"}', 'deadbeef00000000', 'secret'),
+      /mismatch/,
+    );
+  });
+
+  test('verifyWebhookSignature — rejects if payload is altered after signing', async () => {
+    const secret  = 'hook-secret';
+    const original = '{"type":"reservations.created","listing_id":"u1"}';
+    const enc = new TextEncoder();
+    const key = await globalThis.crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const sigBytes = await globalThis.crypto.subtle.sign('HMAC', key, enc.encode(original));
+    const signature = Array.from(new Uint8Array(sigBytes)).map(b => b.toString(16).padStart(2, '0')).join('');
+    const tampered = original.replace('u1', 'EVIL');
+    await assert.rejects(() => verifyAirbnbWebhook(tampered, signature, secret), /mismatch/);
+  });
+
+  test('generateICalFeed — produces valid VCALENDAR with blocked date ranges', async () => {
+    const ical = generateICalFeed('u1', [
+      { checkIn: '2026-07-01', checkOut: '2026-07-05', summary: 'Booking.com confirmed' },
+      { checkIn: '2026-07-10', checkOut: '2026-07-15' },
+    ]);
+    assert.ok(ical.includes('BEGIN:VCALENDAR'),              'must include VCALENDAR wrapper');
+    assert.ok(ical.includes('VERSION:2.0'),                  'must specify iCal version 2.0');
+    assert.ok(ical.includes('BEGIN:VEVENT'),                  'must include VEVENT blocks');
+    assert.ok(ical.includes('DTSTART;VALUE=DATE:20260701'),  'must have correct DTSTART format');
+    assert.ok(ical.includes('DTEND;VALUE=DATE:20260705'),    'must have correct DTEND format');
+    assert.ok(ical.includes('Booking.com confirmed'),        'must include summary text');
+    assert.ok(ical.includes('END:VCALENDAR'),                'must close VCALENDAR');
+    const eventCount = (ical.match(/BEGIN:VEVENT/g) ?? []).length;
+    assert.equal(eventCount, 2, 'must produce exactly 2 VEVENT blocks');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// ──  SECTION 7: Reservation Engine — <500ms Ultimate Overlap Protection  ────
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Pure-JS Reservation Engine (types stripped, same algorithm) ────────────
+
+const _engRegistry = new Map();
+const _engLocks    = new Map();
+const _engTxLog    = [];
+const _engMetrics  = { totalProcessed: 0, confirmed: 0, rejectedOverlap: 0, rejectedTimeout: 0, avgDurationMs: 0, maxDurationMs: 0 };
+
+const ENG_TOTAL_DEADLINE  = 500;
+const ENG_LOCK_TTL        = 10_000;
+const ENG_LOCK_POLL       = 20;
+
+function engClearState() {
+  _engRegistry.clear(); _engLocks.clear(); _engTxLog.length = 0;
+  _engMetrics.totalProcessed = 0; _engMetrics.confirmed = 0; _engMetrics.rejectedOverlap = 0;
+  _engMetrics.rejectedTimeout = 0; _engMetrics.avgDurationMs = 0; _engMetrics.maxDurationMs = 0;
+}
+
+function engCheckLocal(unitId, range) {
+  const reqIn  = new Date(range.checkIn).getTime();
+  const reqOut = new Date(range.checkOut).getTime();
+  for (const b of _engRegistry.values()) {
+    if (b.unitId !== unitId) continue;
+    const bIn  = new Date(b.checkIn).getTime();
+    const bOut = new Date(b.checkOut).getTime();
+    if (!(reqOut <= bIn || reqIn >= bOut)) return { available: false, conflictingBooking: b };
+  }
+  return { available: true };
+}
+
+function engLockKey(unitId, range) { return `${unitId}::${range.checkIn}::${range.checkOut}`; }
+
+async function engAcquireLock(unitId, range, deadlineMs) {
+  const key   = engLockKey(unitId, range);
+  const token = `lk-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+  while (Date.now() < deadlineMs) {
+    const ex = _engLocks.get(key);
+    if (ex && Date.now() > ex.expiresAt) _engLocks.delete(key);
+    if (!_engLocks.has(key)) {
+      const h = { token, unitId, checkIn: range.checkIn, checkOut: range.checkOut, acquiredAt: Date.now(), expiresAt: Date.now() + ENG_LOCK_TTL };
+      _engLocks.set(key, h);
+      return h;
+    }
+    await sleep(ENG_LOCK_POLL);
+  }
+  return null;
+}
+
+function engReleaseLock(handle) {
+  const key = engLockKey(handle.unitId, handle);
+  if (_engLocks.get(key)?.token === handle.token) _engLocks.delete(key);
+}
+
+async function engProcess(request) {
+  const txStart  = Date.now();
+  const deadline = txStart + ENG_TOTAL_DEADLINE;
+  const phases   = { preCheckMs: 0, lockMs: 0, commitMs: 0, broadcastMs: 0 };
+
+  const record = (status, booking) => {
+    const tx = { id: `TX-${txStart}`, request, status, booking, durationMs: Date.now() - txStart, phases };
+    _engTxLog.push(tx);
+    _engMetrics.totalProcessed++;
+    if (status === 'CONFIRMED')        _engMetrics.confirmed++;
+    if (status === 'REJECTED_OVERLAP') _engMetrics.rejectedOverlap++;
+    const d = tx.durationMs;
+    const n = _engMetrics.totalProcessed;
+    _engMetrics.avgDurationMs = (_engMetrics.avgDurationMs * (n-1) + d) / n;
+    if (d > _engMetrics.maxDurationMs) _engMetrics.maxDurationMs = d;
+    return tx;
+  };
+
+  // Phase 1 — local registry check
+  const p1 = Date.now();
+  const localCheck = engCheckLocal(request.unitId, { checkIn: request.checkIn, checkOut: request.checkOut });
+  phases.preCheckMs = Date.now() - p1;
+  if (!localCheck.available) return record('REJECTED_OVERLAP');
+  if (Date.now() >= deadline) return record('REJECTED_DEADLINE_EXCEEDED');
+
+  // Phase 2 — lock
+  const p2 = Date.now();
+  const lock = await engAcquireLock(request.unitId, { checkIn: request.checkIn, checkOut: request.checkOut }, Math.min(deadline, Date.now() + 50));
+  phases.lockMs = Date.now() - p2;
+  if (!lock) return record(Date.now() >= deadline ? 'REJECTED_DEADLINE_EXCEEDED' : 'REJECTED_LOCK_TIMEOUT');
+
+  try {
+    // Phase 3 — re-check + commit
+    const p3 = Date.now();
+    const recheck = engCheckLocal(request.unitId, { checkIn: request.checkIn, checkOut: request.checkOut });
+    if (!recheck.available) { engReleaseLock(lock); phases.commitMs = Date.now()-p3; return record('REJECTED_OVERLAP'); }
+    const booking = { ...request, internalId: `BK-${Date.now()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`, confirmedAt: Date.now() };
+    _engRegistry.set(booking.internalId, booking);
+    engReleaseLock(lock);
+    phases.commitMs = Date.now() - p3;
+    return record('CONFIRMED', booking);
+  } catch(e) { engReleaseLock(lock); throw e; }
+}
+
+suite('Reservation Engine — <500ms Ultimate Overlap Protection', () => {
+
+  test('confirms booking and returns transaction record with phases', async () => {
+    engClearState();
+    const tx = await engProcess({ unitId: 'u1', channel: 'Booking.com', checkIn: '2026-08-01', checkOut: '2026-08-05', guestName: 'Alpha', amount: 5000 });
+    assert.equal(tx.status, 'CONFIRMED');
+    assert.ok(tx.booking?.internalId.startsWith('BK-'), 'must have internalId');
+    assert.ok(tx.durationMs >= 0, 'durationMs must be set');
+    assert.ok('preCheckMs' in tx.phases, 'phases must include preCheckMs');
+    assert.ok('lockMs'     in tx.phases, 'phases must include lockMs');
+    assert.ok('commitMs'   in tx.phases, 'phases must include commitMs');
+  });
+
+  test('all transactions complete well under 500ms hard deadline', async () => {
+    engClearState();
+    const units = ['u1','u2','u3','u4','u5','u6'];
+    const results = await Promise.all(units.map((uid, i) =>
+      engProcess({ unitId: uid, channel: 'Booking.com', checkIn: '2026-09-01', checkOut: '2026-09-07', guestName: `Guest ${i}`, amount: 4000 })
+    ));
+    for (const tx of results) {
+      assert.ok(tx.durationMs < 500, `transaction for ${tx.request.unitId} must complete in <500ms (took ${tx.durationMs}ms)`);
+    }
+  });
+
+  test('rejects duplicate booking with REJECTED_OVERLAP', async () => {
+    engClearState();
+    const r1 = await engProcess({ unitId: 'u1', channel: 'Airbnb',      checkIn: '2026-10-01', checkOut: '2026-10-07', guestName: 'First',  amount: 5000 });
+    const r2 = await engProcess({ unitId: 'u1', channel: 'Gathern',     checkIn: '2026-10-04', checkOut: '2026-10-10', guestName: 'Second', amount: 4000 });
+    const r3 = await engProcess({ unitId: 'u1', channel: 'Booking.com', checkIn: '2026-10-01', checkOut: '2026-10-07', guestName: 'Third',  amount: 5200 });
+    assert.equal(r1.status, 'CONFIRMED',        'first booking should confirm');
+    assert.equal(r2.status, 'REJECTED_OVERLAP', 'partial overlap must be rejected');
+    assert.equal(r3.status, 'REJECTED_OVERLAP', 'exact duplicate must be rejected');
+  });
+
+  test('race condition (3 channels simultaneously) — exactly 1 wins, 2 get REJECTED_OVERLAP', async () => {
+    engClearState();
+    const make = (ch) => engProcess({ unitId: 'u1', channel: ch, checkIn: '2026-11-01', checkOut: '2026-11-05', guestName: `${ch} guest`, amount: 4500 });
+    const [rBC, rAB, rGA] = await Promise.all([make('Booking.com'), make('Airbnb'), make('Gathern')]);
+    const wins = [rBC, rAB, rGA].filter(r => r.status === 'CONFIRMED');
+    const losses = [rBC, rAB, rGA].filter(r => r.status !== 'CONFIRMED');
+    assert.equal(wins.length,   1, 'exactly one channel must win the race');
+    assert.equal(losses.length, 2, 'the other two must be rejected');
+    for (const l of losses) {
+      assert.ok(
+        l.status === 'REJECTED_OVERLAP' || l.status === 'REJECTED_LOCK_TIMEOUT',
+        `loser status must be REJECTED_OVERLAP or REJECTED_LOCK_TIMEOUT, got: ${l.status}`,
+      );
+    }
+  });
+
+  test('5-way concurrent race — exactly 1 wins', async () => {
+    engClearState();
+    const channels = ['Booking.com', 'Airbnb', 'Gathern', 'Direct', 'Booking.com'];
+    const results = await Promise.all(channels.map((ch, i) =>
+      engProcess({ unitId: 'u2', channel: ch, checkIn: '2026-12-01', checkOut: '2026-12-05', guestName: `Racer ${i}`, amount: 3000 })
+    ));
+    const wins = results.filter(r => r.status === 'CONFIRMED');
+    assert.equal(wins.length, 1, 'exactly one of five concurrent requests must win');
+  });
+
+  test('different units process independently without interference', async () => {
+    engClearState();
+    const results = await Promise.all([
+      engProcess({ unitId: 'u1', channel: 'Booking.com', checkIn: '2027-01-01', checkOut: '2027-01-07', guestName: 'A', amount: 5000 }),
+      engProcess({ unitId: 'u2', channel: 'Airbnb',      checkIn: '2027-01-01', checkOut: '2027-01-07', guestName: 'B', amount: 4000 }),
+      engProcess({ unitId: 'u3', channel: 'Gathern',     checkIn: '2027-01-01', checkOut: '2027-01-07', guestName: 'C', amount: 6000 }),
+    ]);
+    assert.ok(results.every(r => r.status === 'CONFIRMED'), 'all bookings on different units must be confirmed simultaneously');
+  });
+
+  test('metrics track confirmed and rejected counts correctly', async () => {
+    engClearState();
+    await engProcess({ unitId: 'u1', channel: 'Booking.com', checkIn: '2027-02-01', checkOut: '2027-02-05', guestName: 'Ok', amount: 4000 });
+    await engProcess({ unitId: 'u1', channel: 'Airbnb',      checkIn: '2027-02-03', checkOut: '2027-02-07', guestName: 'Dup', amount: 3000 });
+    assert.equal(_engMetrics.confirmed,       1, 'metrics must count 1 confirmed');
+    assert.equal(_engMetrics.rejectedOverlap, 1, 'metrics must count 1 rejected overlap');
+    assert.equal(_engMetrics.totalProcessed,  2, 'metrics must count 2 total');
+    assert.ok(_engMetrics.avgDurationMs >= 0,    'avg duration must be tracked');
+  });
+
+  test('back-to-back bookings on same unit are both confirmed', async () => {
+    engClearState();
+    const r1 = await engProcess({ unitId: 'u1', channel: 'Booking.com', checkIn: '2027-03-01', checkOut: '2027-03-05', guestName: 'G1', amount: 3000 });
+    const r2 = await engProcess({ unitId: 'u1', channel: 'Gathern',     checkIn: '2027-03-05', checkOut: '2027-03-10', guestName: 'G2', amount: 3500 });
+    assert.equal(r1.status, 'CONFIRMED', 'first booking must confirm');
+    assert.equal(r2.status, 'CONFIRMED', 'back-to-back booking must also confirm (no overlap)');
+  });
+
+  test('phase timings are individually tracked per transaction', async () => {
+    engClearState();
+    const tx = await engProcess({ unitId: 'u1', channel: 'Direct', checkIn: '2027-04-01', checkOut: '2027-04-05', guestName: 'Timer', amount: 2000 });
+    assert.equal(tx.status, 'CONFIRMED');
+    assert.ok(tx.phases.preCheckMs >= 0, 'preCheckMs must be ≥0');
+    assert.ok(tx.phases.lockMs     >= 0, 'lockMs must be ≥0');
+    assert.ok(tx.phases.commitMs   >= 0, 'commitMs must be ≥0');
+    // Total of recorded phases must be ≤ actual durationMs
+    const sumPhases = tx.phases.preCheckMs + tx.phases.lockMs + tx.phases.commitMs + tx.phases.broadcastMs;
+    assert.ok(sumPhases <= tx.durationMs + 5, 'sum of phases must not exceed total duration (±5ms tolerance)');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // ──  Run  ────────────────────────────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════════════════════
 
