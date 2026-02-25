@@ -227,14 +227,17 @@ export const translations = {
     },
 
     inbox: {
-      title:       'Inbox',
-      allChannels: 'All Channels',
-      viewBooking: 'View Booking',
-      replyVia:    'Replying via',
-      cmdEnter:    '⌘ + Enter to send',
-      noConvo:     'No conversation selected',
-      pickMsg:     'Pick a message from the list',
-      placeholder: 'Message',
+      title:         'Inbox',
+      allChannels:   'All Channels',
+      viewBooking:   'View Booking',
+      replyVia:      'Replying via',
+      cmdEnter:      '⌘ + Enter to send',
+      noConvo:       'No conversation selected',
+      pickMsg:       'Pick a message from the list',
+      placeholder:   'Message',
+      autoTranslate: 'Auto-Translate',
+      translating:   'Translating…',
+      translated:    'Auto-translated',
     },
 
     analytics: {
@@ -338,6 +341,9 @@ export const translations = {
       todayDone:      'done today',
       priority_HIGH:  'Urgent',
       priority_NORMAL:'Normal',
+      autoTranslate: 'Auto-Translate',
+      translating:   'Translating…',
+      translated:    'Auto-translated',
       // New Request modal
       newReqTitle:        'New Cleaning Request',
       newReqUnit:         'Select Unit',
@@ -713,6 +719,9 @@ export const translations = {
       totalRevenue:  'إجمالي الإيرادات',
       noResults:     'لا توجد حجوزات تطابق بحثك',
       view:          'عرض',
+      guestDetails:  'بيانات الضيف',
+      bookingInfo:   'معلومات الحجز',
+      paymentStatus: 'حالة الدفع',
     },
 
     calendar: {
@@ -840,14 +849,17 @@ export const translations = {
     },
 
     inbox: {
-      title:       'صندوق الوارد',
-      allChannels: 'كل القنوات',
-      viewBooking: 'عرض الحجز',
-      replyVia:    'الرد عبر',
-      cmdEnter:    '⌘ + Enter للإرسال',
-      noConvo:     'لم يتم تحديد محادثة',
-      pickMsg:     'اختر رسالة من القائمة',
-      placeholder: 'رسالة',
+      title:         'صندوق الوارد',
+      allChannels:   'كل القنوات',
+      viewBooking:   'عرض الحجز',
+      replyVia:      'الرد عبر',
+      cmdEnter:      '⌘ + Enter للإرسال',
+      noConvo:       'لم يتم تحديد محادثة',
+      pickMsg:       'اختر رسالة من القائمة',
+      placeholder:   'رسالة',
+      autoTranslate: 'ترجمة تلقائية',
+      translating:   'جارٍ الترجمة…',
+      translated:    'مُترجَم تلقائياً',
     },
 
     analytics: {
@@ -951,6 +963,9 @@ export const translations = {
       todayDone:      'منجز اليوم',
       priority_HIGH:  'عاجل',
       priority_NORMAL:'عادي',
+      autoTranslate: 'ترجمة تلقائية',
+      translating:   'جارٍ الترجمة…',
+      translated:    'مُترجَم تلقائياً',
       // New Request modal
       newReqTitle:        'طلب تنظيف جديد',
       newReqUnit:         'اختر الوحدة',

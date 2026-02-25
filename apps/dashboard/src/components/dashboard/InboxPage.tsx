@@ -1,17 +1,34 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Icons } from '@/lib/icons';
 import { INBOX_MESSAGES } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
 
+async function translateText(text: string, targetLang: 'en' | 'ar'): Promise<string> {
+  const srcLang  = targetLang === 'en' ? 'ar' : 'en';
+  const langpair = `${srcLang}|${targetLang}`;
+  try {
+    const res  = await fetch(
+      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langpair}`
+    );
+    const data = await res.json();
+    return data?.responseData?.translatedText ?? text;
+  } catch {
+    return text;
+  }
+}
+
 export default function InboxPage() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [msgs,   setMsgs]   = useState(INBOX_MESSAGES);
   const [selId,  setSelId]  = useState<string | null>('m1');
   const [reply,  setReply]  = useState('');
   const [sending, setSending] = useState(false);
   const [chFilter, setChFilter] = useState('ALL');
+  const [autoTranslate, setAutoTranslate] = useState(false);
+  const [translations, setTranslations] = useState<Record<string, string>>({});
+  const [translating, setTranslating] = useState(false);
 
   const selected = msgs.find(m => m.id === selId);
   const unread   = msgs.filter(m => !m.isRead).length;
@@ -29,6 +46,22 @@ export default function InboxPage() {
     setSending(false);
     setReply('');
   };
+
+  const toggleAutoTranslate = useCallback(async () => {
+    const next = !autoTranslate;
+    setAutoTranslate(next);
+    if (next && selected) {
+      const msgId   = selected.id;
+      const msgText = selected.message;
+      if (!translations[msgId]) {
+        setTranslating(true);
+        const targetLang = lang === 'ar' ? 'en' : 'ar';
+        const translated = await translateText(msgText, targetLang);
+        setTranslations(prev => ({ ...prev, [msgId]: translated }));
+        setTranslating(false);
+      }
+    }
+  }, [autoTranslate, selected, translations, lang]);
 
   const CHANNELS = ['ALL', 'Booking.com', 'Airbnb', 'Gathern'];
 
@@ -116,7 +149,25 @@ export default function InboxPage() {
                   <span className="font-mono" style={{ direction: 'ltr', unicodeBidi: 'embed' }}>{selected.bookingId}</span>
                 </p>
               </div>
-              <button className="btn-ghost text-xs py-1.5 px-3">{t.inbox.viewBooking}</button>
+              <div className="flex items-center gap-2">
+                {/* Auto-translate toggle */}
+                <button
+                  onClick={toggleAutoTranslate}
+                  title={lang === 'ar' ? 'ترجمة تلقائية' : 'Auto-Translate'}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                    autoTranslate
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-slate-100 text-slate-500 border-slate-200 hover:border-slate-400'
+                  }`}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 8l6 6" /><path d="M4 14l6-6 2-3" /><path d="M2 5h12" /><path d="M7 2h1" />
+                    <path d="M22 22l-5-10-5 10" /><path d="M14 18h6" />
+                  </svg>
+                  {lang === 'ar' ? 'ترجمة' : 'Translate'}
+                </button>
+                <button className="btn-ghost text-xs py-1.5 px-3">{t.inbox.viewBooking}</button>
+              </div>
             </div>
 
             {/* Messages area */}
@@ -137,6 +188,27 @@ export default function InboxPage() {
                 <div className="bg-white border border-slate-100 rounded-2xl rounded-es-sm px-4 py-3 shadow-sm">
                   <p className="text-sm text-slate-800 leading-relaxed">{selected.message}</p>
                   <p className="text-[10px] text-slate-400 mt-2">{selected.time}</p>
+                  {/* Auto-translation */}
+                  {autoTranslate && (
+                    <div className="mt-2 pt-2 border-t border-slate-100">
+                      {translating ? (
+                        <p className="text-[11px] text-blue-500 flex items-center gap-1">
+                          <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                          {lang === 'ar' ? 'جارٍ الترجمة…' : 'Translating…'}
+                        </p>
+                      ) : translations[selected.id] ? (
+                        <div>
+                          <p className="text-[10px] text-blue-500 font-semibold mb-0.5 flex items-center gap-1">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/>
+                            </svg>
+                            {lang === 'ar' ? 'الترجمة الآلية' : 'Auto-translated'}
+                          </p>
+                          <p className="text-sm text-slate-600 leading-relaxed italic">{translations[selected.id]}</p>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -110,21 +110,26 @@ function LeafletPinMap({ lat, lng, name, onCoordsChange, lang }: {
   onCoordsChange: (lat: number, lng: number) => void;
   lang: string;
 }) {
-  const containerRef  = useRef<HTMLDivElement>(null);
-  const mapRef        = useRef<any>(null);
-  const markerRef     = useRef<any>(null);
-  const initLatRef    = useRef(lat);
-  const initLngRef    = useRef(lng);
+  const containerRef      = useRef<HTMLDivElement>(null);
+  const mapRef            = useRef<any>(null);
+  const markerRef         = useRef<any>(null);
+  const initLatRef        = useRef(lat);
+  const initLngRef        = useRef(lng);
+  // Keep callback ref stable — prevents map from re-initialising on every form field change
+  const onCoordsChangeRef = useRef(onCoordsChange);
+  useEffect(() => { onCoordsChangeRef.current = onCoordsChange; }, [onCoordsChange]);
+
   const [coords, setCoords]           = useState({ lat, lng });
   const [pinFeedback, setPinFeedback] = useState(false);
   const [loading, setLoading]         = useState(true);
 
+  // Stable — no deps because we use the ref instead of the prop directly
   const updatePin = useCallback((newLat: number, newLng: number) => {
     setCoords({ lat: newLat, lng: newLng });
-    onCoordsChange(newLat, newLng);
+    onCoordsChangeRef.current(newLat, newLng);
     setPinFeedback(true);
     setTimeout(() => setPinFeedback(false), 1800);
-  }, [onCoordsChange]);
+  }, []);
 
   const initLeafletMap = useCallback(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -542,6 +547,23 @@ function UnitModal({ unit, onClose, onSave }: {
     }));
   };
 
+  // Re-center map when neighbourhood changes — applies a small deterministic
+  // offset within the city so the flyTo effect fires (no district-level GPS data)
+  const handleDistrictChange = (district: string) => {
+    const districts = SAUDI_CITIES[form.city ?? 'Riyadh'] ?? [];
+    const idx       = districts.indexOf(district);
+    const count     = Math.max(districts.length, 1);
+    const angle     = (idx / count) * 2 * Math.PI;
+    const radius    = 0.012; // ~1.3 km visual offset
+    const cityCoords = CITY_COORDS[form.city ?? 'Riyadh'] ?? { lat: 24.7136, lng: 46.6753 };
+    setForm(f => ({
+      ...f,
+      district,
+      lat: parseFloat((cityCoords.lat + Math.sin(angle) * radius).toFixed(5)),
+      lng: parseFloat((cityCoords.lng + Math.cos(angle) * radius).toFixed(5)),
+    }));
+  };
+
   const handleNatAddressAutoFill = (city: string, district: string, street: string, lat: number, lng: number) => {
     // Snap city to our known list if possible
     const knownCity = Object.keys(SAUDI_CITIES).find(c => c.toLowerCase() === city.toLowerCase()) ?? city;
@@ -669,7 +691,7 @@ function UnitModal({ unit, onClose, onSave }: {
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-500 mb-1 block">{lang === 'ar' ? 'الحي' : 'Neighbourhood'}</label>
-                <select className="input w-full bg-white" value={form.district ?? ''} onChange={e => setF('district', e.target.value)}>
+                <select className="input w-full bg-white" value={form.district ?? ''} onChange={e => handleDistrictChange(e.target.value)}>
                   {(SAUDI_CITIES[form.city ?? 'Riyadh'] ?? []).map(n => (
                     <option key={n} value={n}>{n}</option>
                   ))}

@@ -1,6 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+
+async function translateText(text: string, targetLang: 'en' | 'ar'): Promise<string> {
+  const srcLang  = targetLang === 'en' ? 'ar' : 'en';
+  try {
+    const res  = await fetch(
+      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${srcLang}|${targetLang}`
+    );
+    const data = await res.json();
+    return data?.responseData?.translatedText ?? text;
+  } catch {
+    return text;
+  }
+}
 import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
 import {
@@ -42,6 +55,9 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
   const [providerFilter, setFilter]     = useState<ProviderFilter>('ALL');
   const [chatInput, setChatInput]       = useState('');
   const [showAssign,  setShowAssign]    = useState(false);
+  const [autoTranslate, setAutoTranslate] = useState(false);
+  const [translations, setTranslations] = useState<Record<string, string>>({});
+  const [translating, setTranslating] = useState(false);
 
   // ── New Request modal ────────────────────────────────────────────────
   const [showNewReq,   setShowNewReq]  = useState(false);
@@ -114,6 +130,26 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
       };
     }));
   }
+
+  // ── Auto-translate chat messages ────────────────────────────────────────
+  const toggleAutoTranslate = useCallback(async () => {
+    const next = !autoTranslate;
+    setAutoTranslate(next);
+    if (next && selected) {
+      const targetLang = lang === 'ar' ? 'en' : 'ar';
+      const nonSystemMsgs = selected.messages.filter(m => m.from !== 'SYSTEM');
+      setTranslating(true);
+      const newTrans: Record<string, string> = { ...translations };
+      await Promise.all(nonSystemMsgs.map(async (msg, i) => {
+        const key = `${selectedId}-${i}`;
+        if (!newTrans[key]) {
+          newTrans[key] = await translateText(msg.text, targetLang);
+        }
+      }));
+      setTranslations(newTrans);
+      setTranslating(false);
+    }
+  }, [autoTranslate, selected, selectedId, translations, lang]);
 
   // ── Submit new request ──────────────────────────────────────────────────
   async function submitNewRequest() {
@@ -380,10 +416,34 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
             </div>
 
             {/* ── Chat ──────────────────────────────────────────────────── */}
+            {/* Chat toolbar */}
+            <div className="flex-shrink-0 bg-slate-50 border-b border-slate-100 px-5 py-2 flex items-center justify-between">
+              <p className="text-[11px] text-slate-400 font-semibold">
+                {lang === 'ar' ? 'محادثة المزود' : 'Provider Chat'}
+              </p>
+              <button
+                onClick={toggleAutoTranslate}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                  autoTranslate
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                }`}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/>
+                  <path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/>
+                </svg>
+                {lang === 'ar' ? 'ترجمة تلقائية' : 'Auto-Translate'}
+                {translating && <span className="w-2.5 h-2.5 border border-white border-t-transparent rounded-full animate-spin ms-0.5" />}
+              </button>
+            </div>
+
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
               {selected.messages.map((msg, i) => {
                 const isSystem  = msg.from === 'SYSTEM';
                 const isManager = msg.from === 'MANAGER';
+                const translationKey = `${selectedId}-${i}`;
+                const translated = autoTranslate && !isSystem ? translations[translationKey] : null;
                 return (
                   <div key={i} className={`flex ${isSystem ? 'justify-center' : isManager ? 'justify-end' : 'justify-start'}`}>
                     {isSystem ? (
@@ -403,6 +463,21 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
                             : 'bg-white border border-slate-200 text-slate-800 rounded-tl-sm shadow-sm'
                         }`}>
                           {msg.text}
+                          {/* Translation */}
+                          {autoTranslate && (
+                            <div className={`mt-1.5 pt-1.5 border-t ${isManager ? 'border-blue-500/40' : 'border-slate-100'}`}>
+                              {translating && !translated ? (
+                                <span className="text-[10px] opacity-60 flex items-center gap-1">
+                                  <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
+                                  {lang === 'ar' ? 'ترجمة…' : 'Translating…'}
+                                </span>
+                              ) : translated ? (
+                                <p className={`text-[11px] italic leading-snug ${isManager ? 'text-blue-100' : 'text-slate-500'}`}>
+                                  {translated}
+                                </p>
+                              ) : null}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

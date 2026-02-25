@@ -12,6 +12,174 @@ const STATUS_STYLE: Record<string, string> = {
   PENDING:     'bg-amber-50 text-amber-700 border border-amber-200',
 };
 
+/* ── Booking Detail Slide-over ─────────────────────────────────────── */
+function BookingDetailModal({
+  booking,
+  onClose,
+}: {
+  booking: typeof RECENT_BOOKINGS[number];
+  onClose: () => void;
+}) {
+  const { t, lang } = useLang();
+  const ins = INSURANCE_RECORDS.find(r => r.bookingId === booking.id);
+
+  const INS_STYLE: Record<string, string> = {
+    HELD:               'bg-blue-50 text-blue-700 border border-blue-200',
+    PENDING_INSPECTION: 'bg-amber-50 text-amber-700 border border-amber-200',
+    RELEASED:           'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-end bg-black/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white h-full w-full max-w-sm shadow-2xl flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}
+        style={{ animation: 'slideIn 0.25s ease-out' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
+              <Icons.bookings size={16} className="text-blue-600" />
+            </div>
+            <div>
+              <p className="font-extrabold text-slate-900 leading-none text-sm">
+                {lang === 'ar' ? 'تفاصيل الحجز' : 'Booking Details'}
+              </p>
+              <p className="text-[11px] text-slate-400 font-mono mt-0.5">{booking.id}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-colors"
+          >
+            <Icons.x size={15} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+
+          {/* Guest profile */}
+          <div className="flex items-center gap-3 bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center font-extrabold text-xl flex-shrink-0"
+              style={{ background: booking.channelColor + '20', color: booking.channelColor }}
+            >
+              {booking.guest.charAt(0)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-extrabold text-slate-900 leading-none">{booking.guest}</p>
+              <p className="text-xs text-slate-400 mt-1">{booking.property}</p>
+              <p className="text-xs text-slate-400">{booking.unit}</p>
+            </div>
+          </div>
+
+          {/* Booking info */}
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              {lang === 'ar' ? 'معلومات الحجز' : 'Booking Info'}
+            </p>
+            <div className="bg-slate-50 rounded-2xl divide-y divide-slate-100 border border-slate-100" style={{ direction: 'ltr' }}>
+              {[
+                { label: lang === 'ar' ? 'القناة' : 'Channel',    value: booking.channel,    color: booking.channelColor },
+                { label: lang === 'ar' ? 'الوصول' : 'Check-in',   value: booking.checkIn },
+                { label: lang === 'ar' ? 'المغادرة' : 'Check-out', value: booking.checkOut },
+                { label: lang === 'ar' ? 'الليالي' : 'Nights',     value: String(booking.nights) },
+              ].map(row => (
+                <div key={row.label} className="flex justify-between items-center px-4 py-2.5 text-xs">
+                  <span className="text-slate-500">{row.label}</span>
+                  <span className="font-bold text-slate-900" style={row.color ? { color: row.color } : {}}>
+                    {row.color ? `● ${row.value}` : row.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Payment status */}
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              {lang === 'ar' ? 'حالة الدفع' : 'Payment'}
+            </p>
+            <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-emerald-700 font-semibold mb-0.5">
+                  {lang === 'ar' ? 'المبلغ الإجمالي' : 'Total Amount'}
+                </p>
+                <p className="text-xl font-extrabold text-emerald-900" style={{ direction: 'ltr' }}>
+                  SAR {booking.amount.toLocaleString()}
+                </p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                <Icons.financials size={18} className="text-emerald-600" />
+              </div>
+            </div>
+          </div>
+
+          {/* Booking status */}
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              {lang === 'ar' ? 'حالة الحجز' : 'Status'}
+            </p>
+            <span className={`badge text-xs ${STATUS_STYLE[booking.status] ?? 'bg-slate-100 text-slate-500'}`}>
+              {t.status[booking.status as keyof typeof t.status] ?? booking.status}
+            </span>
+          </div>
+
+          {/* Insurance */}
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              {t.insurance.title}
+            </p>
+            {ins ? (
+              <div className="bg-slate-50 rounded-2xl border border-slate-100 divide-y divide-slate-100" style={{ direction: 'ltr' }}>
+                <div className="flex justify-between items-center px-4 py-2.5 text-xs">
+                  <span className="text-slate-500">{lang === 'ar' ? 'المزود' : 'Provider'}</span>
+                  <span className="font-bold text-violet-700">{ins.provider}</span>
+                </div>
+                <div className="flex justify-between items-center px-4 py-2.5 text-xs">
+                  <span className="text-slate-500">{lang === 'ar' ? 'مبلغ التأمين' : 'Deposit'}</span>
+                  <span className="font-bold text-slate-900">SAR {ins.depositAmount.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center px-4 py-2.5 text-xs">
+                  <span className="text-slate-500">{lang === 'ar' ? 'الحالة' : 'Status'}</span>
+                  <span className={`badge text-[10px] ${INS_STYLE[ins.status] ?? INS_STYLE.HELD}`}>
+                    <Icons.shield size={10} className="inline me-0.5" />
+                    {ins.status === 'HELD' ? t.insurance.depositHeld :
+                     ins.status === 'RELEASED' ? t.insurance.depositReleased : t.insurance.depositPending}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 italic px-1">
+                {lang === 'ar' ? 'لا يوجد سجل تأمين' : 'No insurance record'}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-slate-100 p-4 flex-shrink-0 bg-white">
+          <button onClick={onClose} className="btn-ghost w-full justify-center py-2.5 text-sm">
+            {lang === 'ar' ? 'إغلاق' : 'Close'}
+          </button>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes slideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to   { transform: translateX(0);    opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 interface Props {
   onCheckoutCleaning?: (unitName: string, bookingId: string) => void;
 }
@@ -23,6 +191,7 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
   const [search, setSearch] = useState('');
   const [localStatuses, setLocalStatuses] = useState<Record<string, string>>({});
   const [justCheckedOut, setJustCheckedOut] = useState<string | null>(null);
+  const [viewBooking, setViewBooking] = useState<typeof RECENT_BOOKINGS[number] | null>(null);
 
   const getStatus = (b: typeof RECENT_BOOKINGS[number]) =>
     localStatuses[b.id] ?? b.status;
@@ -183,7 +352,10 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
                   </td>
                   <td>
                     <div className="flex items-center gap-1.5">
-                      <button className="opacity-0 group-hover:opacity-100 transition-opacity btn-ghost py-1.5 px-2.5 text-xs">
+                      <button
+                        onClick={() => setViewBooking(b)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity btn-ghost py-1.5 px-2.5 text-xs"
+                      >
                         <Icons.eye size={13} /> {t.bookings.view}
                       </button>
                       {/* Check Out button — only for CHECKED_IN */}
@@ -212,6 +384,11 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
           </tbody>
         </table>
       </div>
+
+      {/* Booking detail slide-over */}
+      {viewBooking && (
+        <BookingDetailModal booking={viewBooking} onClose={() => setViewBooking(null)} />
+      )}
     </div>
   );
 }
