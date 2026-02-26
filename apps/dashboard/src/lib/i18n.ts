@@ -425,6 +425,23 @@ export const translations = {
       journeyStep4:   'Add Property',
       journeyStep5:   'Connect Channels',
       journeyStep6:   'Go Live!',
+      // Production strict-mode additions
+      strictNotice:   'All fields are mandatory — this setup cannot be bypassed.',
+      step3TitleProd: 'Add Your First Property',
+      step3DescProd:  'Register at least one unit to begin managing bookings',
+      firstUnitBtn:   'Add Property Now',
+      firstUnitHint:  'You will be taken to the Properties page to create your first listing using the National Address lookup.',
+      completeProd:   'Enter Dashboard',
+      fieldRequired:  'Required',
+      progressPct:    '% complete',
+    },
+
+    demo: {
+      badge:      'DEMO',
+      banner:     'Sandbox Demo Environment',
+      bannerSub:  'Pre-loaded with sample data. All changes reset when you close this tab.',
+      tryProd:    'Switch to Production →',
+      resetNote:  'Demo data resets on tab close',
     },
 
     properties: {
@@ -1062,6 +1079,23 @@ export const translations = {
       journeyStep4:   'إضافة عقار',
       journeyStep5:   'ربط القنوات',
       journeyStep6:   'تشغيل مباشر',
+      // Production strict-mode additions
+      strictNotice:   'جميع الحقول إلزامية — لا يمكن تخطي هذا الإعداد.',
+      step3TitleProd: 'إضافة أول عقار لك',
+      step3DescProd:  'سجّل وحدة واحدة على الأقل للبدء في إدارة الحجوزات',
+      firstUnitBtn:   'إضافة عقار الآن',
+      firstUnitHint:  'ستنتقل إلى صفحة العقارات لإنشاء أول قائمة باستخدام البحث عن العنوان الوطني.',
+      completeProd:   'الدخول إلى لوحة التحكم',
+      fieldRequired:  'مطلوب',
+      progressPct:    '٪ مكتمل',
+    },
+
+    demo: {
+      badge:      'تجريبي',
+      banner:     'بيئة تجريبية',
+      bannerSub:  'محمّلة ببيانات نموذجية. تُحذف جميع التغييرات عند إغلاق هذا التبويب.',
+      tryProd:    '← الانتقال إلى الإنتاج',
+      resetNote:  'تُعاد ضبط البيانات عند إغلاق التبويب',
     },
 
     properties: {

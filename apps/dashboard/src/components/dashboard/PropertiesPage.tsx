@@ -5,6 +5,7 @@ import { Icons } from '@/lib/icons';
 import { UNITS, INSURANCE_RECORDS } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
 import { useJourney } from '@/lib/journey-context';
+import { useMode } from '@/lib/mode-context';
 import { SAUDI_CITIES, CITY_COORDS, PROPERTY_IMAGES } from '@/lib/saudi-cities';
 import {
   splLookup, getSplApiKey, setSplApiKey, clearSplApiKey,
@@ -1262,12 +1263,26 @@ function UnitDetailPanel({ unit, onClose, onEdit, lang }: {
 }
 
 /* ── Main Page ────────────────────────────────────────────────────── */
+const PROD_UNITS_KEY = 'rems-prod-units';
+
+function loadProdUnits(): Unit[] {
+  try {
+    const raw = localStorage.getItem(PROD_UNITS_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as Unit[];
+  } catch { return []; }
+}
+
 export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { t, lang } = useLang();
   const { markDone } = useJourney();
+  const { isDemo } = useMode();
   const p = t.properties;
 
-  const [units, setUnits] = useState<Unit[]>(UNITS as Unit[]);
+  // Demo: pre-loaded mock data. Production: localStorage (starts empty).
+  const [units, setUnits] = useState<Unit[]>(() =>
+    isDemo ? (UNITS as Unit[]) : loadProdUnits(),
+  );
   const [showModal, setShowModal]   = useState(false);
   const [editUnit, setEditUnit]     = useState<Partial<Unit> | undefined>();
   const [inspBkg,  setInspBkg]      = useState<string | null>(null);
@@ -1296,12 +1311,20 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
   const openAdd  = () => { setEditUnit(undefined); setShowModal(true); };
   const openEdit = (u: Unit) => { setDetailUnit(null); setEditUnit(u); setShowModal(true); };
   const handleSave = (form: Partial<Unit>) => {
-    if (form.id) {
-      setUnits(us => us.map(u => u.id === form.id ? { ...u, ...form } as Unit : u));
-    } else {
-      setUnits(us => [...us, { ...form, id: 'u' + Date.now(), propertyId: 'p1', propertyName: 'New Property', occupancy: 0, revenue: 0, photos: 0, color: '#3B82F6' } as Unit]);
-      markDone(2);
-    }
+    setUnits(us => {
+      let next: Unit[];
+      if (form.id) {
+        next = us.map(u => u.id === form.id ? { ...u, ...form } as Unit : u);
+      } else {
+        next = [...us, { ...form, id: 'u' + Date.now(), propertyId: 'p1', propertyName: 'New Property', occupancy: 0, revenue: 0, photos: 0, color: '#3B82F6' } as Unit];
+        markDone(2);
+      }
+      // Persist to localStorage in production mode (demo uses mock data, no persistence needed)
+      if (!isDemo) {
+        try { localStorage.setItem(PROD_UNITS_KEY, JSON.stringify(next)); } catch { /* quota */ }
+      }
+      return next;
+    });
     setShowModal(false);
   };
 
@@ -1355,6 +1378,28 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
           </button>
         ))}
       </div>
+
+      {/* Empty state — production mode with no units yet */}
+      {units.length === 0 && !isDemo && (
+        <div className="card p-12 flex flex-col items-center text-center gap-5">
+          <div className="w-20 h-20 rounded-3xl bg-blue-50 flex items-center justify-center">
+            <Icons.properties size={36} className="text-blue-400" />
+          </div>
+          <div>
+            <p className="text-xl font-extrabold text-slate-800">
+              {lang === 'ar' ? 'لا توجد وحدات بعد' : 'No units yet'}
+            </p>
+            <p className="text-sm text-slate-400 mt-2 max-w-sm">
+              {lang === 'ar'
+                ? 'أضف وحدتك الأولى باستخدام زر "+ إضافة وحدة" أعلاه. يمكنك البحث بالعنوان الوطني لملء التفاصيل تلقائياً.'
+                : 'Add your first unit using the "+ Add Unit" button above. Use the National Address lookup to auto-fill location details.'}
+            </p>
+          </div>
+          <button onClick={openAdd} className="btn-primary">
+            <Icons.plus size={15} /> {p.addUnit}
+          </button>
+        </div>
+      )}
 
       {/* Units grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

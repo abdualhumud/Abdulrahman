@@ -46,10 +46,14 @@ function downloadCSV(filename: string, rows: (string | number)[][]) {
 }
 
 export default function AnalyticsPage() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const totalRev = PROPS.reduce((s, p) => s + p.revenue, 0);
+  const hasData = MONTHLY_REVENUE.length > 0 && PROPS.length > 0;
 
   const handleExport = () => {
+    // Guard: nothing to export when data tables are empty
+    if (!hasData) return;
+
     const rows: (string | number)[][] = [
       ['REMS Analytics Report — February 2026'],
       [],
@@ -84,7 +88,12 @@ export default function AnalyticsPage() {
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">{t.analytics.title}</h1>
           <p className="text-sm text-slate-400 mt-1">{t.analytics.subtitle}</p>
         </div>
-        <button onClick={handleExport} className="btn-ghost text-xs py-2">
+        <button
+          onClick={handleExport}
+          disabled={!hasData}
+          title={!hasData ? (lang === 'ar' ? 'لا توجد بيانات للتصدير' : 'No data to export') : undefined}
+          className="btn-ghost text-xs py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
           <Icons.download size={14} /> {t.common.export}
         </button>
       </div>

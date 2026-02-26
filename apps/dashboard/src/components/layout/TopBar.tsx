@@ -3,6 +3,7 @@
 import { Icons } from '@/lib/icons';
 import { OWNER } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
+import { useMode } from '@/lib/mode-context';
 
 const PAGE_TITLES: Record<string, { en: string; ar: string; icon: keyof typeof import('@/lib/icons').Icons }> = {
   overview:    { en: 'Overview',            ar: 'نظرة عامة'         , icon: 'overview'    },
@@ -25,6 +26,7 @@ interface Props {
 
 export default function TopBar({ activePage, onNavigate }: Props) {
   const { t, lang, toggle } = useLang();
+  const { isDemo } = useMode();
   const pageInfo = PAGE_TITLES[activePage] ?? PAGE_TITLES.overview;
 
   return (
@@ -39,6 +41,12 @@ export default function TopBar({ activePage, onNavigate }: Props) {
           <span className="text-slate-200">/</span>
           <span className="font-medium">{lang === 'ar' ? 'فبراير 2026' : 'February 2026'}</span>
         </span>
+        {/* Demo mode badge */}
+        {isDemo && (
+          <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-extrabold tracking-widest border border-amber-200 ms-1">
+            {t.demo.badge}
+          </span>
+        )}
       </div>
 
       {/* Right cluster */}

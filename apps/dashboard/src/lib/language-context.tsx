@@ -17,29 +17,41 @@ const Ctx = createContext<LangCtx>({
   toggle: () => {},
 });
 
-export function LanguageProvider({ children }: { children: React.ReactNode }) {
+/**
+ * @param storageType - 'local' (default, production) persists across sessions;
+ *   'session' (demo sandbox) resets when the browser tab is closed.
+ */
+export function LanguageProvider({
+  children,
+  storageType = 'local',
+}: {
+  children: React.ReactNode;
+  storageType?: 'local' | 'session';
+}) {
   const [lang, setLang] = useState<Lang>('en');
+  const KEY = storageType === 'session' ? 'rems-lang-demo' : 'rems-lang';
 
-  // On mount, read from localStorage
   useEffect(() => {
-    const stored = localStorage.getItem('rems-lang') as Lang | null;
+    const store = storageType === 'session' ? sessionStorage : localStorage;
+    const stored = store.getItem(KEY) as Lang | null;
     if (stored === 'ar' || stored === 'en') setLang(stored);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keep <html> dir + lang in sync
   useEffect(() => {
-    const dir = lang === 'ar' ? 'rtl' : 'ltr';
-    document.documentElement.dir  = dir;
+    document.documentElement.dir  = lang === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.lang = lang;
   }, [lang]);
 
   const toggle = useCallback(() => {
     setLang(prev => {
       const next = prev === 'en' ? 'ar' : 'en';
-      localStorage.setItem('rems-lang', next);
+      const store = storageType === 'session' ? sessionStorage : localStorage;
+      store.setItem(KEY, next);
       return next;
     });
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageType, KEY]);
 
   return (
     <Ctx.Provider value={{ lang, t: translations[lang], toggle }}>
