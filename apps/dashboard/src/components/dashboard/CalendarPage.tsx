@@ -83,9 +83,9 @@ export default function CalendarPage() {
   };
 
   /* ── Booking side-panel helpers ───────────────────────── */
-  const selectedBooking   = selected ? RECENT_BOOKINGS.find(b => b.guest === selected.guest) : null;
-  const selectedInsurance = selectedBooking ? INSURANCE_RECORDS.find(r => r.bookingId === selectedBooking.id) : null;
-  const selectedCleaning  = selectedBooking ? CLEANING_REQUESTS.find(r => r.bookingId === selectedBooking.id) : null;
+  const selectedBooking   = selected ? (RECENT_BOOKINGS.find(b => b.guest === selected.guest) ?? null) : null;
+  const selectedInsurance = selectedBooking ? (INSURANCE_RECORDS.find(r => r.bookingId === selectedBooking.id) ?? null) : null;
+  const selectedCleaning  = selectedBooking ? (CLEANING_REQUESTS.find(r => r.bookingId === selectedBooking.id) ?? null) : null;
   const chStyle = selected ? (CHANNELS[selected.channel] ?? { bg: '#F1F5F9', text: '#475569', dot: '#94A3B8' }) : null;
 
   const INS_STYLE: Record<string, string> = {

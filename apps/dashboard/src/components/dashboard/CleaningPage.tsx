@@ -71,7 +71,7 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
     providerId: '',
   });
 
-  const selected = requests.find(r => r.id === selectedId)!;
+  const selected = requests.find(r => r.id === selectedId) ?? requests[0];
 
   // ── KPIs ────────────────────────────────────────────────────────────────
   const activeCount    = requests.filter(r => r.status !== 'INSPECTION_DONE').length;

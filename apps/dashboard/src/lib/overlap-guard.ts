@@ -254,7 +254,7 @@ export async function processBookingRequest(
     // Fire-and-forget — don't fail the booking if a channel push fails.
     // In production: add retry queue with exponential backoff.
     broadcastAvailabilityBlock(booking, creds).catch(err =>
-      console.error('[OverlapGuard] Broadcast error:', err),
+      console.error('[OverlapGuard] Broadcast error:', (err as Error).message),
     );
 
     return { success: true, booking };
@@ -318,7 +318,7 @@ async function broadcastAvailabilityBlock(
   const results = await Promise.allSettled(tasks);
   results.forEach((r, i) => {
     if (r.status === 'rejected') {
-      console.error(`[OverlapGuard] Channel push #${i} failed:`, r.reason);
+      console.error(`[OverlapGuard] Channel push #${i} failed:`, (r.reason as Error).message);
     }
   });
 }

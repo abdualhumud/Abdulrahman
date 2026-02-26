@@ -92,7 +92,7 @@ function PhotoUploader({ photos, onPhotosChange, lang }: {
           {photos.map((src, idx) => (
             <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden border border-slate-200">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={src} alt="" className="w-full h-full object-cover" />
+              <img src={src} alt="" className="w-full h-full object-cover" loading="lazy" />
               <button
                 onClick={() => removePhoto(idx)}
                 className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -407,7 +407,7 @@ function NationalAddressField({
           return;
         }
         // Network / CORS error → fall through to Nominatim
-        console.warn('SPL unreachable (likely CORS), falling back to Nominatim:', (err as Error).message);
+        if (process.env.NODE_ENV !== 'production') console.warn('SPL unreachable (likely CORS), falling back to Nominatim:', (err as Error).message);
       }
     }
 
@@ -657,7 +657,7 @@ function ShareUnitModal({ unit, onClose, lang }: { unit: Unit; onClose: () => vo
         <div className="flex justify-center mb-5">
           <div className="p-3 bg-slate-50 border border-slate-100 rounded-2xl">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qrSrc} alt="QR Code" width={160} height={160} className="rounded-xl" />
+            <img src={qrSrc} alt={`QR code for unit ${unit.name}`} width={160} height={160} className="rounded-xl" loading="lazy" />
           </div>
         </div>
 
@@ -1102,7 +1102,7 @@ function UnitDetailPanel({ unit, onClose, onEdit, lang }: {
         {/* Header image */}
         <div className="relative h-44 flex-shrink-0 bg-slate-200 overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={unitImg} alt={unit.name} className="w-full h-full object-cover" />
+          <img src={unitImg} alt={unit.name} className="w-full h-full object-cover" loading="lazy" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
           <button
             onClick={onClose}

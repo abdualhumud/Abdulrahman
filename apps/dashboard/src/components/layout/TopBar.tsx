@@ -47,7 +47,7 @@ export default function TopBar({ activePage, onNavigate }: Props) {
         {/* Notifications → inbox */}
         <button
           onClick={() => onNavigate('inbox')}
-          title={lang === 'ar' ? 'صندوق الوارد' : 'Inbox'}
+          aria-label={lang === 'ar' ? 'صندوق الوارد' : 'Inbox'}
           className="relative w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
         >
           <Icons.inbox size={16} />
@@ -65,7 +65,7 @@ export default function TopBar({ activePage, onNavigate }: Props) {
         <button
           onClick={toggle}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-all border border-slate-200 hover:border-slate-400 bg-white text-slate-700 hover:bg-slate-50 shadow-sm"
-          title={lang === 'en' ? 'Switch to Arabic' : 'Switch to English'}
+          aria-label={lang === 'en' ? 'Switch to Arabic' : 'Switch to English'}
         >
           <Icons.globe size={14} className="text-slate-500" />
           <span>{lang === 'en' ? 'عربي' : 'EN'}</span>

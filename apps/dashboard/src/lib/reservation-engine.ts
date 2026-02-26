@@ -409,7 +409,9 @@ function scheduleAsyncBroadcast(
 ): void {
   // In production: push to a message queue / Redis stream for guaranteed delivery
   setTimeout(() =>
-    broadcastBlock(booking, creds, 5000, results).catch(console.error),
+    broadcastBlock(booking, creds, 5000, results).catch((err: unknown) =>
+      console.error('[ReservationEngine] Broadcast error:', (err as Error).message),
+    ),
     0,
   );
 }
