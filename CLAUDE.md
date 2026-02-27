@@ -8,7 +8,11 @@ Developer reference for the REMS monorepo. Captures all architectural decisions,
 
 A bilingual (Arabic/English) SaaS property management dashboard for Saudi property owners. Built as a static Next.js export deployed to GitHub Pages. Covers the full operational workflow: property listing → OTA channel sync → bookings → guest checkout → cleaning assignment → financial reporting.
 
-**Live URL:** `https://abdualhumud.github.io/Abdulrahman/`
+**Live URLs:**
+| Environment | URL |
+|---|---|
+| Production | `https://abdualhumud.github.io/Abdulrahman/` |
+| Demo/Sandbox | `https://abdualhumud.github.io/Abdulrahman/demo/` |
 
 ---
 
@@ -29,13 +33,17 @@ A bilingual (Arabic/English) SaaS property management dashboard for Saudi proper
         ├── tailwind.config.ts
         ├── src/
         │   ├── app/
-        │   │   ├── page.tsx           # Root orchestrator + routing
+        │   │   ├── page.tsx           # Production entry (isDemo=false, storageType=local)
+        │   │   ├── demo/
+        │   │   │   └── page.tsx       # Demo entry (isDemo=true, storageType=session)
         │   │   ├── layout.tsx
         │   │   └── globals.css
         │   ├── components/
+        │   │   ├── AppShell.tsx       # Shared app logic for both environments
         │   │   ├── layout/
         │   │   │   ├── Sidebar.tsx
         │   │   │   ├── TopBar.tsx
+        │   │   │   ├── DemoBanner.tsx # Amber banner shown only in demo mode
         │   │   │   └── JourneyBanner.tsx
         │   │   └── dashboard/
         │   │       ├── OnboardingPage.tsx
@@ -53,8 +61,9 @@ A bilingual (Arabic/English) SaaS property management dashboard for Saudi proper
         │       ├── i18n.ts                # Full EN/AR translation object
         │       ├── mock-data.ts           # All static data
         │       ├── saudi-cities.ts        # Saudi city/neighbourhood/GPS data
-        │       ├── language-context.tsx
-        │       ├── journey-context.tsx
+        │       ├── mode-context.tsx       # isDemo flag — Demo vs Production mode
+        │       ├── language-context.tsx   # storageType: 'local'|'session'
+        │       ├── journey-context.tsx    # storageType: 'local'|'session'
         │       ├── spl-service.ts         # SPL National Address API client + localStorage key helper
         │       ├── booking-com-service.ts # Booking.com Connectivity API client
         │       ├── overlap-guard.ts       # Exclusive-lock overlap prevention engine
@@ -138,6 +147,25 @@ module.exports = nextConfig;
 
 ## React Context Architecture
 
+### Mode Context (`mode-context.tsx`) — NEW
+
+Provides a single `isDemo` boolean that distinguishes the Demo Sandbox from the Production Core. All components that need environment-aware behaviour consume this context.
+
+```tsx
+interface ModeCtx { isDemo: boolean; }
+
+export function ModeProvider({ isDemo, children }: { isDemo: boolean; children: React.ReactNode }) {
+  return <ModeContext.Provider value={{ isDemo }}>{children}</ModeContext.Provider>;
+}
+export const useMode = () => useContext(ModeContext);
+```
+
+**Usage example:**
+```tsx
+const { isDemo } = useMode();
+const units = isDemo ? UNITS : loadFromLocalStorage();  // data-layer bifurcation
+```
+
 ### Language Context (`language-context.tsx`)
 
 Manages EN/AR bilingual switching with RTL/LTR document direction.
@@ -154,7 +182,21 @@ interface LangCtx {
 }
 ```
 
-**localStorage key:** `rems-lang`
+**`storageType` prop** — controls which storage backend is used:
+```tsx
+export function LanguageProvider({ children, storageType = 'local' }: {
+  children: React.ReactNode;
+  storageType?: 'local' | 'session';  // 'local' → localStorage, 'session' → sessionStorage
+}) {
+  const KEY = storageType === 'session' ? 'rems-lang-demo' : 'rems-lang';
+  // reads/writes to sessionStorage (demo) or localStorage (production)
+}
+```
+
+| Mode | storageType | Storage key | Resets on… |
+|---|---|---|---|
+| Production | `'local'` | `rems-lang` | Never (persists) |
+| Demo | `'session'` | `rems-lang-demo` | Tab close |
 
 **RTL switching:**
 ```tsx
@@ -176,7 +218,20 @@ export type JourneyStep = 1 | 2 | 3 | 4;
 // Step 4: Go Live (arrive at overview with steps 1-3 done)
 ```
 
-**localStorage key:** `rems-journey` (JSON array of completed step numbers)
+**`storageType` prop** — mirrors LanguageProvider pattern:
+```tsx
+export function JourneyProvider({ children, storageType = 'local' }: {
+  children: React.ReactNode;
+  storageType?: 'local' | 'session';
+}) {
+  const KEY = storageType === 'session' ? 'rems-journey-demo' : 'rems-journey';
+}
+```
+
+| Mode | storageType | Storage key |
+|---|---|---|
+| Production | `'local'` | `rems-journey` |
+| Demo | `'session'` | `rems-journey-demo` |
 
 **Critical placement rule:** `JourneyProvider` must wrap the **entire** `App` including the onboarding conditional. If placed after `if (showOnboarding) return <OnboardingPage />`, the onboarding page cannot call `useJourney()`.
 
@@ -184,18 +239,14 @@ export type JourneyStep = 1 | 2 | 3 | 4;
 ```tsx
 export default function Home() {
   return (
-    <LanguageProvider>
-      <JourneyProvider>   {/* wraps everything, including onboarding */}
-        <App />
-      </JourneyProvider>
-    </LanguageProvider>
+    <ModeProvider isDemo={false}>
+      <LanguageProvider storageType="local">
+        <JourneyProvider storageType="local">
+          <AppShell />
+        </JourneyProvider>
+      </LanguageProvider>
+    </ModeProvider>
   );
-}
-
-function App() {
-  const { markDone } = useJourney();  // works because provider is above
-  if (showOnboarding) return <OnboardingPage onComplete={completeOnboarding} />;
-  // ...
 }
 ```
 
@@ -203,10 +254,116 @@ function App() {
 
 | Step | Where `markDone()` fires | Trigger |
 |------|--------------------------|---------|
-| 1 | `page.tsx` → `completeOnboarding()` | User finishes OnboardingPage |
+| 1 | `AppShell.tsx` → `completeOnboarding()` | User finishes OnboardingPage |
 | 2 | `PropertiesPage.tsx` → `handleSave()` | User adds first unit (not edit) |
 | 3 | `ChannelsPage.tsx` → `forceSync()` | User force-syncs any channel |
 | 4 | `OverviewPage.tsx` → `useEffect` | Auto-fires when `completed.size >= 3` |
+
+---
+
+## Demo / Production Environment Bifurcation
+
+The app ships as **two independent entry points** served from the same static Next.js export.
+
+### Environment Comparison
+
+| Concern | Production (`/`) | Demo (`/demo/`) |
+|---|---|---|
+| Entry file | `src/app/page.tsx` | `src/app/demo/page.tsx` |
+| `isDemo` | `false` | `true` |
+| storageType | `'local'` (localStorage) | `'session'` (sessionStorage) |
+| Onboarding | Mandatory — cannot be skipped | Pre-bypassed (all steps pre-marked done) |
+| Onboarding mode | `strictMode={true}` | not rendered |
+| Unit data source | `localStorage` (`rems-prod-units`) | `UNITS` mock array |
+| Data lifetime | Permanent (persists across sessions) | Ephemeral (clears on tab close) |
+| DemoBanner | Hidden | Visible (amber top bar) |
+| DEMO badge in TopBar | Hidden | Visible |
+
+### AppShell (`src/components/AppShell.tsx`)
+
+Extracted shared component containing all app logic (routing, onboarding gate, layout). Both entry points render `<AppShell />`. `isDemo` is read from `ModeContext`.
+
+```tsx
+export default function AppShell() {
+  const { isDemo } = useMode();
+
+  // Demo: pre-mark all journey steps, skip onboarding gate entirely
+  // Production: gate on localStorage 'rems-onboarding-done' flag
+  useEffect(() => {
+    if (isDemo) {
+      markDone(1); markDone(2); markDone(3); markDone(4);
+      setShowOnboarding(false);
+    } else {
+      const done = localStorage.getItem('rems-onboarding-done');
+      if (!done) setShowOnboarding(true);
+    }
+  }, [isDemo]);
+
+  return (
+    <>
+      {isDemo && <DemoBanner />}
+      {showOnboarding
+        ? <OnboardingPage onComplete={completeOnboarding} strictMode={!isDemo} />
+        : <MainLayout ... />}
+    </>
+  );
+}
+```
+
+### Strict Onboarding (`OnboardingPage` with `strictMode={true}`)
+
+Production onboarding cannot be skipped. Each step has mandatory field validation:
+
+| Step | Required fields |
+|---|---|
+| Step 1 — Business Info | CR Number (≥7 chars), VAT Number (≥10 chars), City, District, Street |
+| Step 2 — Personal Info | Full Name, Email (contains `@`), Phone (≥9 chars), National ID (≥9 chars) |
+| Step 3 — First Property | "Add Property Now" CTA (navigates to Properties) |
+
+**Behaviour differences when `strictMode={true}`:**
+- "Skip" button is hidden
+- "Next" button is disabled (`opacity-40 cursor-not-allowed`) until all required fields pass
+- Progress bar shown at top of card with live percentage
+- Step 3 shows a "First Property" card with feature checklist instead of subscription plan cards
+
+### Production Data Layer (`PropertiesPage`)
+
+In production mode, units are stored in and loaded from `localStorage`:
+
+```tsx
+const PROD_UNITS_KEY = 'rems-prod-units';
+
+function loadProdUnits(): Unit[] {
+  try {
+    const raw = localStorage.getItem(PROD_UNITS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+const { isDemo } = useMode();
+const [units, setUnits] = useState<Unit[]>(() =>
+  isDemo ? (UNITS as Unit[]) : loadProdUnits(),
+);
+
+// On save (new unit):
+if (!isDemo) localStorage.setItem(PROD_UNITS_KEY, JSON.stringify(nextUnits));
+```
+
+**Empty state:** When `units.length === 0 && !isDemo`, a placeholder card is shown with a CTA to add the first property.
+
+### DemoBanner (`src/components/layout/DemoBanner.tsx`)
+
+Amber strip shown at the very top of every page in demo mode. Contains:
+- Flask SVG icon
+- DEMO badge
+- Banner text explaining ephemeral nature
+- "Switch to Production →" link pointing to the production URL
+
+```tsx
+const prodUrl = typeof window !== 'undefined'
+  ? window.location.origin + '/Abdulrahman/'
+  : '/Abdulrahman/';
+```
 
 ---
 
@@ -232,6 +389,21 @@ export const translations = {
     },
     journey: {   // 9 keys
       title, step1, step2, step3, step4, done, current, pending, goTo, nextStep
+    },
+    demo: {      // 6 keys — Demo banner + mode indicators
+      badge,           // 'DEMO'
+      banner,          // 'Sandbox Demo Environment'
+      bannerSub,       // 'Pre-loaded with sample data. All changes reset when you close this tab.'
+      tryProd,         // 'Switch to Production →'
+      resetNote,       // 'Demo data resets on tab close'
+    },
+    onboarding: { // strict-mode additions
+      strictNotice,    // 'All fields are mandatory — this setup cannot be bypassed.'
+      step3TitleProd,  // 'Add Your First Property'
+      firstUnitBtn,    // 'Add Property Now'
+      firstUnitHint,   // 'You will be taken to the Properties page...'
+      progressPct,     // '% complete'
+      fieldRequired,   // 'Required'
     },
     channels: {  // 60+ keys — IntegrationMonitor + Airbnb + Ultimate Overlap
       // IntegrationMonitor
@@ -1236,6 +1408,50 @@ Airbnb's `calendar_operations` endpoint expects `daily_price` in the smallest cu
 body.daily_price = op.nightlyPrice * 100;  // 1248 SAR → 124800
 ```
 Forgetting the `× 100` means the listing shows prices 100× lower than intended.
+
+### 18. Demo state leaking into production localStorage
+Demo mode must use `storageType="session"` on both `LanguageProvider` and `JourneyProvider`. If you accidentally pass `storageType="local"` to the demo entry point, demo interactions will overwrite the user's production `rems-lang` and `rems-journey` keys.
+
+```tsx
+// ✗ WRONG — demo contaminating production localStorage
+<ModeProvider isDemo={true}>
+  <LanguageProvider storageType="local">   ← uses 'rems-lang', same key as production
+```
+
+```tsx
+// ✓ CORRECT — demo isolated in sessionStorage under different keys
+<ModeProvider isDemo={true}>
+  <LanguageProvider storageType="session">  ← uses 'rems-lang-demo', resets on tab close
+```
+
+### 19. Production PropertiesPage starting with mock data
+When `isDemo` is `false`, units must be loaded from `localStorage` (`rems-prod-units`), not from the `UNITS` mock array. If you accidentally initialize state with `UNITS` in production, the user sees fake properties they never added.
+
+```tsx
+// ✗ WRONG — always uses mock data
+const [units, setUnits] = useState<Unit[]>(UNITS);
+
+// ✓ CORRECT — bifurcated by environment
+const [units, setUnits] = useState<Unit[]>(() =>
+  isDemo ? (UNITS as Unit[]) : loadProdUnits(),
+);
+```
+
+### 20. `console.error` leaking internal error objects
+Passing raw `Error` objects to `console.error` can expose stack traces and internal state in production. Always log only `.message`:
+
+```ts
+// ✗ WRONG — exposes stack trace
+} catch (err) { console.error('Failed:', err); }
+
+// ✓ CORRECT — logs message only
+} catch (err) { console.error('Failed:', (err as Error).message); }
+```
+
+Also scope `console.warn` to development only when the message is a developer hint:
+```ts
+if (process.env.NODE_ENV !== 'production') console.warn('SPL unreachable, falling back...');
+```
 
 ---
 
