@@ -247,7 +247,10 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
             <p className="text-xs text-blue-600">{t.cleaning.status_PENDING} — {t.cleaning.unitHidden}</p>
           </div>
           <button
-            onClick={() => onCheckoutCleaning?.('', justCheckedOut)}
+            onClick={() => {
+              const b = RECENT_BOOKINGS.find(bk => bk.id === justCheckedOut);
+              onCheckoutCleaning?.(b?.unit ?? '', justCheckedOut ?? '');
+            }}
             className="text-xs font-bold text-blue-700 underline underline-offset-2 hover:text-blue-900"
           >
             {t.cleaning.title} →

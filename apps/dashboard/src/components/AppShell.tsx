@@ -242,10 +242,10 @@ export default function AppShell() {
       case 'overview':    return <OverviewPage onNavigate={navigate} />;
       case 'properties':  return <PropertiesPage onNavigate={navigate} />;
       case 'bookings':    return <BookingsPage onCheckoutCleaning={handleCheckoutCleaning} />;
-      case 'calendar':    return <CalendarPage />;
+      case 'calendar':    return <CalendarPage onNavigate={navigate} />;
       case 'channels':    return <ChannelsPage />;
       case 'cleaning':    return <CleaningPage />;
-      case 'inbox':       return <InboxPage />;
+      case 'inbox':       return <InboxPage onNavigate={navigate} />;
       case 'analytics':   return <AnalyticsPage />;
       case 'financials':  return <FinancialsPage />;
       case 'settings':    return <SettingsPage />;

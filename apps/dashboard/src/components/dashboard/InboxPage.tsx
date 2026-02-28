@@ -19,7 +19,9 @@ async function translateText(text: string, targetLang: 'en' | 'ar'): Promise<str
   }
 }
 
-export default function InboxPage() {
+interface InboxPageProps { onNavigate?: (page: string) => void; }
+
+export default function InboxPage({ onNavigate }: InboxPageProps) {
   const { t, lang } = useLang();
   const [msgs,   setMsgs]   = useState(INBOX_MESSAGES);
   const [selId,  setSelId]  = useState<string | null>('m1');
@@ -174,7 +176,7 @@ export default function InboxPage() {
                   </svg>
                   {lang === 'ar' ? 'ترجمة' : 'Translate'}
                 </button>
-                <button className="btn-ghost text-xs py-1.5 px-3">{t.inbox.viewBooking}</button>
+                <button onClick={() => onNavigate?.('bookings')} className="btn-ghost text-xs py-1.5 px-3">{t.inbox.viewBooking}</button>
               </div>
             </div>
 
@@ -347,7 +349,7 @@ export default function InboxPage() {
             </div>
 
             {/* View booking button */}
-            <button className="w-full btn-primary py-2 text-xs justify-center">
+            <button onClick={() => onNavigate?.('bookings')} className="w-full btn-primary py-2 text-xs justify-center">
               <Icons.bookings size={12} />
               {t.inbox.viewBooking}
             </button>

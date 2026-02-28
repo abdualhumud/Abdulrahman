@@ -38,7 +38,9 @@ const INITIAL_OPEN = {
   unit: UNITS[0], from: '2026-02-25', to: '2026-02-27',
 };
 
-export default function CalendarPage() {
+interface CalendarPageProps { onNavigate?: (page: string) => void; }
+
+export default function CalendarPage({ onNavigate }: CalendarPageProps) {
   const { t, lang } = useLang();
 
   /* ── Calendar event selection ─────────────────────────── */
@@ -393,7 +395,10 @@ export default function CalendarPage() {
           </div>
 
           <div className="px-5 py-4 border-t border-slate-100">
-            <button className="w-full btn-primary text-sm justify-center">
+            <button
+              onClick={() => onNavigate?.('bookings')}
+              className="w-full btn-primary text-sm justify-center"
+            >
               <Icons.eye size={14} /> {t.bookings.view}
             </button>
           </div>
