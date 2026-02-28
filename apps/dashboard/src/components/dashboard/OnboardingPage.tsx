@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
+import { validatePromoCode, redeemPromoCode, type PromoValidationResult } from '@/lib/promo-service';
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2 | 3 | 4;
 
 const PLANS = ['Basic', 'Pro', 'Enterprise'] as const;
 
@@ -16,20 +17,30 @@ const REQ_DOT = (
 );
 
 interface Props {
-  onComplete: () => void;
-  /** strictMode=true (production): Skip hidden, Next blocked until required fields filled */
+  onComplete: (plan?: string, promoCode?: string) => void;
+  /** strictMode=true (production/staging): Skip hidden, Next blocked until required fields filled */
   strictMode?: boolean;
+  /** showPayment=true: show Step 4 payment/checkout step */
+  showPayment?: boolean;
 }
 
-export default function OnboardingPage({ onComplete, strictMode = false }: Props) {
+export default function OnboardingPage({ onComplete, strictMode = false, showPayment = false }: Props) {
   const { t, lang, toggle } = useLang();
   const o = t.onboarding;
+  const p = t.payment;
+
+  const totalSteps: Step = showPayment ? 4 : 3;
 
   const [step, setStep]         = useState<Step>(1);
   const [validating, setVal]    = useState(false);
   const [crOk, setCrOk]         = useState(false);
   const [selectedPlan, setPlan] = useState<typeof PLANS[number]>('Pro');
   const [touched, setTouched]   = useState(false);
+
+  // Payment / promo state
+  const [promoInput,  setPromoInput]  = useState('');
+  const [promoResult, setPromoResult] = useState<PromoValidationResult | null>(null);
+  const [promoApplied, setPromoApplied] = useState('');
 
   const [form, setForm] = useState({
     cr: '', vat: '', natCity: '', natDistr: '', natStreet: '', natPostal: '',
@@ -39,6 +50,25 @@ export default function OnboardingPage({ onComplete, strictMode = false }: Props
   const set = (k: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm(f => ({ ...f, [k]: e.target.value }));
+
+  /* ── Promo code logic ── */
+  const handleApplyPromo = () => {
+    const result = validatePromoCode(promoInput);
+    setPromoResult(result);
+    if (result.valid && result.code) setPromoApplied(result.code);
+  };
+  const handleRemovePromo = () => {
+    setPromoInput(''); setPromoResult(null); setPromoApplied('');
+  };
+
+  const planPrices: Record<typeof PLANS[number], number> = {
+    Basic: p.planBasicRaw as unknown as number,
+    Pro:   p.planProRaw   as unknown as number,
+    Enterprise: p.planEntRaw as unknown as number,
+  };
+  const basePrice   = planPrices[selectedPlan] ?? 349;
+  const discountPct = (promoResult?.valid ? promoResult.discount : 0);
+  const discounted  = Math.round(basePrice * (1 - discountPct / 100));
 
   /* ── Validation ── */
   const step1Valid = !strictMode || (
@@ -57,14 +87,15 @@ export default function OnboardingPage({ onComplete, strictMode = false }: Props
   const canGoNext =
     (step === 1 && step1Valid) ||
     (step === 2 && step2Valid) ||
-    step === 3;
+    step === 3 ||
+    step === 4;
 
   /* Progress percentage (strict only) */
   const filledCount = [
     form.cr, form.vat, form.natCity, form.natDistr, form.natStreet,
     form.ownerName, form.email, form.phone, form.nationalId, form.bankName, form.iban,
   ].filter(v => v.trim() !== '').length;
-  const progressPct = Math.min(100, Math.round(((step - 1) / 3) * 100 + (filledCount / 11) * (100 / 3)));
+  const progressPct = Math.min(100, Math.round(((step - 1) / totalSteps) * 100 + (filledCount / 11) * (100 / totalSteps)));
 
   const fakeValidate = async () => {
     setVal(true);
@@ -76,8 +107,11 @@ export default function OnboardingPage({ onComplete, strictMode = false }: Props
   const handleNext = () => {
     if (strictMode) setTouched(true);
     if (!canGoNext) return;
-    if (step < 3) { setStep(s => (s + 1) as Step); setTouched(false); }
-    else onComplete();
+    if (step < totalSteps) { setStep(s => (s + 1) as Step); setTouched(false); }
+    else {
+      if (promoApplied) redeemPromoCode(promoApplied);
+      onComplete(selectedPlan, promoApplied);
+    }
   };
 
   const fieldErr = (val: string, minLen = 1) =>
@@ -91,6 +125,7 @@ export default function OnboardingPage({ onComplete, strictMode = false }: Props
       title: strictMode ? o.step3TitleProd : o.step3Title,
       icon:  strictMode ? <Icons.properties size={16} /> : <Icons.star size={16} />,
     },
+    ...(showPayment ? [{ num: 4, title: p.title, icon: <Icons.creditCard size={16} /> }] : []),
   ];
 
   const planData = [
@@ -402,6 +437,105 @@ export default function OnboardingPage({ onComplete, strictMode = false }: Props
             </div>
           )}
 
+          {/* ── Step 4: Payment & Promo Code ── */}
+          {step === 4 && showPayment && (() => {
+            const plans = [
+              { key: 'Basic' as const,      label: p.planBasic, desc: p.planBasicDesc, price: p.planBasicPrice, raw: p.planBasicRaw as unknown as number, accent: '#64748B', popular: false },
+              { key: 'Pro' as const,         label: p.planPro,   desc: p.planProDesc,   price: p.planProPrice,   raw: p.planProRaw   as unknown as number, accent: '#3B82F6', popular: true  },
+              { key: 'Enterprise' as const,  label: p.planEnt,   desc: p.planEntDesc,   price: p.planEntPrice,   raw: p.planEntRaw   as unknown as number, accent: '#8B5CF6', popular: false },
+            ];
+            return (
+              <div className="space-y-5">
+                <div>
+                  <h2 className="text-lg font-extrabold text-slate-900">{p.title}</h2>
+                  <p className="text-sm text-slate-400 mt-0.5">{p.subtitle}</p>
+                </div>
+                {/* Plan selector */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {plans.map(plan => (
+                    <button key={plan.key} onClick={() => { setPlan(plan.key); setPromoResult(null); setPromoApplied(''); setPromoInput(''); }}
+                      className={`relative text-start rounded-2xl border-2 p-4 transition-all
+                        ${selectedPlan === plan.key ? 'shadow-md scale-[1.02]' : 'border-slate-100 hover:border-slate-300'}`}
+                      style={selectedPlan === plan.key ? { borderColor: plan.accent } : {}}>
+                      {plan.popular && (
+                        <span className="absolute -top-3 start-1/2 -translate-x-1/2 bg-blue-600 text-white text-[10px] font-bold px-3 py-0.5 rounded-full whitespace-nowrap">
+                          {p.mostPopular}
+                        </span>
+                      )}
+                      <p className="font-extrabold text-slate-900 text-sm">{plan.label}</p>
+                      <p className="text-[11px] text-slate-400 mt-1 leading-snug">{plan.desc}</p>
+                      <p className="font-extrabold mt-2 text-sm" style={{ color: plan.accent, direction: 'ltr' }}>{plan.price}</p>
+                      {selectedPlan === plan.key && (
+                        <div className="absolute top-2 end-2 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: plan.accent }}>
+                          <Icons.check size={10} className="text-white" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Promo code */}
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">
+                    {p.promoLabel}
+                  </label>
+                  {!promoApplied ? (
+                    <div className="flex gap-2">
+                      <input
+                        value={promoInput}
+                        onChange={e => { setPromoInput(e.target.value.toUpperCase()); setPromoResult(null); }}
+                        placeholder={p.promoPlaceholder}
+                        className={INPUT + ' flex-1'}
+                        style={{ direction: 'ltr', fontFamily: 'monospace', letterSpacing: '0.05em' }}
+                      />
+                      <button
+                        onClick={handleApplyPromo}
+                        disabled={!promoInput.trim()}
+                        className="px-4 py-2.5 rounded-xl text-sm font-bold bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-40 transition-all whitespace-nowrap"
+                      >{p.promoApply}</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between bg-emerald-50 rounded-xl px-4 py-3 border border-emerald-200">
+                      <div className="flex items-center gap-2">
+                        <Icons.check size={14} className="text-emerald-600" />
+                        <span className="text-sm font-bold text-emerald-700">{promoApplied}</span>
+                        <span className="text-xs text-emerald-600">— {promoResult?.discount}% {p.discount}</span>
+                      </div>
+                      <button onClick={handleRemovePromo} className="text-xs text-slate-400 hover:text-red-500 transition-colors font-semibold">
+                        {p.promoRemove}
+                      </button>
+                    </div>
+                  )}
+                  {promoResult && !promoResult.valid && (
+                    <p className="mt-1.5 text-xs text-red-500 font-semibold flex items-center gap-1">
+                      <Icons.x size={12} /> {promoResult.message}
+                    </p>
+                  )}
+                </div>
+
+                {/* Price summary */}
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-500">{p.originalPrice}</span>
+                    <span className="font-semibold text-slate-700" style={{ direction: 'ltr' }}>SAR {basePrice}{p.perMonth}</span>
+                  </div>
+                  {discountPct > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-emerald-600 font-semibold">{p.discount} ({discountPct}%)</span>
+                      <span className="font-semibold text-emerald-600" style={{ direction: 'ltr' }}>– SAR {basePrice - discounted}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-slate-200 pt-2 flex items-center justify-between">
+                    <span className="font-extrabold text-slate-900">{p.totalDue}</span>
+                    <span className="font-extrabold text-blue-600 text-lg" style={{ direction: 'ltr' }}>SAR {discounted}{p.perMonth}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">{p.vatNote}</p>
+                </div>
+                <p className="text-[11px] text-slate-400 text-center">{p.trialNote}</p>
+              </div>
+            );
+          })()}
+
           {/* ── Navigation ── */}
           <div className="flex items-center justify-between mt-7 pt-5 border-t border-slate-100">
             <div className="flex items-center gap-3">
@@ -413,23 +547,25 @@ export default function OnboardingPage({ onComplete, strictMode = false }: Props
               )}
               {/* Skip — demo mode only */}
               {!strictMode && (
-                <button onClick={onComplete} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
+                <button onClick={() => onComplete()} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
                   {o.skip}
                 </button>
               )}
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-xs text-slate-400">{o.step} {step} {o.of} 3</span>
+              <span className="text-xs text-slate-400">{o.step} {step} {o.of} {totalSteps}</span>
               <button
                 onClick={handleNext}
                 disabled={strictMode && !canGoNext}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 shadow-lg shadow-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: 'linear-gradient(135deg,#2563EB,#4F46E5)' }}
               >
-                {step === 3
-                  ? (strictMode ? o.firstUnitBtn : o.finish)
-                  : o.next}
-                {step < 3 && <Icons.chevronRight size={15} className="sidebar-chevron" />}
+                {step === totalSteps
+                  ? (showPayment ? p.confirm : (strictMode ? o.firstUnitBtn : o.finish))
+                  : step === 3 && strictMode && !showPayment
+                    ? o.firstUnitBtn
+                    : o.next}
+                {step < totalSteps && <Icons.chevronRight size={15} className="sidebar-chevron" />}
               </button>
             </div>
           </div>

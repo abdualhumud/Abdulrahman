@@ -9,10 +9,12 @@ Developer reference for the REMS monorepo. Captures all architectural decisions,
 A bilingual (Arabic/English) SaaS property management dashboard for Saudi property owners. Built as a static Next.js export deployed to GitHub Pages. Covers the full operational workflow: property listing → OTA channel sync → bookings → guest checkout → cleaning assignment → financial reporting.
 
 **Live URLs:**
-| Environment | URL |
-|---|---|
-| Production | `https://abdualhumud.github.io/Abdulrahman/` |
-| Demo/Sandbox | `https://abdualhumud.github.io/Abdulrahman/demo/` |
+| Environment | URL | Purpose |
+|---|---|---|
+| Production | `https://abdualhumud.github.io/Abdulrahman/` | Live SaaS core — strict onboarding |
+| Demo/Sandbox | `https://abdualhumud.github.io/Abdulrahman/demo/` | Sales demo — pre-loaded mock data |
+| Staging/Trial | `https://abdualhumud.github.io/Abdulrahman/staging/` | 14-day free trial — multi-tenant, login-gated |
+| Super-Admin | `https://abdualhumud.github.io/Abdulrahman/super-admin/` | Owner control panel — PIN-gated |
 
 ---
 
@@ -33,20 +35,26 @@ A bilingual (Arabic/English) SaaS property management dashboard for Saudi proper
         ├── tailwind.config.ts
         ├── src/
         │   ├── app/
-        │   │   ├── page.tsx           # Production entry (isDemo=false, storageType=local)
+        │   │   ├── page.tsx           # Production entry (envMode='production')
         │   │   ├── demo/
-        │   │   │   └── page.tsx       # Demo entry (isDemo=true, storageType=session)
+        │   │   │   └── page.tsx       # Demo entry (envMode='demo')
+        │   │   ├── staging/
+        │   │   │   └── page.tsx       # Staging/Trial entry (envMode='staging')
+        │   │   ├── super-admin/
+        │   │   │   └── page.tsx       # Super-Admin entry (envMode='superAdmin')
         │   │   ├── layout.tsx
         │   │   └── globals.css
         │   ├── components/
-        │   │   ├── AppShell.tsx       # Shared app logic for both environments
+        │   │   ├── AppShell.tsx       # Shared app logic for production/demo/staging
         │   │   ├── layout/
         │   │   │   ├── Sidebar.tsx
         │   │   │   ├── TopBar.tsx
-        │   │   │   ├── DemoBanner.tsx # Amber banner shown only in demo mode
+        │   │   │   ├── DemoBanner.tsx    # Amber banner shown only in demo mode
+        │   │   │   ├── StagingBanner.tsx # Violet banner shown only in staging mode
         │   │   │   └── JourneyBanner.tsx
         │   │   └── dashboard/
-        │   │       ├── OnboardingPage.tsx
+        │   │       ├── OnboardingPage.tsx  # Steps 1-3 (+ Step 4 payment when showPayment=true)
+        │   │       ├── SuperAdminPage.tsx  # PIN-gated owner control panel
         │   │       ├── OverviewPage.tsx
         │   │       ├── PropertiesPage.tsx
         │   │       ├── BookingsPage.tsx
@@ -61,9 +69,11 @@ A bilingual (Arabic/English) SaaS property management dashboard for Saudi proper
         │       ├── i18n.ts                # Full EN/AR translation object
         │       ├── mock-data.ts           # All static data
         │       ├── saudi-cities.ts        # Saudi city/neighbourhood/GPS data
-        │       ├── mode-context.tsx       # isDemo flag — Demo vs Production mode
+        │       ├── mode-context.tsx       # envMode: 'production'|'demo'|'staging'|'superAdmin'
         │       ├── language-context.tsx   # storageType: 'local'|'session'
         │       ├── journey-context.tsx    # storageType: 'local'|'session'
+        │       ├── promo-service.ts       # Promo code CRUD + validation (localStorage-backed)
+        │       ├── staging-auth.ts        # Multi-tenant auth for staging (per-user localStorage)
         │       ├── spl-service.ts         # SPL National Address API client + localStorage key helper
         │       ├── booking-com-service.ts # Booking.com Connectivity API client
         │       ├── overlap-guard.ts       # Exclusive-lock overlap prevention engine
@@ -147,22 +157,44 @@ module.exports = nextConfig;
 
 ## React Context Architecture
 
-### Mode Context (`mode-context.tsx`) — NEW
+### Mode Context (`mode-context.tsx`)
 
-Provides a single `isDemo` boolean that distinguishes the Demo Sandbox from the Production Core. All components that need environment-aware behaviour consume this context.
+Provides the environment mode to all components. Four environments are supported via a union type.
 
 ```tsx
-interface ModeCtx { isDemo: boolean; }
+export type EnvMode = 'production' | 'demo' | 'staging' | 'superAdmin';
 
-export function ModeProvider({ isDemo, children }: { isDemo: boolean; children: React.ReactNode }) {
-  return <ModeContext.Provider value={{ isDemo }}>{children}</ModeContext.Provider>;
+interface ModeCtx {
+  envMode:     EnvMode;
+  isDemo:      boolean;   // envMode === 'demo'
+  isStaging:   boolean;   // envMode === 'staging'
+  isSuperAdmin: boolean;  // envMode === 'superAdmin'
+}
+
+export function ModeProvider({
+  envMode,
+  isDemo: isdemoProp,   // backward-compat: treated as envMode='demo'
+  children,
+}: {
+  envMode?: EnvMode;
+  isDemo?: boolean;
+  children: React.ReactNode;
+}) {
+  const resolved: EnvMode = envMode ?? (isdemoProp ? 'demo' : 'production');
+  const value = {
+    envMode: resolved,
+    isDemo:       resolved === 'demo',
+    isStaging:    resolved === 'staging',
+    isSuperAdmin: resolved === 'superAdmin',
+  };
+  return <ModeContext.Provider value={value}>{children}</ModeContext.Provider>;
 }
 export const useMode = () => useContext(ModeContext);
 ```
 
 **Usage example:**
 ```tsx
-const { isDemo } = useMode();
+const { isDemo, isStaging, envMode } = useMode();
 const units = isDemo ? UNITS : loadFromLocalStorage();  // data-layer bifurcation
 ```
 
@@ -254,81 +286,134 @@ export default function Home() {
 
 | Step | Where `markDone()` fires | Trigger |
 |------|--------------------------|---------|
-| 1 | `AppShell.tsx` → `completeOnboarding()` | User finishes OnboardingPage |
+| 1 | `AppShell.tsx` → `completeOnboarding()` | User finishes OnboardingPage (any mode) |
 | 2 | `PropertiesPage.tsx` → `handleSave()` | User adds first unit (not edit) |
 | 3 | `ChannelsPage.tsx` → `forceSync()` | User force-syncs any channel |
 | 4 | `OverviewPage.tsx` → `useEffect` | Auto-fires when `completed.size >= 3` |
 
 ---
 
-## Demo / Production Environment Bifurcation
+## Four-Environment Architecture
 
-The app ships as **two independent entry points** served from the same static Next.js export.
+The app ships as **four independent entry points** served from the same static Next.js export, all sharing the same `AppShell` and component tree.
 
-### Environment Comparison
+### Environment Routing Summary
 
-| Concern | Production (`/`) | Demo (`/demo/`) |
-|---|---|---|
-| Entry file | `src/app/page.tsx` | `src/app/demo/page.tsx` |
-| `isDemo` | `false` | `true` |
-| storageType | `'local'` (localStorage) | `'session'` (sessionStorage) |
-| Onboarding | Mandatory — cannot be skipped | Pre-bypassed (all steps pre-marked done) |
-| Onboarding mode | `strictMode={true}` | not rendered |
-| Unit data source | `localStorage` (`rems-prod-units`) | `UNITS` mock array |
-| Data lifetime | Permanent (persists across sessions) | Ephemeral (clears on tab close) |
-| DemoBanner | Hidden | Visible (amber top bar) |
-| DEMO badge in TopBar | Hidden | Visible |
+| Path | `envMode` | storageType | Auth Gate | Onboarding |
+|---|---|---|---|---|
+| `/Abdulrahman/` | `'production'` | `'local'` | None | Strict, 4-step + payment |
+| `/Abdulrahman/demo/` | `'demo'` | `'session'` | None | Pre-skipped |
+| `/Abdulrahman/staging/` | `'staging'` | `'session'` | Login/Register | Strict, 4-step + payment |
+| `/Abdulrahman/super-admin/` | `'superAdmin'` | `'local'` | PIN (default: 1234) | N/A |
+
+### `ModeContext` — `envMode` Union
+
+```tsx
+export type EnvMode = 'production' | 'demo' | 'staging' | 'superAdmin';
+
+interface ModeCtx {
+  envMode: EnvMode;
+  isDemo:      boolean;   // envMode === 'demo'
+  isStaging:   boolean;   // envMode === 'staging'
+  isSuperAdmin: boolean;  // envMode === 'superAdmin'
+}
+```
+
+Backward-compat: `ModeProvider` still accepts `isDemo?: boolean` (treated as `envMode='demo'`).
+
+---
+
+## Four-Environment Comparison
+
+The app ships as **four independent entry points** from the same static Next.js export, sharing all components through `AppShell`.
+
+### Full Environment Matrix
+
+| Concern | Production (`/`) | Demo (`/demo/`) | Staging (`/staging/`) | Super-Admin (`/super-admin/`) |
+|---|---|---|---|---|
+| Entry file | `src/app/page.tsx` | `src/app/demo/page.tsx` | `src/app/staging/page.tsx` | `src/app/super-admin/page.tsx` |
+| `envMode` | `'production'` | `'demo'` | `'staging'` | `'superAdmin'` |
+| storageType | `'local'` | `'session'` | `'session'` | `'local'` |
+| Auth gate | None | None | Login / Register | PIN (default: 1234) |
+| Onboarding | Strict, 4 steps + payment | Pre-skipped | Strict, 4 steps + payment | N/A |
+| Unit data source | `localStorage` (`rems-prod-units`) | `UNITS` mock array | `localStorage` (per-user key) | N/A |
+| Data lifetime | Permanent | Resets on tab close | Per-user, persistent | Permanent |
+| Banner | None | Amber `DemoBanner` | Violet `StagingBanner` + user name | None |
 
 ### AppShell (`src/components/AppShell.tsx`)
 
-Extracted shared component containing all app logic (routing, onboarding gate, layout). Both entry points render `<AppShell />`. `isDemo` is read from `ModeContext`.
+Shared component handling all routing, auth gates, banners, and onboarding for production / demo / staging. Super-Admin renders `SuperAdminPage` directly and does not use `AppShell`.
 
 ```tsx
 export default function AppShell() {
-  const { isDemo } = useMode();
+  const { isDemo, isStaging, envMode } = useMode();
+  const [stagingUser, setStagingUser] = useState<StagingUser | null>(null);
 
-  // Demo: pre-mark all journey steps, skip onboarding gate entirely
-  // Production: gate on localStorage 'rems-onboarding-done' flag
   useEffect(() => {
     if (isDemo) {
+      // Pre-mark all journey steps, skip onboarding entirely
       markDone(1); markDone(2); markDone(3); markDone(4);
       setShowOnboarding(false);
+    } else if (isStaging) {
+      // Check existing session — show auth gate if not logged in
+      const session = getStagingSession();
+      setStagingUser(session);
+      if (session) {
+        const done = localStorage.getItem(stagingOnboardingKey(session.id));
+        if (!done) setShowOnboarding(true);
+      }
     } else {
+      // Production: gate on localStorage 'rems-onboarding-done' flag
       const done = localStorage.getItem('rems-onboarding-done');
       if (!done) setShowOnboarding(true);
     }
-  }, [isDemo]);
+  }, [isDemo, isStaging]);
+
+  // Staging: show auth gate before anything else
+  if (isStaging && !stagingUser) {
+    return <StagingAuthGate onAuth={setStagingUser} />;
+  }
 
   return (
     <>
-      {isDemo && <DemoBanner />}
+      {isDemo    && <DemoBanner />}
+      {isStaging && <StagingBanner user={stagingUser} onLogout={handleLogout} />}
       {showOnboarding
-        ? <OnboardingPage onComplete={completeOnboarding} strictMode={!isDemo} />
+        ? <OnboardingPage onComplete={completeOnboarding} strictMode={true} showPayment={true} />
         : <MainLayout ... />}
     </>
   );
 }
 ```
 
-### Strict Onboarding (`OnboardingPage` with `strictMode={true}`)
+### Strict Onboarding (`OnboardingPage`)
 
-Production onboarding cannot be skipped. Each step has mandatory field validation:
+Called with `strictMode={true} showPayment={true}` in both Production and Staging. Steps:
 
 | Step | Required fields |
 |---|---|
 | Step 1 — Business Info | CR Number (≥7 chars), VAT Number (≥10 chars), City, District, Street |
 | Step 2 — Personal Info | Full Name, Email (contains `@`), Phone (≥9 chars), National ID (≥9 chars) |
 | Step 3 — First Property | "Add Property Now" CTA (navigates to Properties) |
+| Step 4 — Payment | Plan selection + optional promo code; confirms registration |
+
+**`showPayment` prop:** Controls whether Step 4 (payment/plan) is rendered.
+```tsx
+interface OnboardingPageProps {
+  onComplete: (plan?: string, promoCode?: string) => void;
+  strictMode?: boolean;
+  showPayment?: boolean;   // true → 4 steps; false → 3 steps
+}
+```
 
 **Behaviour differences when `strictMode={true}`:**
 - "Skip" button is hidden
 - "Next" button is disabled (`opacity-40 cursor-not-allowed`) until all required fields pass
 - Progress bar shown at top of card with live percentage
-- Step 3 shows a "First Property" card with feature checklist instead of subscription plan cards
 
 ### Production Data Layer (`PropertiesPage`)
 
-In production mode, units are stored in and loaded from `localStorage`:
+In production/staging mode, units are stored in and loaded from `localStorage`:
 
 ```tsx
 const PROD_UNITS_KEY = 'rems-prod-units';
@@ -354,15 +439,172 @@ if (!isDemo) localStorage.setItem(PROD_UNITS_KEY, JSON.stringify(nextUnits));
 ### DemoBanner (`src/components/layout/DemoBanner.tsx`)
 
 Amber strip shown at the very top of every page in demo mode. Contains:
-- Flask SVG icon
-- DEMO badge
+- Flask SVG icon, DEMO badge
 - Banner text explaining ephemeral nature
 - "Switch to Production →" link pointing to the production URL
 
+### StagingBanner (`src/components/layout/StagingBanner.tsx`)
+
+Violet gradient strip shown in staging mode. Contains:
+- Beaker icon, TRIAL badge
+- Active user's name (e.g. "Logged in as Ahmed Al-Rashidi")
+- "Switch to Production →" link
+- "Sign Out" button → calls `logoutStagingUser()` + reloads page
+
+---
+
+## Staging Multi-Tenancy
+
+Each staging user gets completely isolated data in `localStorage`, keyed by their generated user ID.
+
+### User Registration & Session
+
+```ts
+// staging-auth.ts
+
+export interface StagingUser {
+  id: string;           // 'user_<timestamp36>_<random5>'
+  email: string;
+  passwordB64: string;  // btoa(password) — demo-only, NOT production-safe
+  name: string;
+  companyName: string;
+  createdAt: string;
+  plan: string;
+  promoCode: string;
+}
+
+// All registered users: localStorage['rems-staging-users']
+// Active session:       sessionStorage['rems-staging-session']  ← resets on tab close
+```
+
+### Per-User Storage Keys
+
+```ts
+stagingUnitsKey(userId)      // 'rems-staging-{id}-units'
+stagingJourneyKey(userId)    // 'rems-staging-{id}-journey'
+stagingLangKey(userId)       // 'rems-staging-{id}-lang'
+stagingOnboardingKey(userId) // 'rems-staging-{id}-onboarding'
+```
+
+### Auth Gate (`StagingAuthGate` in `AppShell`)
+
+Inline component rendered when `isStaging && !stagingUser`. Presents a two-mode panel (Login tab / Register tab). On success, calls `setStagingUser(user)` to proceed into the main app.
+
 ```tsx
-const prodUrl = typeof window !== 'undefined'
-  ? window.location.origin + '/Abdulrahman/'
-  : '/Abdulrahman/';
+// Register flow
+const result = registerStagingUser(email, password, name, company, plan, promo);
+if (result.ok) { onAuth(result.user); }
+
+// Login flow
+const user = loginStagingUser(email, password);
+if (user) { onAuth(user); }
+```
+
+### Cross-Contamination Prevention
+
+- **Session storage for active session**: `sessionStorage['rems-staging-session']` resets when the tab closes, requiring re-login — preventing one user's identity leaking to another browser session.
+- **User-scoped data keys**: Each user's units, journey state, language, and onboarding completion are stored under `rems-staging-{id}-*` keys. Two registered users on the same browser never share data.
+- **No sessionStorage for data**: Only the session token is in sessionStorage. User data persists in localStorage so users can return and resume.
+
+---
+
+## Promo Code Service (`promo-service.ts`)
+
+Promo codes are managed entirely client-side in `localStorage['rems-promo-codes']`.
+
+### Default Seed Codes
+
+| Code | Discount | Max Uses | Expires | Active |
+|---|---|---|---|---|
+| `REMS2026` | 20% | 100 | 2026-12-31 | Yes |
+| `LAUNCH50` | 50% | 50 | 2026-06-30 | Yes |
+| `EARLYBIRD` | 30% | Unlimited | Never | Yes |
+| `PARTNER15` | 15% | 200 | Never | No |
+
+### Key Functions
+
+```ts
+validatePromoCode(rawCode: string): PromoValidationResult
+// Returns: { valid, discount (0 if invalid), message, code? }
+// Checks: exists → active → maxUses → expiresAt (in that order)
+
+redeemPromoCode(rawCode: string): void
+// Increments usedCount — call AFTER checkout confirms
+
+createPromoCode(partial: Omit<PromoCode, 'usedCount'|'createdAt'>): void
+updatePromoCode(code: string, patch: Partial<PromoCode>): void
+deletePromoCode(code: string): void
+getPromoCodes(): PromoCode[]
+```
+
+### Payment Step Integration (OnboardingPage Step 4)
+
+```tsx
+// Real-time validation as user types
+const result = validatePromoCode(promoInput);
+setPromoResult(result);
+if (result.valid) setPromoApplied(result.code ?? '');
+
+// Price calculation
+const BASE_PRICES = { basic: 149, pro: 349, enterprise: 799 };
+const discountPct = promoApplied ? (promoResult?.discount ?? 0) : 0;
+const discounted = Math.round(basePrice * (1 - discountPct / 100));
+
+// On final confirm
+await redeemPromoCode(promoApplied);   // increments usedCount
+onComplete(selectedPlan, promoApplied);
+```
+
+---
+
+## Super-Admin Portal (`SuperAdminPage.tsx`)
+
+Served at `/super-admin/`. PIN-gated — not linked from any navigation menu (access by direct URL only).
+
+### PIN Gate
+
+Default PIN: `1234`. Stored in `localStorage['rems-superadmin-pin']`.
+
+```tsx
+function PinGate({ onUnlock }: { onUnlock: () => void }) {
+  const storedPin = localStorage.getItem('rems-superadmin-pin') ?? '1234';
+  if (entered === storedPin) onUnlock();
+  // Shows: dark centered screen, password input, "Access Super-Admin" button
+}
+```
+
+### Sections / Tabs
+
+| Tab | Content |
+|---|---|
+| Promo Manager | Create / edit / delete / monitor promo codes (table + form) |
+| Business Intelligence | KPI cards (total accounts, active users, plans) + staging accounts table |
+| Activity Log | Session-level audit trail (`sessionStorage['rems-superadmin-logs']`) |
+| Global Settings | PIN change form + maintenance mode toggle |
+
+### Activity Log Pattern
+
+```ts
+function appendLog(event: string) {
+  const logs = JSON.parse(sessionStorage.getItem('rems-superadmin-logs') ?? '[]');
+  logs.unshift({ time: new Date().toLocaleTimeString(), event, user: 'Super Admin' });
+  sessionStorage.setItem('rems-superadmin-logs', JSON.stringify(logs.slice(0, 200)));
+}
+// Called on: code create, edit, delete, PIN change, maintenance toggle
+```
+
+### BI Panel — Account Summaries
+
+Reads `getStagingAccountSummaries()` from `staging-auth.ts`:
+```ts
+// Returns array of:
+{
+  id, name, email, companyName,
+  plan,       // chosen subscription plan
+  promoCode,  // promo code used at registration
+  createdAt,
+  unitCount,  // live count from localStorage key
+}
 ```
 
 ---
@@ -404,6 +646,46 @@ export const translations = {
       firstUnitHint,   // 'You will be taken to the Properties page...'
       progressPct,     // '% complete'
       fieldRequired,   // 'Required'
+    },
+    payment: {   // Step 4 — Plan + Promo Code
+      title,           // 'Choose Your Plan'
+      subtitle,        // 'Start your 14-day free trial'
+      planBasic,       // 'SAR 149/mo'  (display string)
+      planPro,         // 'SAR 349/mo'
+      planEnt,         // 'SAR 799/mo'
+      planBasicRaw: 149,  // numeric — used for discount arithmetic
+      planProRaw:   349,
+      planEntRaw:   799,
+      promoPlaceholder, promoApply, promoApplied, promoInvalid,
+      summaryTitle, summaryPlan, summaryDiscount, summaryTotal,
+      confirm,         // 'Confirm & Launch'
+    },
+    staging: {   // Staging auth gate + banner
+      loginTitle, loginEmail, loginPassword, loginBtn, loginError,
+      registerTitle, registerName, registerCompany, registerEmail,
+      registerPassword, registerBtn, registerError, registerExists,
+      banner,          // 'Trial / Staging Environment'
+      bannerSub,       // 'Your data is saved between sessions.'
+      loggedInAs,      // 'Logged in as'
+      signOut,         // 'Sign Out'
+      switchProd,      // 'Switch to Production →'
+    },
+    superAdmin: { // Super-Admin portal
+      pinTitle,        // 'Super-Admin Access'
+      pinPlaceholder,  // 'Enter PIN'
+      pinBtn,          // 'Access Super-Admin'
+      pinError,        // 'Incorrect PIN'
+      tabs: { promo, bi, logs, settings },
+      // Promo Manager
+      promoTitle, promoCode, promoDiscount, promoMaxUses, promoUsed,
+      promoExpires, promoActive, promoActions, promoCreate, promoEdit, promoDelete,
+      // BI Panel
+      biTitle, biAccounts, biUnits, biPlans,
+      // Logs Panel
+      logsTitle, logsTime, logsEvent, logsUser, logsClear,
+      // Settings
+      settingsTitle, pinCurrent, pinNew, pinConfirm, pinChange,
+      maintenanceMode, maintenanceOn, maintenanceOff,
     },
     channels: {  // 60+ keys — IntegrationMonitor + Airbnb + Ultimate Overlap
       // IntegrationMonitor
@@ -1451,6 +1733,68 @@ Passing raw `Error` objects to `console.error` can expose stack traces and inter
 Also scope `console.warn` to development only when the message is a developer hint:
 ```ts
 if (process.env.NODE_ENV !== 'production') console.warn('SPL unreachable, falling back...');
+```
+
+### 21. Staging cross-contamination via shared localStorage keys
+
+If staging users store data under the same key as production (e.g. `rems-prod-units`), one user's data overwrites another's. Always use user-scoped keys in staging:
+
+```ts
+// ✗ WRONG — all staging users share the same key
+localStorage.setItem('rems-prod-units', JSON.stringify(units));
+
+// ✓ CORRECT — isolated per user ID
+localStorage.setItem(stagingUnitsKey(user.id), JSON.stringify(units));
+// 'rems-staging-{userId}-units'
+```
+
+### 22. Promo code `usedCount` incremented too early
+
+`redeemPromoCode()` (which increments `usedCount`) must only fire **after** checkout confirms, not when the user clicks "Apply". Incrementing on Apply means the quota is consumed even if the user abandons checkout.
+
+```tsx
+// ✗ WRONG — increments when user clicks "Apply"
+const handleApply = () => { redeemPromoCode(code); setPromoApplied(code); };
+
+// ✓ CORRECT — increments only on final confirmation
+const handleConfirm = async () => {
+  redeemPromoCode(promoApplied);  // ← inside final step handler
+  onComplete(selectedPlan, promoApplied);
+};
+```
+
+### 23. TypeScript `interface` does not support union syntax
+
+Discriminated unions must be declared as `type`, not `interface`:
+
+```ts
+// ✗ WRONG — TS1109 "Expression expected"
+export interface RegisterResult {
+  ok: true; user: StagingUser;
+} | {
+  ok: false; error: string;
+}
+
+// ✓ CORRECT
+export type RegisterResult =
+  | { ok: true;  user: StagingUser }
+  | { ok: false; error: string };
+```
+
+### 24. Plan price arithmetic on i18n string values
+
+i18n values are typed as `string`. Extracting numeric plan prices for discount calculation requires a raw number field alongside the display string:
+
+```ts
+// In i18n.ts — add raw numeric fields:
+planBasicRaw:  149,   // used for arithmetic
+planProRaw:    349,
+planEntRaw:    799,
+planBasic:    'SAR 149/mo',  // display string
+
+// In component — cast to number:
+const basePrice = t.payment.planBasicRaw as unknown as number;
+const discounted = Math.round(basePrice * (1 - discountPct / 100));
 ```
 
 ---
