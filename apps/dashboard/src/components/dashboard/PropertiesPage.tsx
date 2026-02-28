@@ -830,7 +830,7 @@ function UnitModal({ unit, onClose, onSave }: {
       city: knownCity,
       district:
         SAUDI_CITIES[knownCity]?.find(d => d.toLowerCase() === r.district.toLowerCase()) ??
-        (r.district || SAUDI_CITIES[knownCity]?.[0] ?? f.district ?? ''),
+        (r.district || (SAUDI_CITIES[knownCity]?.[0] ?? (f.district ?? ''))),
       street: r.street || f.street,
       lat:    coords.lat,
       lng:    coords.lng,
