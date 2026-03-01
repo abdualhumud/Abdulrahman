@@ -11,6 +11,7 @@ import {
   splLookup, getSplApiKey, setSplApiKey, clearSplApiKey,
   SplAuthError, SplNotFoundError,
 } from '@/lib/spl-service';
+import PaymentLinkModal from '@/components/dashboard/PaymentLinkModal';
 
 /** Unified result from either SPL or Nominatim fallback */
 type NatFillResult = {
@@ -621,7 +622,9 @@ function NationalAddressField({
 }
 
 /* ── Share Unit Modal (URL + QR) ──────────────────────────────────── */
-function ShareUnitModal({ unit, onClose, lang }: { unit: Unit; onClose: () => void; lang: string }) {
+function ShareUnitModal({ unit, onClose, onRequestPayment, lang }: {
+  unit: Unit; onClose: () => void; onRequestPayment: () => void; lang: string;
+}) {
   const shareUrl = `https://abdualhumud.github.io/Abdulrahman/unit/${unit.id}`;
   const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(shareUrl)}&size=200x200&margin=10`;
   const [copied, setCopied] = useState(false);
@@ -675,6 +678,20 @@ function ShareUnitModal({ unit, onClose, lang }: { unit: Unit; onClose: () => vo
           {copied
             ? (lang === 'ar' ? 'تم النسخ!' : 'Copied!')
             : (lang === 'ar' ? 'نسخ الرابط' : 'Copy Link')}
+        </button>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3 my-1">
+          <div className="flex-1 h-px bg-slate-100" />
+          <span className="text-[11px] text-slate-400 font-semibold">{lang === 'ar' ? 'أو' : 'OR'}</span>
+          <div className="flex-1 h-px bg-slate-100" />
+        </div>
+
+        {/* Request Payment button */}
+        <button onClick={onRequestPayment}
+          className="w-full py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 bg-emerald-600 text-white hover:bg-emerald-700 transition-all">
+          <Icons.financials size={16} />
+          {lang === 'ar' ? 'طلب دفع من الضيف' : 'Request Guest Payment'}
         </button>
       </div>
     </div>
@@ -1300,6 +1317,7 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
   const [released, setReleased]     = useState<Record<string, boolean>>({});
   const [filter, setFilter]         = useState<'ALL'|'ACTIVE'|'MAINTENANCE'>('ALL');
   const [shareUnit, setShareUnit]   = useState<Unit | null>(null);
+  const [payUnit,   setPayUnit]     = useState<Unit | null>(null);
   const [detailUnit, setDetailUnit] = useState<Unit | null>(null);
   // Kill switch state per unit per channel
   const [killSwitches, setKillSwitches] = useState<Record<string, Record<string, boolean>>>({});
@@ -1636,7 +1654,21 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
         />
       )}
       {shareUnit && (
-        <ShareUnitModal unit={shareUnit} onClose={() => setShareUnit(null)} lang={lang} />
+        <ShareUnitModal
+          unit={shareUnit}
+          lang={lang}
+          onClose={() => setShareUnit(null)}
+          onRequestPayment={() => { const u = shareUnit; setShareUnit(null); setPayUnit(u); }}
+        />
+      )}
+      {payUnit && (
+        <PaymentLinkModal
+          unitId={payUnit.id}
+          defaultDescription={`${lang === 'ar' ? (payUnit.nameAr ?? payUnit.name) : payUnit.name} — ${lang === 'ar' ? 'حجز مباشر' : 'Direct Booking'}`}
+          defaultAmount={payUnit.basePrice}
+          onClose={() => setPayUnit(null)}
+          onCreated={() => setPayUnit(null)}
+        />
       )}
       {detailUnit && (
         <UnitDetailPanel
