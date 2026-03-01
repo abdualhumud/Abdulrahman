@@ -222,6 +222,19 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
       ? 'border-red-300 ring-2 ring-red-100'
       : '';
 
+  /* Dynamic staging button: "Fill Later" when fields are blank, "Next" when user started typing */
+  const stagingStepHasInput =
+    !isStaging ? true :
+    step === 1 ? [form.cr, form.freelanceCert, form.vat, form.natCity].some(v => v.trim() !== '') :
+    step === 2 ? [form.ownerName, form.email, form.phone, form.username].some(v => v.trim() !== '') :
+    true;
+
+  const nextBtnLabel =
+    step === totalSteps && showPayment ? p.proceedCheckout :
+    step === totalSteps               ? o.finish :
+    isStaging && !stagingStepHasInput ? (o.fillLater ?? 'Fill Later') :
+    o.next;
+
   /* Step indicator config */
   const STEPS = [
     { num: 1, title: o.step1Title, icon: <Icons.building size={16} /> },
@@ -931,11 +944,7 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
                         className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 shadow-lg shadow-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
                         style={{ background: 'linear-gradient(135deg,#2563EB,#4F46E5)' }}
                       >
-                        {step === totalSteps && showPayment
-                          ? p.proceedCheckout
-                          : step === totalSteps
-                            ? o.finish
-                            : o.next}
+                        {nextBtnLabel}
                         {step < totalSteps && <Icons.chevronRight size={15} className="sidebar-chevron" />}
                       </button>
                     )}

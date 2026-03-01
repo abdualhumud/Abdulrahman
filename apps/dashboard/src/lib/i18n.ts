@@ -227,18 +227,21 @@ export const translations = {
     },
 
     inbox: {
-      title:         'Inbox',
-      allChannels:   'All Channels',
-      viewBooking:   'View Booking',
-      replyVia:      'Replying via',
-      cmdEnter:      '⌘ + Enter to send',
-      noConvo:       'No conversation selected',
-      pickMsg:       'Pick a message from the list',
-      placeholder:   'Message',
-      autoTranslate: 'Auto-Translate',
-      translating:   'Translating…',
-      translated:    'Auto-translated',
+      title:              'Inbox',
+      allChannels:        'All Channels',
+      viewBooking:        'View Booking',
+      replyVia:           'Replying via',
+      cmdEnter:           '⌘ + Enter to send',
+      noConvo:            'No conversation selected',
+      pickMsg:            'Pick a message from the list',
+      placeholder:        'Message',
+      autoTranslate:      'Auto-Translate',
+      translating:        'Translating…',
+      translated:         'Auto-translated',
       reservationDetails: 'Reservation Details',
+      whatsappChannel:    'WhatsApp',
+      emptyInbox:         'Inbox is empty',
+      emptyInboxSub:      'New guest messages from all channels will appear here.',
     },
 
     analytics: {
@@ -467,6 +470,7 @@ export const translations = {
       natIdExactHint:     'National ID / Iqama must be exactly 10 digits',
       stagingOptionalNotice: 'Trial mode — all fields are optional for testing',
       trialPlanOnly:      'Your trial account includes the Professional Plan',
+      fillLater:          'Fill Later',
     },
 
     demo: {
@@ -1129,18 +1133,21 @@ export const translations = {
     },
 
     inbox: {
-      title:         'صندوق الوارد',
-      allChannels:   'كل القنوات',
-      viewBooking:   'عرض الحجز',
-      replyVia:      'الرد عبر',
-      cmdEnter:      '⌘ + Enter للإرسال',
-      noConvo:       'لم يتم تحديد محادثة',
-      pickMsg:       'اختر رسالة من القائمة',
-      placeholder:   'رسالة',
-      autoTranslate: 'ترجمة تلقائية',
-      translating:   'جارٍ الترجمة…',
-      translated:    'مُترجَم تلقائياً',
+      title:              'صندوق الوارد',
+      allChannels:        'كل القنوات',
+      viewBooking:        'عرض الحجز',
+      replyVia:           'الرد عبر',
+      cmdEnter:           '⌘ + Enter للإرسال',
+      noConvo:            'لم يتم تحديد محادثة',
+      pickMsg:            'اختر رسالة من القائمة',
+      placeholder:        'رسالة',
+      autoTranslate:      'ترجمة تلقائية',
+      translating:        'جارٍ الترجمة…',
+      translated:         'مُترجَم تلقائياً',
       reservationDetails: 'تفاصيل الحجز',
+      whatsappChannel:    'واتساب',
+      emptyInbox:         'صندوق الوارد فارغ',
+      emptyInboxSub:      'ستظهر هنا رسائل الضيوف الجديدة من جميع القنوات.',
     },
 
     analytics: {
@@ -1369,6 +1376,7 @@ export const translations = {
       natIdExactHint:     'يجب أن تكون الهوية الوطنية / الإقامة 10 أرقام',
       stagingOptionalNotice: 'وضع التجربة — جميع الحقول اختيارية للاختبار',
       trialPlanOnly:      'يشمل حسابك التجريبي الخطة الاحترافية',
+      fillLater:          'التعبئة لاحقاً',
     },
 
     demo: {

@@ -233,6 +233,30 @@ export const INBOX_MESSAGES = [
     isRead: true,
     time: 'Yesterday',
   },
+  {
+    id: 'm5',
+    bookingId: 'BK-1088',
+    channel: 'WhatsApp',
+    channelColor: '#25D366',
+    guest: 'Nasser Al-Qahtani',
+    property: 'Riyadh Luxury Apartment',
+    message: 'السلام عليكم، أرغب في تأكيد موعد تسليم المفاتيح. هل الساعة الثالثة عصراً مناسبة؟',
+    isRead: false,
+    time: '8:04 AM',
+    phone: '+966501234567',
+  },
+  {
+    id: 'm6',
+    bookingId: 'BK-1087',
+    channel: 'WhatsApp',
+    channelColor: '#25D366',
+    guest: 'Emma Wilson',
+    property: 'AlUla Desert Studio',
+    message: 'Hi! Just wanted to confirm — does the studio have a dedicated parking spot? We are renting a car.',
+    isRead: false,
+    time: '7:30 AM',
+    phone: '+447700900123',
+  },
 ];
 
 // ── Extended unit data with pricing, amenities, insurance ──────────────

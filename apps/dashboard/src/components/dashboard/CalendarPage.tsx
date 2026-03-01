@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
+import { useMode } from '@/lib/mode-context';
 import { CALENDAR_EVENTS, RECENT_BOOKINGS, INSURANCE_RECORDS, CLEANING_REQUESTS } from '@/lib/mock-data';
 
 const DAYS  = Array.from({ length: 28 }, (_, i) => i + 1);
@@ -42,6 +43,10 @@ interface CalendarPageProps { onNavigate?: (page: string) => void; }
 
 export default function CalendarPage({ onNavigate }: CalendarPageProps) {
   const { t, lang } = useLang();
+  const { isDemo } = useMode();
+  // Fresh-start: production/staging users begin with an empty calendar
+  const allEvents   = isDemo ? CALENDAR_EVENTS : ([] as typeof CALENDAR_EVENTS);
+  const allBookings = isDemo ? RECENT_BOOKINGS  : ([] as typeof RECENT_BOOKINGS);
 
   /* ── Calendar event selection ─────────────────────────── */
   const [selected, setSelected] = useState<CalEvent | null>(null);
@@ -85,7 +90,7 @@ export default function CalendarPage({ onNavigate }: CalendarPageProps) {
   };
 
   /* ── Booking side-panel helpers ───────────────────────── */
-  const selectedBooking   = selected ? (RECENT_BOOKINGS.find(b => b.guest === selected.guest) ?? null) : null;
+  const selectedBooking   = selected ? (allBookings.find(b => b.guest === selected.guest) ?? null) : null;
   const selectedInsurance = selectedBooking ? (INSURANCE_RECORDS.find(r => r.bookingId === selectedBooking.id) ?? null) : null;
   const selectedCleaning  = selectedBooking ? (CLEANING_REQUESTS.find(r => r.bookingId === selectedBooking.id) ?? null) : null;
   const chStyle = selected ? (CHANNELS[selected.channel] ?? { bg: '#F1F5F9', text: '#475569', dot: '#94A3B8' }) : null;
@@ -184,7 +189,7 @@ export default function CalendarPage({ onNavigate }: CalendarPageProps) {
                     {unit}
                   </td>
                   {DAYS.map(day => {
-                    const ev    = CALENDAR_EVENTS.find(e => e.unit === unit && day >= e.start && day < e.end);
+                    const ev    = allEvents.find(e => e.unit === unit && day >= e.start && day < e.end);
                     const start = ev && day === ev.start;
                     const end   = ev && day === ev.end - 1;
                     const ch    = ev ? (CHANNELS[ev.channel] ?? { bg: '#E2E8F0', text: '#475569', dot: '#94A3B8' }) : null;

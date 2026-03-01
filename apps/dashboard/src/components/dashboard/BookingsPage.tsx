@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
+import { useMode } from '@/lib/mode-context';
 import { RECENT_BOOKINGS, INSURANCE_RECORDS } from '@/lib/mock-data';
 import PaymentLinkModal from './PaymentLinkModal';
 
@@ -187,6 +188,9 @@ interface Props {
 
 export default function BookingsPage({ onCheckoutCleaning }: Props) {
   const { t } = useLang();
+  const { isDemo } = useMode();
+  // Fresh-start: production/staging users begin with zero bookings
+  const allBookings = isDemo ? RECENT_BOOKINGS : ([] as typeof RECENT_BOOKINGS);
   const STATUSES = ['ALL', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'PENDING'];
   const [filter, setFilter] = useState('ALL');
   const [search, setSearch] = useState('');
@@ -198,7 +202,7 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
   const getStatus = (b: typeof RECENT_BOOKINGS[number]) =>
     localStatuses[b.id] ?? b.status;
 
-  const rows = RECENT_BOOKINGS.filter(b => {
+  const rows = allBookings.filter(b => {
     const st = getStatus(b);
     const s = filter === 'ALL' || st === filter;
     const q = !search ||
@@ -209,10 +213,10 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
   });
 
   const stats = {
-    confirmed: RECENT_BOOKINGS.filter(b => getStatus(b) === 'CONFIRMED').length,
-    checkedIn: RECENT_BOOKINGS.filter(b => getStatus(b) === 'CHECKED_IN').length,
-    pending:   RECENT_BOOKINGS.filter(b => getStatus(b) === 'PENDING').length,
-    revenue:   RECENT_BOOKINGS.reduce((s, b) => s + b.amount, 0),
+    confirmed: allBookings.filter(b => getStatus(b) === 'CONFIRMED').length,
+    checkedIn: allBookings.filter(b => getStatus(b) === 'CHECKED_IN').length,
+    pending:   allBookings.filter(b => getStatus(b) === 'PENDING').length,
+    revenue:   allBookings.reduce((s, b) => s + b.amount, 0),
   };
 
   const filterLabel = (s: string) => {
@@ -235,7 +239,7 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">{t.bookings.title}</h1>
-          <p className="text-sm text-slate-400 mt-1">{RECENT_BOOKINGS.length} {t.bookings.subtitle}</p>
+          <p className="text-sm text-slate-400 mt-1">{allBookings.length} {t.bookings.subtitle}</p>
         </div>
         <button className="btn-primary"><Icons.plus size={16} /> {t.bookings.newBooking}</button>
       </div>
@@ -250,7 +254,7 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
           </div>
           <button
             onClick={() => {
-              const b = RECENT_BOOKINGS.find(bk => bk.id === justCheckedOut);
+              const b = allBookings.find(bk => bk.id === justCheckedOut);
               onCheckoutCleaning?.(b?.unit ?? '', justCheckedOut ?? '');
             }}
             className="text-xs font-bold text-blue-700 underline underline-offset-2 hover:text-blue-900"
