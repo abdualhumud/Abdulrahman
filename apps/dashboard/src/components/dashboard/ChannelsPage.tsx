@@ -29,14 +29,15 @@ function ChannelLogo({ channel, isActive = true }: { channel: string; isActive?:
 
   if (channel === 'Booking.com') return (
     <div
-      className="w-12 h-12 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 shadow-sm overflow-hidden select-none"
+      className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden select-none"
       style={{ background: '#003580', ...inactiveStyle }}
     >
-      {/* Booking.com: wordmark "B." in white + "booking" subtext */}
-      <svg width="34" height="30" viewBox="0 0 34 30" fill="none">
-        <text x="3" y="20" fontFamily="Arial Black,Helvetica,sans-serif" fontWeight="900" fontSize="18" fill="white">B</text>
-        <text x="17" y="20" fontFamily="Arial Black,Helvetica,sans-serif" fontWeight="900" fontSize="18" fill="#6699FF">.</text>
-        <text x="3" y="28" fontFamily="Arial,sans-serif" fontWeight="700" fontSize="7" fill="white" letterSpacing="1">BOOKING</text>
+      {/* Booking.com: "B." wordmark centered + "BOOKING" subtext */}
+      <svg width="44" height="38" viewBox="0 0 44 38" fill="none">
+        <text x="22" y="24" textAnchor="middle" fontFamily="Arial Black,Helvetica,sans-serif" fontWeight="900" fontSize="20">
+          <tspan fill="white">B</tspan><tspan fill="#6699FF">.</tspan>
+        </text>
+        <text x="22" y="35" textAnchor="middle" fontFamily="Arial,sans-serif" fontWeight="700" fontSize="7" fill="white" letterSpacing="1.5">BOOKING</text>
       </svg>
     </div>
   );
@@ -55,13 +56,13 @@ function ChannelLogo({ channel, isActive = true }: { channel: string; isActive?:
 
   if (channel === 'Gathern') return (
     <div
-      className="w-12 h-12 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 shadow-sm overflow-hidden"
+      className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden"
       style={{ background: '#00A651', ...inactiveStyle }}
     >
-      {/* Gathern: stylized G with Arabic brand name */}
-      <svg width="34" height="30" viewBox="0 0 34 30" fill="none">
-        <text x="6" y="21" fontFamily="Arial Black,Helvetica,sans-serif" fontWeight="900" fontSize="20" fill="white">G</text>
-        <text x="3" y="29" fontFamily="Arial,sans-serif" fontWeight="700" fontSize="6.5" fill="white" letterSpacing="0.5">GATHERN</text>
+      {/* Gathern: "G" mark centered + "GATHERN" subtext */}
+      <svg width="44" height="38" viewBox="0 0 44 38" fill="none">
+        <text x="22" y="24" textAnchor="middle" fontFamily="Arial Black,Helvetica,sans-serif" fontWeight="900" fontSize="20" fill="white">G</text>
+        <text x="22" y="35" textAnchor="middle" fontFamily="Arial,sans-serif" fontWeight="700" fontSize="7" fill="white" letterSpacing="1">GATHERN</text>
       </svg>
     </div>
   );

@@ -81,10 +81,9 @@ function ApplePayLogo() {
 
 function STCPayLogo() {
   return (
-    <div className="flex items-center justify-center w-12 h-8 rounded-lg border border-slate-200 bg-white overflow-hidden">
+    <div className="flex items-center justify-center w-12 h-8 rounded-lg border border-[#6D1ED4] bg-[#6D1ED4] overflow-hidden">
       <svg viewBox="0 0 48 24" width="44" height="22" xmlns="http://www.w3.org/2000/svg">
-        <rect width="48" height="24" rx="4" fill="#6D1ED4"/>
-        <text x="3" y="17" fontFamily="Arial Black, sans-serif" fontWeight="900" fontSize="9" fill="white" letterSpacing="0.5">STC Pay</text>
+        <text x="24" y="17" textAnchor="middle" fontFamily="Arial Black, sans-serif" fontWeight="900" fontSize="9" fill="white" letterSpacing="0.5">STC Pay</text>
       </svg>
     </div>
   );
@@ -239,19 +238,19 @@ function DemoCardForm({
         </div>
       )}
 
-      {/* Amount + Pay button */}
+      {/* Amount summary */}
       <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-500">{description}</p>
-            <p className="text-xl font-extrabold text-slate-900 mt-0.5" style={{ direction: 'ltr' }}>
-              SAR {amountSAR.toLocaleString()}
-            </p>
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <MadaLogo />
-            <VisaLogo />
-          </div>
+        <p className="text-xs text-slate-500 mb-0.5">{description}</p>
+        <p className="text-2xl font-extrabold text-slate-900" style={{ direction: 'ltr' }}>
+          SAR {amountSAR.toLocaleString()}
+        </p>
+        <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-slate-200">
+          <span className="text-[10px] text-slate-400 font-semibold me-0.5">Accepted:</span>
+          <VisaLogo />
+          <MadaLogo />
+          <MastercardLogo />
+          <ApplePayLogo />
+          <STCPayLogo />
         </div>
       </div>
 
