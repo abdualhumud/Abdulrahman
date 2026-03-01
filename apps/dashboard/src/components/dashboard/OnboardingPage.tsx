@@ -7,7 +7,7 @@ import { useMode } from '@/lib/mode-context';
 import { validatePromoCode, redeemPromoCode, type PromoValidationResult } from '@/lib/promo-service';
 import MoyasarCheckout from './MoyasarCheckout';
 import { createTransaction } from '@/lib/transaction-log';
-import type { MoyasarPayment } from '@/lib/moyasar-service';
+import { STAGING_MOYASAR_TEST_KEY, type MoyasarPayment } from '@/lib/moyasar-service';
 
 type Step = 1 | 2 | 3;
 type OnboardingMode = 'signup' | 'login';
@@ -706,6 +706,7 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
                       onSuccess={handleCheckoutSuccess}
                       onFail={handleCheckoutFail}
                       onBack={() => setPaySubStep('summary')}
+                      overrideKey={isStaging ? STAGING_MOYASAR_TEST_KEY : undefined}
                     />
                   );
                 }

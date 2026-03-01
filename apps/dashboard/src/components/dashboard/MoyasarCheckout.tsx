@@ -29,6 +29,8 @@ interface MoyasarCheckoutProps {
   onFail?: (payment: MoyasarPayment | null) => void;
   onBack?: () => void;
   callbackUrl?: string;
+  /** Bypass localStorage key — used to inject the staging test key without polluting production storage. */
+  overrideKey?: string;
 }
 
 /* ── Payment method logos (inline SVG / styled elements) ─────── */
@@ -306,6 +308,7 @@ function RealMoyasarForm({
   onSuccess,
   onFail,
   callbackUrl,
+  overrideKey,
 }: MoyasarCheckoutProps) {
   const { t } = useLang();
   const p = t.payment;
@@ -320,7 +323,7 @@ function RealMoyasarForm({
       amount: amountSAR * 100, // halalas
       currency: 'SAR',
       description,
-      publishable_api_key: getMoyasarKey(),
+      publishable_api_key: overrideKey ?? getMoyasarKey(),
       callback_url: callbackUrl ?? (typeof window !== 'undefined' ? window.location.href : ''),
       methods: ['creditcard', 'mada', 'applepay', 'stcpay'],
       metadata: metadata ?? {},
@@ -383,7 +386,7 @@ export default function MoyasarCheckout(props: MoyasarCheckoutProps) {
       </div>
 
       {/* Form */}
-      {isMoyasarConfigured()
+      {(isMoyasarConfigured() || props.overrideKey)
         ? <RealMoyasarForm {...props} />
         : <DemoCardForm
             amountSAR={props.amountSAR}

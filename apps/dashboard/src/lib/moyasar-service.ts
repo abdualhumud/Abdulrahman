@@ -85,6 +85,13 @@ export interface MoyasarWebhookPayload {
 const API_BASE = 'https://api.moyasar.com/v1';
 const LS_KEY   = 'rems-moyasar-key';
 
+/**
+ * Moyasar test publishable key — staging environment only.
+ * Safe to ship in frontend bundle (publishable keys are public by design).
+ * Never use a secret key (sk_*) here.
+ */
+export const STAGING_MOYASAR_TEST_KEY = 'pk_test_7wgXcuKDuNaqoJVyt9igNr3VZbr5P1eEuKzFDyF5';
+
 /** Returns the configured publishable/secret key from localStorage. */
 export function getMoyasarKey(): string {
   try { return localStorage.getItem(LS_KEY) ?? ''; } catch { return ''; }
