@@ -1,9 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
 import { validatePromoCode, redeemPromoCode, type PromoValidationResult } from '@/lib/promo-service';
+import MoyasarCheckout from './MoyasarCheckout';
+import { createTransaction } from '@/lib/transaction-log';
+import type { MoyasarPayment } from '@/lib/moyasar-service';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -41,6 +44,9 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
   const [promoInput,  setPromoInput]  = useState('');
   const [promoResult, setPromoResult] = useState<PromoValidationResult | null>(null);
   const [promoApplied, setPromoApplied] = useState('');
+  // Checkout sub-step: 'summary' → 'checkout' → 'success' | 'failed'
+  type PaySubStep = 'summary' | 'checkout' | 'success' | 'failed';
+  const [paySubStep, setPaySubStep] = useState<PaySubStep>('summary');
 
   const [form, setForm] = useState({
     cr: '', vat: '', natCity: '', natDistr: '', natStreet: '', natPostal: '',
@@ -108,11 +114,39 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
     if (strictMode) setTouched(true);
     if (!canGoNext) return;
     if (step < totalSteps) { setStep(s => (s + 1) as Step); setTouched(false); }
-    else {
+    else if (showPayment && paySubStep === 'summary') {
+      // Move from plan-summary to checkout form
+      setPaySubStep('checkout');
+    } else {
       if (promoApplied) redeemPromoCode(promoApplied);
       onComplete(selectedPlan, promoApplied);
     }
   };
+
+  function handleCheckoutSuccess(payment: MoyasarPayment | null) {
+    // Record the transaction
+    createTransaction({
+      type:      'subscription',
+      status:    'paid',
+      amountSAR: discounted,
+      method:    payment?.source?.type ?? 'creditcard',
+      description: `REMS ${selectedPlan} — Monthly Subscription`,
+      ownerPlan:   selectedPlan,
+      promoCode:   promoApplied || undefined,
+      discountPct: discountPct || undefined,
+      originalAmountSAR: basePrice,
+      moyasarId:   payment?.id,
+      paidAt:      new Date().toISOString(),
+      cardLast4:   payment?.source?.number?.slice(-4),
+      cardCompany: payment?.source?.company,
+      cardName:    payment?.source?.name,
+    });
+    setPaySubStep('success');
+  }
+
+  function handleCheckoutFail(_payment: MoyasarPayment | null) {
+    setPaySubStep('failed');
+  }
 
   const fieldErr = (val: string, minLen = 1) =>
     strictMode && touched && val.trim().length < minLen ? 'border-red-300 ring-2 ring-red-100' : '';
@@ -444,6 +478,84 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
               { key: 'Pro' as const,         label: p.planPro,   desc: p.planProDesc,   price: p.planProPrice,   raw: p.planProRaw   as unknown as number, accent: '#3B82F6', popular: true  },
               { key: 'Enterprise' as const,  label: p.planEnt,   desc: p.planEntDesc,   price: p.planEntPrice,   raw: p.planEntRaw   as unknown as number, accent: '#8B5CF6', popular: false },
             ];
+
+            /* ── Checkout sub-step: payment form ── */
+            if (paySubStep === 'checkout') {
+              return (
+                <MoyasarCheckout
+                  amountSAR={discounted}
+                  description={`REMS ${selectedPlan} — Monthly Subscription`}
+                  metadata={{ plan: selectedPlan, promo_code: promoApplied }}
+                  onSuccess={handleCheckoutSuccess}
+                  onFail={handleCheckoutFail}
+                  onBack={() => setPaySubStep('summary')}
+                />
+              );
+            }
+
+            /* ── Success screen ── */
+            if (paySubStep === 'success') {
+              return (
+                <div className="flex flex-col items-center text-center gap-5 py-4">
+                  <div className="w-20 h-20 rounded-full flex items-center justify-center bg-emerald-100">
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-extrabold text-slate-900">{p.checkoutSuccess}</h2>
+                    <p className="text-sm text-slate-500 mt-1">{p.checkoutSuccessMsg}</p>
+                  </div>
+                  <div className="w-full bg-emerald-50 rounded-2xl border border-emerald-100 p-4 space-y-2" style={{ direction: 'ltr' }}>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Plan</span>
+                      <span className="font-bold text-slate-900">{selectedPlan}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Amount charged</span>
+                      <span className="font-extrabold text-emerald-700">SAR {discounted}/mo</span>
+                    </div>
+                    {promoApplied && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500">Promo</span>
+                        <span className="font-bold text-emerald-700">{promoApplied} (−{discountPct}%)</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+
+            /* ── Failed screen ── */
+            if (paySubStep === 'failed') {
+              return (
+                <div className="flex flex-col items-center text-center gap-5 py-4">
+                  <div className="w-20 h-20 rounded-full flex items-center justify-center bg-red-100">
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2.5" strokeLinecap="round">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-extrabold text-slate-900">{p.checkoutFailed}</h2>
+                    <p className="text-sm text-slate-500 mt-1">Please try again or use a different payment method.</p>
+                  </div>
+                  <button
+                    onClick={() => setPaySubStep('checkout')}
+                    className="px-6 py-3 rounded-2xl font-bold text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                  >
+                    {p.checkoutRetry}
+                  </button>
+                  <button
+                    onClick={() => setPaySubStep('summary')}
+                    className="text-xs text-slate-400 hover:text-slate-600"
+                  >
+                    {p.backToPlan}
+                  </button>
+                </div>
+              );
+            }
+
+            /* ── Default: Plan summary ── */
             return (
               <div className="space-y-5">
                 <div>
@@ -537,38 +649,55 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
           })()}
 
           {/* ── Navigation ── */}
-          <div className="flex items-center justify-between mt-7 pt-5 border-t border-slate-100">
-            <div className="flex items-center gap-3">
-              {step > 1 && (
-                <button onClick={() => setStep(s => (s - 1) as Step)}
-                  className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors">
-                  <Icons.chevronLeft size={16} className="sidebar-chevron" /> {o.back}
-                </button>
-              )}
-              {/* Skip — demo mode only */}
-              {!strictMode && (
-                <button onClick={() => onComplete()} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
-                  {o.skip}
-                </button>
-              )}
+          {/* Hide nav for checkout/success/failed sub-steps */}
+          {!(step === 4 && showPayment && (paySubStep === 'checkout' || paySubStep === 'success' || paySubStep === 'failed')) && (
+            <div className="flex items-center justify-between mt-7 pt-5 border-t border-slate-100">
+              <div className="flex items-center gap-3">
+                {step > 1 && (
+                  <button onClick={() => setStep(s => (s - 1) as Step)}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors">
+                    <Icons.chevronLeft size={16} className="sidebar-chevron" /> {o.back}
+                  </button>
+                )}
+                {/* Skip — demo mode only */}
+                {!strictMode && (
+                  <button onClick={() => onComplete()} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
+                    {o.skip}
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-slate-400">{o.step} {step} {o.of} {totalSteps}</span>
+                {/* Success step: Enter Dashboard button */}
+                {step === 4 && showPayment && paySubStep === 'success' ? (
+                  <button
+                    onClick={() => { redeemPromoCode(promoApplied); onComplete(selectedPlan, promoApplied); }}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 shadow-lg shadow-emerald-500/20"
+                    style={{ background: 'linear-gradient(135deg,#059669,#047857)' }}
+                  >
+                    {o.completeProd ?? 'Enter Dashboard'}
+                    <Icons.chevronRight size={15} className="sidebar-chevron" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleNext}
+                    disabled={strictMode && !canGoNext}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 shadow-lg shadow-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ background: 'linear-gradient(135deg,#2563EB,#4F46E5)' }}
+                  >
+                    {step === totalSteps && showPayment
+                      ? p.proceedCheckout
+                      : step === totalSteps && !showPayment
+                        ? (strictMode ? o.firstUnitBtn : o.finish)
+                        : step === 3 && strictMode && !showPayment
+                          ? o.firstUnitBtn
+                          : o.next}
+                    {step < totalSteps && <Icons.chevronRight size={15} className="sidebar-chevron" />}
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-slate-400">{o.step} {step} {o.of} {totalSteps}</span>
-              <button
-                onClick={handleNext}
-                disabled={strictMode && !canGoNext}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 shadow-lg shadow-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ background: 'linear-gradient(135deg,#2563EB,#4F46E5)' }}
-              >
-                {step === totalSteps
-                  ? (showPayment ? p.confirm : (strictMode ? o.firstUnitBtn : o.finish))
-                  : step === 3 && strictMode && !showPayment
-                    ? o.firstUnitBtn
-                    : o.next}
-                {step < totalSteps && <Icons.chevronRight size={15} className="sidebar-chevron" />}
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

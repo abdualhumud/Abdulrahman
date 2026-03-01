@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
 import { RECENT_BOOKINGS, INSURANCE_RECORDS } from '@/lib/mock-data';
+import PaymentLinkModal from './PaymentLinkModal';
 
 const STATUS_STYLE: Record<string, string> = {
   CONFIRMED:   'bg-emerald-50 text-emerald-700 border border-emerald-200',
@@ -192,6 +193,7 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
   const [localStatuses, setLocalStatuses] = useState<Record<string, string>>({});
   const [justCheckedOut, setJustCheckedOut] = useState<string | null>(null);
   const [viewBooking, setViewBooking] = useState<typeof RECENT_BOOKINGS[number] | null>(null);
+  const [payLinkBooking, setPayLinkBooking] = useState<typeof RECENT_BOOKINGS[number] | null>(null);
 
   const getStatus = (b: typeof RECENT_BOOKINGS[number]) =>
     localStatuses[b.id] ?? b.status;
@@ -361,6 +363,20 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
                       >
                         <Icons.eye size={13} /> {t.bookings.view}
                       </button>
+                      {/* Generate Payment Link — for PENDING bookings */}
+                      {st === 'PENDING' && (
+                        <button
+                          onClick={() => setPayLinkBooking(b)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700"
+                          title={t.transactions?.generateLink ?? 'Generate Payment Link'}
+                        >
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                          </svg>
+                          {t.transactions?.generateLink ?? 'Pay Link'}
+                        </button>
+                      )}
                       {/* Check Out button — only for CHECKED_IN */}
                       {st === 'CHECKED_IN' && (
                         <button
@@ -391,6 +407,17 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
       {/* Booking detail slide-over */}
       {viewBooking && (
         <BookingDetailModal booking={viewBooking} onClose={() => setViewBooking(null)} />
+      )}
+
+      {/* Payment Link modal */}
+      {payLinkBooking && (
+        <PaymentLinkModal
+          bookingId={payLinkBooking.id}
+          defaultAmount={payLinkBooking.amount}
+          defaultDescription={`Booking ${payLinkBooking.id} — ${payLinkBooking.unit} (${payLinkBooking.nights} nights)`}
+          guestName={payLinkBooking.guest}
+          onClose={() => setPayLinkBooking(null)}
+        />
       )}
     </div>
   );

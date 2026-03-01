@@ -1,0 +1,398 @@
+'use client';
+
+/**
+ * MoyasarCheckout.tsx
+ *
+ * Embedded Moyasar payment form component.
+ * - In demo/no-key mode: shows a simulated payment UI with Mada/Visa/Apple Pay logos.
+ * - When a publishable key is configured: loads Moyasar.js and renders the real hosted form.
+ *
+ * Usage:
+ *   <MoyasarCheckout
+ *     amountSAR={349}
+ *     description="REMS Pro — Monthly Subscription"
+ *     onSuccess={(payment) => handleSuccess(payment)}
+ *     onFail={(payment) => handleFail(payment)}
+ *     onBack={() => setSubStep('summary')}
+ *   />
+ */
+
+import { useState, useEffect, useRef } from 'react';
+import { useLang } from '@/lib/language-context';
+import { isMoyasarConfigured, getMoyasarKey, loadMoyasarForm, type MoyasarPayment } from '@/lib/moyasar-service';
+
+interface MoyasarCheckoutProps {
+  amountSAR: number;
+  description: string;
+  metadata?: Record<string, string>;
+  onSuccess: (payment: MoyasarPayment | null) => void;
+  onFail?: (payment: MoyasarPayment | null) => void;
+  onBack?: () => void;
+  callbackUrl?: string;
+}
+
+/* ── Payment method logos (inline SVG / styled elements) ─────── */
+
+function MadaLogo() {
+  return (
+    <div className="flex items-center justify-center w-12 h-8 rounded-lg border border-slate-200 bg-white overflow-hidden">
+      <svg viewBox="0 0 48 24" width="44" height="22" xmlns="http://www.w3.org/2000/svg">
+        <rect width="48" height="24" rx="4" fill="#ffffff"/>
+        <text x="4" y="17" fontFamily="Arial Black, sans-serif" fontWeight="900" fontSize="13" fill="#00703C">mada</text>
+      </svg>
+    </div>
+  );
+}
+
+function VisaLogo() {
+  return (
+    <div className="flex items-center justify-center w-12 h-8 rounded-lg border border-slate-200 bg-white overflow-hidden">
+      <svg viewBox="0 0 48 24" width="44" height="22" xmlns="http://www.w3.org/2000/svg">
+        <rect width="48" height="24" rx="4" fill="#ffffff"/>
+        <text x="4" y="18" fontFamily="Arial Black, sans-serif" fontWeight="900" fontSize="14" fill="#1A1F71" letterSpacing="-0.5">VISA</text>
+      </svg>
+    </div>
+  );
+}
+
+function MastercardLogo() {
+  return (
+    <div className="flex items-center justify-center w-12 h-8 rounded-lg border border-slate-200 bg-white overflow-hidden">
+      <svg viewBox="0 0 48 24" width="44" height="22" xmlns="http://www.w3.org/2000/svg">
+        <rect width="48" height="24" rx="4" fill="#ffffff"/>
+        <circle cx="18" cy="12" r="8" fill="#EB001B" opacity="0.9"/>
+        <circle cx="30" cy="12" r="8" fill="#F79E1B" opacity="0.9"/>
+        <path d="M24 5.6a8 8 0 0 1 0 12.8A8 8 0 0 1 24 5.6z" fill="#FF5F00"/>
+      </svg>
+    </div>
+  );
+}
+
+function ApplePayLogo() {
+  return (
+    <div className="flex items-center justify-center w-12 h-8 rounded-lg border border-slate-200 bg-black overflow-hidden">
+      <svg viewBox="0 0 48 24" width="44" height="22" xmlns="http://www.w3.org/2000/svg">
+        <rect width="48" height="24" rx="4" fill="#000000"/>
+        <text x="6" y="17" fontFamily="Arial, sans-serif" fontWeight="500" fontSize="9" fill="white" letterSpacing="0.3">Apple Pay</text>
+      </svg>
+    </div>
+  );
+}
+
+function STCPayLogo() {
+  return (
+    <div className="flex items-center justify-center w-12 h-8 rounded-lg border border-slate-200 bg-white overflow-hidden">
+      <svg viewBox="0 0 48 24" width="44" height="22" xmlns="http://www.w3.org/2000/svg">
+        <rect width="48" height="24" rx="4" fill="#6D1ED4"/>
+        <text x="3" y="17" fontFamily="Arial Black, sans-serif" fontWeight="900" fontSize="9" fill="white" letterSpacing="0.5">STC Pay</text>
+      </svg>
+    </div>
+  );
+}
+
+/* ── Demo / mock card form ────────────────────────────────────── */
+
+function DemoCardForm({
+  amountSAR,
+  description,
+  onSuccess,
+  onFail,
+}: Pick<MoyasarCheckoutProps, 'amountSAR' | 'description' | 'onSuccess' | 'onFail'>) {
+  const { t } = useLang();
+  const p = t.payment;
+  const [cardNum,  setCardNum]  = useState('');
+  const [expiry,   setExpiry]   = useState('');
+  const [cvv,      setCvv]      = useState('');
+  const [name,     setName]     = useState('');
+  const [paying,   setPaying]   = useState(false);
+  const [method,   setMethod]   = useState<'card' | 'mada' | 'applepay' | 'stcpay'>('card');
+
+  const INPUT = 'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-slate-300';
+
+  const handlePay = async () => {
+    setPaying(true);
+    await new Promise(r => setTimeout(r, 2000));
+    // Demo: fail if card number ends in 0000
+    const fail = cardNum.replace(/\s/g, '').endsWith('0000');
+    if (fail) {
+      onFail?.(null);
+    } else {
+      onSuccess(null);
+    }
+    setPaying(false);
+  };
+
+  const canPay = method !== 'card' || (
+    cardNum.replace(/\s/g, '').length >= 16 &&
+    expiry.length >= 5 &&
+    cvv.length >= 3 &&
+    name.trim().length > 0
+  );
+
+  const formatCard = (v: string) =>
+    v.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
+  const formatExpiry = (v: string) =>
+    v.replace(/\D/g, '').slice(0, 4).replace(/^(\d{2})(\d)/, '$1/$2');
+
+  return (
+    <div className="space-y-5">
+      {/* Demo notice */}
+      <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <p className="text-xs font-semibold text-amber-700">{p.checkoutDemoNote}</p>
+      </div>
+
+      {/* Method tabs */}
+      <div>
+        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{p.payMethods}</p>
+        <div className="grid grid-cols-4 gap-2">
+          {([
+            { key: 'card',     label: 'Credit Card', logo: <VisaLogo /> },
+            { key: 'mada',     label: 'Mada',        logo: <MadaLogo /> },
+            { key: 'applepay', label: 'Apple Pay',   logo: <ApplePayLogo /> },
+            { key: 'stcpay',   label: 'STC Pay',     logo: <STCPayLogo /> },
+          ] as const).map(m => (
+            <button key={m.key} onClick={() => setMethod(m.key)}
+              className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all
+                ${method === m.key ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-100 hover:border-slate-300'}`}>
+              {m.logo}
+              <span className="text-[10px] font-semibold text-slate-500">{m.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Card fields (shown only for creditcard / mada) */}
+      {(method === 'card' || method === 'mada') && (
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">
+              {method === 'mada' ? 'Mada' : 'Credit'} Card Number
+            </label>
+            <input
+              value={cardNum}
+              onChange={e => setCardNum(formatCard(e.target.value))}
+              placeholder="1234 5678 9012 3456"
+              className={INPUT}
+              style={{ direction: 'ltr', fontFamily: 'monospace', letterSpacing: '0.08em' }}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Expiry</label>
+              <input
+                value={expiry}
+                onChange={e => setExpiry(formatExpiry(e.target.value))}
+                placeholder="MM/YY"
+                className={INPUT}
+                style={{ direction: 'ltr', fontFamily: 'monospace' }}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">CVV</label>
+              <input
+                value={cvv}
+                onChange={e => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="•••"
+                type="password"
+                className={INPUT}
+                style={{ direction: 'ltr', fontFamily: 'monospace' }}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Cardholder Name</label>
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Mohammed Al-Otaibi"
+              className={INPUT}
+              style={{ direction: 'ltr' }}
+            />
+          </div>
+          <p className="text-[11px] text-slate-400">
+            Test card: <span className="font-mono">4111 1111 1111 1111</span> · Use any expiry/CVV · Ending in 0000 = fail
+          </p>
+        </div>
+      )}
+
+      {/* Apple Pay / STC Pay alternative flow */}
+      {method === 'applepay' && (
+        <div className="bg-black rounded-2xl p-5 flex items-center justify-center">
+          <div className="text-center text-white space-y-2">
+            <div className="text-2xl">🍎</div>
+            <p className="text-sm font-semibold">Apple Pay</p>
+            <p className="text-xs text-gray-400">Touch ID / Face ID to authorize</p>
+          </div>
+        </div>
+      )}
+      {method === 'stcpay' && (
+        <div className="rounded-2xl p-5 flex items-center justify-center" style={{ background: '#6D1ED4' }}>
+          <div className="text-center text-white space-y-2">
+            <div className="text-2xl">📱</div>
+            <p className="text-sm font-semibold">STC Pay</p>
+            <p className="text-xs text-purple-200">Authenticate in STC Pay app</p>
+          </div>
+        </div>
+      )}
+
+      {/* Amount + Pay button */}
+      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-500">{description}</p>
+            <p className="text-xl font-extrabold text-slate-900 mt-0.5" style={{ direction: 'ltr' }}>
+              SAR {amountSAR.toLocaleString()}
+            </p>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <MadaLogo />
+            <VisaLogo />
+          </div>
+        </div>
+      </div>
+
+      <button
+        onClick={handlePay}
+        disabled={paying || !canPay}
+        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-extrabold text-sm text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20"
+        style={{ background: 'linear-gradient(135deg,#2563EB,#4F46E5)' }}
+      >
+        {paying ? (
+          <>
+            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            Processing…
+          </>
+        ) : (
+          <>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+              <line x1="1" y1="10" x2="23" y2="10"/>
+            </svg>
+            Pay SAR {amountSAR.toLocaleString()}
+          </>
+        )}
+      </button>
+
+      {/* Security badges */}
+      <div className="flex items-center justify-center gap-4 text-xs text-slate-400">
+        <div className="flex items-center gap-1">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          SSL Secured
+        </div>
+        <div className="flex items-center gap-1">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          PCI DSS Compliant
+        </div>
+        <span>Powered by Moyasar</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Real Moyasar.js form wrapper ─────────────────────────────── */
+
+function RealMoyasarForm({
+  amountSAR,
+  description,
+  metadata,
+  onSuccess,
+  onFail,
+  callbackUrl,
+}: MoyasarCheckoutProps) {
+  const { t } = useLang();
+  const p = t.payment;
+  const formRef = useRef<HTMLDivElement>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!formRef.current) return;
+    loadMoyasarForm({
+      element: '#moyasar-form-container',
+      amount: amountSAR * 100, // halalas
+      currency: 'SAR',
+      description,
+      publishable_api_key: getMoyasarKey(),
+      callback_url: callbackUrl ?? (typeof window !== 'undefined' ? window.location.href : ''),
+      methods: ['creditcard', 'mada', 'applepay', 'stcpay'],
+      metadata: metadata ?? {},
+      on_completed: (payment) => { setLoading(false); onSuccess(payment); },
+      on_failed:    (payment) => { setLoading(false); onFail?.(payment); },
+    })
+      .then(() => setLoading(false))
+      .catch(e => { setError((e as Error).message); setLoading(false); });
+  }, [amountSAR, description, metadata, onSuccess, onFail, callbackUrl]);
+
+  if (error) return (
+    <div className="rounded-2xl bg-red-50 border border-red-200 p-5 text-center">
+      <p className="text-sm font-bold text-red-700">{error}</p>
+      <p className="text-xs text-red-500 mt-1">Check that your Moyasar publishable key is correct.</p>
+    </div>
+  );
+
+  return (
+    <div className="relative min-h-[200px]">
+      {loading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+          <span className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-slate-500">{p.checkoutLoading}</p>
+        </div>
+      )}
+      <div ref={formRef} id="moyasar-form-container" className={loading ? 'opacity-0' : 'opacity-100 transition-opacity'} />
+    </div>
+  );
+}
+
+/* ── Main export ─────────────────────────────────────────────── */
+
+export default function MoyasarCheckout(props: MoyasarCheckoutProps) {
+  const { t } = useLang();
+  const p = t.payment;
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+        <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
+          style={{ background: 'linear-gradient(135deg,#2563EB,#4F46E5)' }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+            <line x1="1" y1="10" x2="23" y2="10"/>
+          </svg>
+        </div>
+        <div>
+          <p className="font-extrabold text-slate-900 leading-none">{p.checkoutTitle}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{p.checkoutSubtitle}</p>
+        </div>
+        {props.onBack && (
+          <button
+            onClick={props.onBack}
+            className="ms-auto text-xs font-semibold text-slate-400 hover:text-slate-700 transition-colors flex items-center gap-1"
+          >
+            ← {p.backToPlan}
+          </button>
+        )}
+      </div>
+
+      {/* Form */}
+      {isMoyasarConfigured()
+        ? <RealMoyasarForm {...props} />
+        : <DemoCardForm
+            amountSAR={props.amountSAR}
+            description={props.description}
+            onSuccess={props.onSuccess}
+            onFail={props.onFail}
+          />
+      }
+    </div>
+  );
+}

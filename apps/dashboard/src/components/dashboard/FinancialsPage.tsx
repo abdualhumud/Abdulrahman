@@ -1,9 +1,13 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Icons } from '@/lib/icons';
 import { OWNER } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
+import {
+  getTransactions, getTxStatusStyle, getTxMethodIcon,
+  type TransactionRecord,
+} from '@/lib/transaction-log';
 
 function downloadCSV(filename: string, rows: (string | number)[][]) {
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -66,6 +70,9 @@ export default function FinancialsPage() {
   const [receipt,   setReceipt]         = useState<{ name: string; preview: string | null } | null>(null);
 
   const [exportToast, setExportToast] = useState(false);
+  const [txRecords, setTxRecords] = useState<TransactionRecord[]>([]);
+
+  useEffect(() => { setTxRecords(getTransactions()); }, []);
 
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
   const netPct = ((PAYOUT.net / PAYOUT.gross) * 100).toFixed(1);
@@ -317,6 +324,63 @@ export default function FinancialsPage() {
           </div>
         ))}
       </div>
+
+      {/* ── Payment Transactions ──────────────────────────────────── */}
+      {txRecords.length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                style={{ background: 'linear-gradient(135deg,#2563EB,#4F46E5)', color: 'white' }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+                  <line x1="1" y1="10" x2="23" y2="10"/>
+                </svg>
+              </div>
+              <p className="font-bold text-slate-900">{t.transactions?.title ?? 'Payment Transactions'}</p>
+            </div>
+            <span className="badge bg-blue-50 text-blue-700 border border-blue-100">{txRecords.length}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full data-table">
+              <thead className="bg-slate-50 border-b border-slate-100">
+                <tr>
+                  {['ID', t.transactions?.type ?? 'Type', t.transactions?.description ?? 'Description',
+                    t.transactions?.amount ?? 'Amount', t.transactions?.method ?? 'Method',
+                    t.transactions?.status ?? 'Status', t.transactions?.date ?? 'Date'].map(h => (
+                    <th key={h}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {txRecords.slice(0, 10).map(r => (
+                  <tr key={r.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="font-mono text-[11px] text-slate-400">{r.id.slice(0, 16)}…</td>
+                    <td>
+                      <span className="badge bg-slate-100 text-slate-600 text-[10px]">
+                        {r.type.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="text-xs text-slate-700 max-w-[160px] truncate">{r.description}</td>
+                    <td className="font-bold text-slate-900 text-xs" style={{ direction: 'ltr' }}>
+                      SAR {r.amountSAR.toLocaleString()}
+                    </td>
+                    <td className="text-base">{getTxMethodIcon(r.method)}</td>
+                    <td>
+                      <span className={`badge text-[10px] ${getTxStatusStyle(r.status)}`}>
+                        {r.status.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="text-[11px] text-slate-400 font-mono" style={{ direction: 'ltr' }}>
+                      {new Date(r.createdAt).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* ── Add Expense Modal ───────────────────────────────────────── */}
       {modalOpen && (

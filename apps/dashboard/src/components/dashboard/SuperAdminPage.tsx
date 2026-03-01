@@ -20,6 +20,10 @@ import {
 } from '@/lib/promo-service';
 import { getStagingAccountSummaries } from '@/lib/staging-auth';
 import { MONTHLY_REVENUE } from '@/lib/mock-data';
+import {
+  getTransactions, clearTransactions, getTxStatusStyle, getTxMethodIcon,
+  type TransactionRecord, type TxStatus,
+} from '@/lib/transaction-log';
 
 /* ── Storage keys ── */
 const PIN_KEY     = 'rems-superadmin-pin';
@@ -753,6 +757,157 @@ const CAT_STYLE: Record<LogCategory, { badge: string; icon: string }> = {
   settings: { badge: 'bg-emerald-100 text-emerald-700', icon: '🔧' },
 };
 
+/* ─────────────────────────────────────────────────────────────
+   TRANSACTIONS PANEL
+───────────────────────────────────────────────────────────── */
+function TransactionsPanel() {
+  const { t, lang } = useLang();
+  const tx = t.transactions;
+  const [records, setRecords] = useState<TransactionRecord[]>([]);
+  const [filter, setFilter] = useState<'all' | TxStatus>('all');
+  const [cleared, setCleared] = useState(false);
+
+  useEffect(() => { setRecords(getTransactions()); }, []);
+
+  const filtered = filter === 'all' ? records : records.filter(r => r.status === filter);
+
+  const stats = {
+    total:  records.length,
+    paid:   records.filter(r => r.status === 'paid').length,
+    pending: records.filter(r => r.status === 'pending_payment' || r.status === 'initiated').length,
+    failed: records.filter(r => r.status === 'failed').length,
+    revenue: records.filter(r => r.status === 'paid').reduce((s, r) => s + r.amountSAR, 0),
+  };
+
+  const TYPE_LABEL: Record<string, string> = {
+    subscription:   tx.type_subscription,
+    booking:        tx.type_booking,
+    guest_checkout: tx.type_guest_checkout,
+    refund:         tx.type_refund,
+  };
+
+  const FILTERS: { key: 'all' | TxStatus; label: string }[] = [
+    { key: 'all',             label: tx.filterAll },
+    { key: 'paid',            label: tx.filterPaid },
+    { key: 'pending_payment', label: tx.filterPending },
+    { key: 'failed',          label: tx.filterFailed },
+  ];
+
+  function handleClear() {
+    clearTransactions();
+    setRecords([]);
+    setCleared(true);
+    setTimeout(() => setCleared(false), 2500);
+  }
+
+  return (
+    <div className="space-y-6" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-extrabold text-slate-900">{tx.title}</h2>
+          <p className="text-sm text-slate-400 mt-0.5">{tx.subtitle}</p>
+        </div>
+        <button
+          onClick={handleClear}
+          className="px-3 py-1.5 rounded-xl text-xs font-bold border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+        >
+          {cleared ? '✓ Cleared' : 'Clear All'}
+        </button>
+      </div>
+
+      {/* KPI row */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {[
+          { label: 'Total',   value: stats.total,                                   color: 'text-slate-900', bg: 'bg-white border border-slate-100' },
+          { label: tx.filterPaid,    value: stats.paid,                                    color: 'text-emerald-700', bg: 'bg-emerald-50 border border-emerald-100' },
+          { label: tx.filterPending, value: stats.pending,                                  color: 'text-amber-700',   bg: 'bg-amber-50 border border-amber-100' },
+          { label: tx.filterFailed,  value: stats.failed,                                   color: 'text-red-700',     bg: 'bg-red-50 border border-red-100' },
+          { label: 'Revenue', value: `SAR ${stats.revenue.toLocaleString()}`, color: 'text-blue-700', bg: 'bg-blue-50 border border-blue-100' },
+        ].map(s => (
+          <div key={s.label} className={`rounded-2xl p-4 ${s.bg}`}>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{s.label}</p>
+            <p className={`text-lg font-extrabold mt-1 ${s.color}`} style={{ direction: 'ltr' }}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter chips */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {FILTERS.map(f => (
+          <button key={f.key} onClick={() => setFilter(f.key)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              filter === f.key ? 'bg-violet-700 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+            }`}>
+            {f.label}
+          </button>
+        ))}
+        <span className="text-xs text-slate-400 ms-auto">{filtered.length} record{filtered.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {/* Table */}
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full data-table">
+            <thead className="bg-slate-50 border-b border-slate-100">
+              <tr>
+                {[tx.id, tx.type, tx.description, tx.amount, tx.method, tx.status, tx.date].map(h => (
+                  <th key={h}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-16 text-center">
+                    <p className="text-slate-300 text-3xl mb-2">💳</p>
+                    <p className="text-slate-400 text-sm">{tx.noTx}</p>
+                  </td>
+                </tr>
+              ) : filtered.map(r => (
+                <tr key={r.id} className="hover:bg-slate-50/60 transition-colors">
+                  <td className="font-mono text-xs text-slate-500">{r.id.slice(0, 18)}…</td>
+                  <td>
+                    <span className="badge bg-slate-100 text-slate-600 text-[10px]">
+                      {TYPE_LABEL[r.type] ?? r.type}
+                    </span>
+                  </td>
+                  <td className="text-xs text-slate-700 max-w-[160px] truncate">{r.description}</td>
+                  <td className="font-bold text-slate-900" style={{ direction: 'ltr' }}>
+                    SAR {r.amountSAR.toLocaleString()}
+                    {r.discountPct ? (
+                      <span className="ms-1 text-[10px] font-normal text-emerald-600">
+                        (−{r.discountPct}%)
+                      </span>
+                    ) : null}
+                  </td>
+                  <td>
+                    <span className="text-base">{getTxMethodIcon(r.method)}</span>
+                    <span className="text-xs text-slate-500 ms-1">{r.method}</span>
+                  </td>
+                  <td>
+                    <span className={`badge text-[10px] ${getTxStatusStyle(r.status)}`}>
+                      {r.status.replace('_', ' ').toUpperCase()}
+                    </span>
+                  </td>
+                  <td className="text-xs text-slate-400 font-mono whitespace-nowrap" style={{ direction: 'ltr' }}>
+                    {new Date(r.createdAt).toLocaleDateString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {records.length === 0 && (
+        <div className="text-center py-8 text-slate-400 text-sm">
+          <p>No transactions seeded. Run the app in demo mode to auto-seed sample data.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LogsPanel() {
   const { t, lang } = useLang();
   const sa = t.superAdmin;
@@ -913,7 +1068,7 @@ function GlobalSettings() {
 /* ─────────────────────────────────────────────────────────────
    SUPER-ADMIN SHELL
 ───────────────────────────────────────────────────────────── */
-type AdminTab = 'promo' | 'bi' | 'revenue' | 'health' | 'logs' | 'global';
+type AdminTab = 'promo' | 'bi' | 'revenue' | 'health' | 'transactions' | 'logs' | 'global';
 
 export default function SuperAdminPage() {
   const { t, lang, toggle } = useLang();
@@ -927,12 +1082,13 @@ export default function SuperAdminPage() {
   }
 
   const tabs: { key: AdminTab; label: string; icon: string }[] = [
-    { key: 'promo',   label: sa.tabPromo,   icon: '🏷️' },
-    { key: 'bi',      label: sa.tabBI,      icon: '📊' },
-    { key: 'revenue', label: sa.tabRevenue, icon: '💰' },
-    { key: 'health',  label: sa.tabHealth,  icon: '🩺' },
-    { key: 'logs',    label: sa.tabLogs,    icon: '📋' },
-    { key: 'global',  label: sa.tabGlobal,  icon: '⚙️' },
+    { key: 'promo',        label: sa.tabPromo,        icon: '🏷️' },
+    { key: 'bi',           label: sa.tabBI,           icon: '📊' },
+    { key: 'revenue',      label: sa.tabRevenue,      icon: '💰' },
+    { key: 'health',       label: sa.tabHealth,       icon: '🩺' },
+    { key: 'transactions', label: sa.tabTransactions, icon: '💳' },
+    { key: 'logs',         label: sa.tabLogs,         icon: '📋' },
+    { key: 'global',       label: sa.tabGlobal,       icon: '⚙️' },
   ];
 
   return (
@@ -982,11 +1138,12 @@ export default function SuperAdminPage() {
       {/* Content */}
       <div className="p-6">
         {tab === 'promo'   && <PromoManager />}
-        {tab === 'bi'      && <BIPanel />}
-        {tab === 'revenue' && <RevenuePanel />}
-        {tab === 'health'  && <HealthPanel />}
-        {tab === 'logs'    && <LogsPanel />}
-        {tab === 'global'  && <GlobalSettings />}
+        {tab === 'bi'           && <BIPanel />}
+        {tab === 'revenue'      && <RevenuePanel />}
+        {tab === 'health'       && <HealthPanel />}
+        {tab === 'transactions' && <TransactionsPanel />}
+        {tab === 'logs'         && <LogsPanel />}
+        {tab === 'global'       && <GlobalSettings />}
       </div>
     </div>
   );
