@@ -19,24 +19,31 @@ const Ctx = createContext<JourneyCtx>({
 });
 
 /**
- * @param storageType - 'local' (default, production) persists across sessions;
- *   'session' (demo sandbox) resets when the browser tab is closed.
+ * @param storageType
+ *   'local'      — production: persists in localStorage under 'rems-journey'
+ *   'session'    — staging:    persists in sessionStorage under 'rems-journey-demo'
+ *   'local-demo' — demo:       persists in localStorage under 'rems-journey-demo' (survives tab close)
  */
 export function JourneyProvider({
   children,
   storageType = 'local',
 }: {
   children: React.ReactNode;
-  storageType?: 'local' | 'session';
+  storageType?: 'local' | 'session' | 'local-demo';
 }) {
   const [completed, setCompleted] = useState<Set<JourneyStep>>(new Set());
   const [currentGuide, setGuide] = useState<JourneyStep | null>(null);
-  const KEY = storageType === 'session' ? 'rems-journey-demo' : 'rems-journey';
+  const KEY = storageType === 'local' ? 'rems-journey' : 'rems-journey-demo';
+
+  // Resolve storage backend at call site (inside effects/callbacks) to avoid SSR errors
+  const getStore = useCallback(
+    () => (storageType === 'session' ? sessionStorage : localStorage),
+    [storageType],
+  );
 
   useEffect(() => {
     try {
-      const store = storageType === 'session' ? sessionStorage : localStorage;
-      const saved = JSON.parse(store.getItem(KEY) ?? '[]') as JourneyStep[];
+      const saved = JSON.parse(getStore().getItem(KEY) ?? '[]') as JourneyStep[];
       if (saved.length) setCompleted(new Set(saved));
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -46,11 +53,10 @@ export function JourneyProvider({
     setCompleted(prev => {
       const next = new Set(prev);
       next.add(step);
-      const store = storageType === 'session' ? sessionStorage : localStorage;
-      store.setItem(KEY, JSON.stringify([...next]));
+      getStore().setItem(KEY, JSON.stringify([...next]));
       return next;
     });
-  }, [KEY, storageType]);
+  }, [KEY, getStore]);
 
   return (
     <Ctx.Provider value={{ completed, markDone, currentGuide, setGuide }}>

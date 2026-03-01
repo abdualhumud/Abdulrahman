@@ -434,14 +434,28 @@ export const translations = {
       completeProd:   'Enter Dashboard',
       fieldRequired:  'Required',
       progressPct:    '% complete',
+      // Business type toggle (Sprint 5)
+      businessType:       'Business Type',
+      corporate:          'Corporate (Company / Establishment)',
+      individual:         'Freelancer (Individual)',
+      freelanceCert:      'Freelance Certificate No.',
+      freelanceCertPh:    'FL-XXXXXXXXXX',
+      vatOptionalBadge:   'Optional',
+      skipAddrHint:       'Skip for now — add later in unit settings',
+      verifyFreelance:    'Verify Freelance Certificate',
+      verifyCorpBtn:      'Verify Commercial Register',
+      successCorporate:   'Registered as Corporate entity',
+      successFreelancer:  'Registered as Freelancer',
+      step1DescFlexible:  'Select your business type and enter your credentials',
+      strictNoticeFlexible: 'Required fields only — optional fields can be completed later.',
     },
 
     demo: {
       badge:      'DEMO',
       banner:     'Sandbox Demo Environment',
-      bannerSub:  'Pre-loaded with sample data. All changes reset when you close this tab.',
+      bannerSub:  'Pre-loaded with sample data. Changes you make are saved between sessions.',
       tryProd:    'Switch to Production →',
-      resetNote:  'Demo data resets on tab close',
+      resetNote:  'Data persists between browser sessions',
     },
 
     properties: {
@@ -1303,14 +1317,28 @@ export const translations = {
       completeProd:   'الدخول إلى لوحة التحكم',
       fieldRequired:  'مطلوب',
       progressPct:    '٪ مكتمل',
+      // Business type toggle (Sprint 5)
+      businessType:       'نوع المنشأة',
+      corporate:          'شركة / منشأة تجارية',
+      individual:         'عمل حر (فرد)',
+      freelanceCert:      'رقم وثيقة العمل الحر',
+      freelanceCertPh:    'FL-XXXXXXXXXX',
+      vatOptionalBadge:   'اختياري',
+      skipAddrHint:       'يمكن تخطيه الآن وإضافته لاحقاً في إعدادات الوحدة',
+      verifyFreelance:    'التحقق من وثيقة العمل الحر',
+      verifyCorpBtn:      'التحقق من السجل التجاري',
+      successCorporate:   'مسجَّل كمنشأة تجارية',
+      successFreelancer:  'مسجَّل كعامل مستقل',
+      step1DescFlexible:  'اختر نوع منشأتك وأدخل بياناتها',
+      strictNoticeFlexible: 'الحقول المطلوبة فقط — يمكن إكمال الاختيارية لاحقاً.',
     },
 
     demo: {
       badge:      'تجريبي',
       banner:     'بيئة تجريبية',
-      bannerSub:  'محمّلة ببيانات نموذجية. تُحذف جميع التغييرات عند إغلاق هذا التبويب.',
+      bannerSub:  'محمّلة ببيانات نموذجية. تُحفظ التغييرات بين الجلسات.',
       tryProd:    '← الانتقال إلى الإنتاج',
-      resetNote:  'تُعاد ضبط البيانات عند إغلاق التبويب',
+      resetNote:  'تُحفظ البيانات بين جلسات المتصفح',
     },
 
     properties: {

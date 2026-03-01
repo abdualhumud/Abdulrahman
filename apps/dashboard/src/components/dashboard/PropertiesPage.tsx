@@ -1264,6 +1264,7 @@ function UnitDetailPanel({ unit, onClose, onEdit, lang }: {
 
 /* ── Main Page ────────────────────────────────────────────────────── */
 const PROD_UNITS_KEY = 'rems-prod-units';
+const DEMO_UNITS_KEY = 'rems-demo-units';
 
 function loadProdUnits(): Unit[] {
   try {
@@ -1273,15 +1274,25 @@ function loadProdUnits(): Unit[] {
   } catch { return []; }
 }
 
+/** Demo: try persisted localStorage first; fall back to mock data on first visit */
+function loadDemoUnits(): Unit[] {
+  try {
+    const raw = localStorage.getItem(DEMO_UNITS_KEY);
+    if (raw) return JSON.parse(raw) as Unit[];
+  } catch { /* ignore */ }
+  return UNITS as Unit[];
+}
+
 export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { t, lang } = useLang();
   const { markDone } = useJourney();
   const { isDemo } = useMode();
   const p = t.properties;
 
-  // Demo: pre-loaded mock data. Production: localStorage (starts empty).
+  // Demo: localStorage (rems-demo-units), falls back to mock on first visit.
+  // Production/Staging: localStorage (rems-prod-units), starts empty.
   const [units, setUnits] = useState<Unit[]>(() =>
-    isDemo ? (UNITS as Unit[]) : loadProdUnits(),
+    isDemo ? loadDemoUnits() : loadProdUnits(),
   );
   const [showModal, setShowModal]   = useState(false);
   const [editUnit, setEditUnit]     = useState<Partial<Unit> | undefined>();
@@ -1319,10 +1330,10 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
         next = [...us, { ...form, id: 'u' + Date.now(), propertyId: 'p1', propertyName: 'New Property', occupancy: 0, revenue: 0, photos: 0, color: '#3B82F6' } as Unit];
         markDone(2);
       }
-      // Persist to localStorage in production mode (demo uses mock data, no persistence needed)
-      if (!isDemo) {
-        try { localStorage.setItem(PROD_UNITS_KEY, JSON.stringify(next)); } catch { /* quota */ }
-      }
+      // Persist to localStorage — demo uses its own key, prod uses production key
+      try {
+        localStorage.setItem(isDemo ? DEMO_UNITS_KEY : PROD_UNITS_KEY, JSON.stringify(next));
+      } catch { /* quota */ }
       return next;
     });
     setShowModal(false);

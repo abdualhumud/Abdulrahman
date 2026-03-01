@@ -18,22 +18,29 @@ const Ctx = createContext<LangCtx>({
 });
 
 /**
- * @param storageType - 'local' (default, production) persists across sessions;
- *   'session' (demo sandbox) resets when the browser tab is closed.
+ * @param storageType
+ *   'local'      — production: persists in localStorage under 'rems-lang'
+ *   'session'    — staging:    persists in sessionStorage under 'rems-lang-demo'
+ *   'local-demo' — demo:       persists in localStorage under 'rems-lang-demo' (survives tab close)
  */
 export function LanguageProvider({
   children,
   storageType = 'local',
 }: {
   children: React.ReactNode;
-  storageType?: 'local' | 'session';
+  storageType?: 'local' | 'session' | 'local-demo';
 }) {
   const [lang, setLang] = useState<Lang>('en');
-  const KEY = storageType === 'session' ? 'rems-lang-demo' : 'rems-lang';
+  const KEY = storageType === 'local' ? 'rems-lang' : 'rems-lang-demo';
+
+  // Resolve storage backend at call site (inside effects/callbacks) to avoid SSR errors
+  const getStore = useCallback(
+    () => (storageType === 'session' ? sessionStorage : localStorage),
+    [storageType],
+  );
 
   useEffect(() => {
-    const store = storageType === 'session' ? sessionStorage : localStorage;
-    const stored = store.getItem(KEY) as Lang | null;
+    const stored = getStore().getItem(KEY) as Lang | null;
     if (stored === 'ar' || stored === 'en') setLang(stored);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -46,12 +53,11 @@ export function LanguageProvider({
   const toggle = useCallback(() => {
     setLang(prev => {
       const next = prev === 'en' ? 'ar' : 'en';
-      const store = storageType === 'session' ? sessionStorage : localStorage;
-      store.setItem(KEY, next);
+      getStore().setItem(KEY, next);
       return next;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageType, KEY]);
+  }, [getStore, KEY]);
 
   return (
     <Ctx.Provider value={{ lang, t: translations[lang], toggle }}>

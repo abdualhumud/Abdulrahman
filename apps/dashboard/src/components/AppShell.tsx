@@ -183,10 +183,9 @@ export default function AppShell() {
 
   useEffect(() => {
     if (isDemo) {
-      const store = sessionStorage;
-      const key   = ONBOARDING_KEY_DEMO;
-      if (!store.getItem(key)) {
-        store.setItem(key, '1');
+      // Demo onboarding persists in localStorage (demo-specific key, not production key)
+      if (!localStorage.getItem(ONBOARDING_KEY_DEMO)) {
+        localStorage.setItem(ONBOARDING_KEY_DEMO, '1');
         markDone(1); markDone(2); markDone(3); markDone(4);
       }
       setShowOnboarding(false);

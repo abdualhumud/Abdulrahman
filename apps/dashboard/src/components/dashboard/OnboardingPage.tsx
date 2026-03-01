@@ -34,11 +34,12 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
 
   const totalSteps: Step = showPayment ? 4 : 3;
 
-  const [step, setStep]         = useState<Step>(1);
-  const [validating, setVal]    = useState(false);
-  const [crOk, setCrOk]         = useState(false);
-  const [selectedPlan, setPlan] = useState<typeof PLANS[number]>('Pro');
-  const [touched, setTouched]   = useState(false);
+  const [step, setStep]               = useState<Step>(1);
+  const [validating, setVal]          = useState(false);
+  const [crOk, setCrOk]               = useState(false);
+  const [selectedPlan, setPlan]       = useState<typeof PLANS[number]>('Pro');
+  const [touched, setTouched]         = useState(false);
+  const [businessType, setBusinessType] = useState<'corporate' | 'individual'>('corporate');
 
   // Payment / promo state
   const [promoInput,  setPromoInput]  = useState('');
@@ -50,6 +51,7 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
 
   const [form, setForm] = useState({
     cr: '', vat: '', natCity: '', natDistr: '', natStreet: '', natPostal: '',
+    freelanceCert: '',
     ownerName: '', email: '', phone: '', nationalId: '',
     bankName: '', iban: '',
   });
@@ -77,12 +79,12 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
   const discounted  = Math.round(basePrice * (1 - discountPct / 100));
 
   /* ── Validation ── */
+  // Sprint 5: VAT and National Address are optional for both business types.
+  // Corporate: CR required (≥7 chars). Individual: Freelance Certificate required (≥7 chars).
   const step1Valid = !strictMode || (
-    form.cr.trim().length >= 7 &&
-    form.vat.trim().length >= 10 &&
-    form.natCity.trim() !== '' &&
-    form.natDistr.trim() !== '' &&
-    form.natStreet.trim() !== ''
+    businessType === 'corporate'
+      ? form.cr.trim().length >= 7
+      : form.freelanceCert.trim().length >= 7
   );
   const step2Valid = !strictMode || (
     form.ownerName.trim() !== '' &&
@@ -98,7 +100,8 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
 
   /* Progress percentage (strict only) */
   const filledCount = [
-    form.cr, form.vat, form.natCity, form.natDistr, form.natStreet,
+    businessType === 'corporate' ? form.cr : form.freelanceCert,
+    form.vat, form.natCity, form.natDistr, form.natStreet,
     form.ownerName, form.email, form.phone, form.nationalId, form.bankName, form.iban,
   ].filter(v => v.trim() !== '').length;
   const progressPct = Math.min(100, Math.round(((step - 1) / totalSteps) * 100 + (filledCount / 11) * (100 / totalSteps)));
@@ -207,7 +210,7 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
         {strictMode && (
           <div className="mb-5">
             <div className="flex items-center justify-between mb-1.5 px-0.5">
-              <span className="text-xs text-slate-400 font-semibold">{o.strictNotice}</span>
+              <span className="text-xs text-slate-400 font-semibold">{o.strictNoticeFlexible ?? o.strictNotice}</span>
               <span className="text-xs font-extrabold text-blue-400">{progressPct}{o.progressPct}</span>
             </div>
             <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
@@ -242,60 +245,134 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
         {/* ────────────── Card ────────────── */}
         <div className="bg-white rounded-3xl p-8 shadow-2xl">
 
-          {/* ── Step 1: Commercial Validation ── */}
+          {/* ── Step 1: Business Registration ── */}
           {step === 1 && (
             <div className="space-y-5">
               <div>
                 <h2 className="text-lg font-extrabold text-slate-900">{o.step1Title}</h2>
-                <p className="text-sm text-slate-400 mt-0.5">{o.step1Desc}</p>
+                <p className="text-sm text-slate-400 mt-0.5">{o.step1DescFlexible ?? o.step1Desc}</p>
               </div>
 
+              {/* Business Type Toggle */}
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                  {o.crNumber}{strictMode && REQ_DOT}
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                  {o.businessType}{REQ_DOT}
                 </label>
-                <div className="relative">
-                  <input value={form.cr} onChange={set('cr')} placeholder={o.crPlaceholder}
-                    className={`${INPUT} ${fieldErr(form.cr, 7)}`} />
-                  {crOk && <span className="absolute end-3 top-2.5 text-emerald-500"><Icons.check size={16} /></span>}
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    { key: 'corporate' as const, label: o.corporate,  icon: (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                    )},
+                    { key: 'individual' as const, label: o.individual, icon: (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    )},
+                  ] as { key: 'corporate' | 'individual'; label: string; icon: React.ReactNode }[]).map(bt => (
+                    <button
+                      key={bt.key}
+                      onClick={() => { setBusinessType(bt.key); setCrOk(false); }}
+                      className={`flex items-center gap-2.5 p-3.5 rounded-xl border-2 text-sm font-semibold transition-all text-start
+                        ${businessType === bt.key
+                          ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}
+                    >
+                      <span className={businessType === bt.key ? 'text-blue-600' : 'text-slate-400'}>{bt.icon}</span>
+                      <span className="leading-tight">{bt.label}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
 
+              {/* CR Number (Corporate only) */}
+              {businessType === 'corporate' && (
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                    {o.crNumber}{strictMode && REQ_DOT}
+                  </label>
+                  <div className="relative">
+                    <input value={form.cr} onChange={set('cr')} placeholder={o.crPlaceholder}
+                      className={`${INPUT} ${fieldErr(form.cr, 7)}`} />
+                    {crOk && <span className="absolute end-3 top-2.5 text-emerald-500"><Icons.check size={16} /></span>}
+                  </div>
+                </div>
+              )}
+
+              {/* Freelance Certificate (Individual only) */}
+              {businessType === 'individual' && (
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                    {o.freelanceCert ?? 'Freelance Certificate No.'}{strictMode && REQ_DOT}
+                  </label>
+                  <div className="relative">
+                    <input value={form.freelanceCert} onChange={set('freelanceCert')}
+                      placeholder={o.freelanceCertPh ?? 'FL-XXXXXXXXXX'}
+                      className={`${INPUT} ${strictMode && touched && form.freelanceCert.trim().length < 7 ? 'border-red-300 ring-2 ring-red-100' : ''}`}
+                      style={{ direction: 'ltr', letterSpacing: '0.04em' }} />
+                    {crOk && <span className="absolute end-3 top-2.5 text-emerald-500"><Icons.check size={16} /></span>}
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-slate-400">
+                    {lang === 'ar' ? 'وثيقة العمل الحر الصادرة عن وزارة الموارد البشرية' : 'Freelance Work Certificate — issued by the Ministry of HR'}
+                  </p>
+                </div>
+              )}
+
+              {/* VAT Number — Optional */}
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                  {o.vatNumber}{strictMode && REQ_DOT}
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  {o.vatNumber}
+                  <span className="text-[10px] font-semibold text-slate-400 normal-case tracking-normal bg-slate-100 px-1.5 py-0.5 rounded-full">
+                    {o.vatOptionalBadge ?? 'Optional'}
+                  </span>
                 </label>
                 <input value={form.vat} onChange={set('vat')} placeholder={o.vatPlaceholder}
-                  className={`${INPUT} ${fieldErr(form.vat, 10)}`} />
+                  className={INPUT} style={{ direction: 'ltr', letterSpacing: '0.04em' }} />
               </div>
 
+              {/* National Address — Optional */}
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                  {o.natAddress}{strictMode && REQ_DOT}
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  {o.natAddress}
+                  <span className="text-[10px] font-semibold text-slate-400 normal-case tracking-normal bg-slate-100 px-1.5 py-0.5 rounded-full">
+                    {o.vatOptionalBadge ?? 'Optional'}
+                  </span>
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <input value={form.natCity}   onChange={set('natCity')}
-                    placeholder={o.natAddrCity}   className={`${INPUT} ${fieldErr(form.natCity)}`} />
+                    placeholder={o.natAddrCity}   className={INPUT} />
                   <input value={form.natDistr}  onChange={set('natDistr')}
-                    placeholder={o.natAddrDistr}  className={`${INPUT} ${fieldErr(form.natDistr)}`} />
+                    placeholder={o.natAddrDistr}  className={INPUT} />
                   <input value={form.natStreet} onChange={set('natStreet')}
-                    placeholder={o.natAddrStreet} className={`${INPUT} ${fieldErr(form.natStreet)}`} />
+                    placeholder={o.natAddrStreet} className={INPUT} />
                   <input value={form.natPostal} onChange={set('natPostal')}
                     placeholder={o.natAddrPostal} className={INPUT} style={{ direction: 'ltr' }} />
                 </div>
+                <p className="mt-1.5 text-[11px] text-slate-400 flex items-center gap-1">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  {o.skipAddrHint ?? 'Skip for now — add later in unit settings'}
+                </p>
               </div>
 
+              {/* Verify button */}
               {!crOk && (
-                <button onClick={fakeValidate} disabled={validating || !form.cr || !form.vat}
+                <button
+                  onClick={fakeValidate}
+                  disabled={validating || (businessType === 'corporate' ? !form.cr : !form.freelanceCert)}
                   className="w-full py-2.5 rounded-xl text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-40 transition-all flex items-center justify-center gap-2">
                   {validating
                     ? <><span className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />{o.validating}</>
-                    : o.verifyButton}
+                    : businessType === 'individual'
+                      ? (o.verifyFreelance ?? 'Verify Freelance Certificate')
+                      : (o.verifyCorpBtn ?? o.verifyButton)}
                 </button>
               )}
               {crOk && (
                 <div className="flex items-center gap-2 text-emerald-600 text-sm font-semibold bg-emerald-50 rounded-xl px-4 py-3">
-                  <Icons.check size={16} /> {o.verified}
+                  <Icons.check size={16} />
+                  <span>{o.verified}</span>
+                  <span className="ms-auto text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                    {businessType === 'individual'
+                      ? (o.successFreelancer ?? 'Freelancer')
+                      : (o.successCorporate ?? 'Corporate')}
+                  </span>
                 </div>
               )}
               {strictMode && touched && !step1Valid && (
@@ -451,14 +528,26 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
 
               {/* Registration summary */}
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-                  {lang === 'ar' ? 'ملخص التسجيل' : 'Registration Summary'}
-                </p>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    {lang === 'ar' ? 'ملخص التسجيل' : 'Registration Summary'}
+                  </p>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    businessType === 'individual'
+                      ? 'bg-violet-100 text-violet-700'
+                      : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    {businessType === 'individual'
+                      ? (o.successFreelancer ?? 'Freelancer')
+                      : (o.successCorporate ?? 'Corporate')}
+                  </span>
+                </div>
                 <div className="space-y-1.5 text-xs text-slate-700">
                   {[
-                    { label: o.crNumber,    val: form.cr || '—' },
+                    { label: businessType === 'corporate' ? o.crNumber : (o.freelanceCert ?? 'Freelance Cert.'),
+                      val: businessType === 'corporate' ? form.cr || '—' : form.freelanceCert || '—' },
                     { label: o.ownerName,   val: form.ownerName || '—' },
-                    { label: o.natAddress,  val: form.natCity ? `${form.natCity}, ${form.natDistr}` : '—' },
+                    { label: o.natAddress,  val: form.natCity ? `${form.natCity}, ${form.natDistr}` : (lang === 'ar' ? '— (يُضاف لاحقاً)' : '— (add later)') },
                     { label: o.ownerEmail,  val: form.email || '—' },
                   ].map(r => (
                     <div key={r.label} className="flex items-center justify-between">
@@ -507,6 +596,14 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
                     <p className="text-sm text-slate-500 mt-1">{p.checkoutSuccessMsg}</p>
                   </div>
                   <div className="w-full bg-emerald-50 rounded-2xl border border-emerald-100 p-4 space-y-2" style={{ direction: 'ltr' }}>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Account type</span>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${businessType === 'individual' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {businessType === 'individual'
+                          ? (o.successFreelancer ?? 'Freelancer')
+                          : (o.successCorporate ?? 'Corporate')}
+                      </span>
+                    </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-500">Plan</span>
                       <span className="font-bold text-slate-900">{selectedPlan}</span>
