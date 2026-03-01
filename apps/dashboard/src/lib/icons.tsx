@@ -60,4 +60,6 @@ export const Icons = {
   sliders:     (p: IconProps) => <Icon size={p.size} className={p.className} d={['M4 21v-7','M4 10V3','M12 21v-9','M12 8V3','M20 21v-5','M20 12V3','M1 14h6','M9 8h6','M17 16h6']} />,
   trash:       (p: IconProps) => <Icon size={p.size} className={p.className} d={['M3 6h18','M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6','M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2']} />,
   share:       (p: IconProps) => <Icon size={p.size} className={p.className} d={['M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8','M16 6l-4-4-4 4','M12 2v13']} />,
+  menu:        (p: IconProps) => <Icon size={p.size} className={p.className} d={['M3 6h18','M3 12h18','M3 18h18']} />,
+  info:        (p: IconProps) => <Icon size={p.size} className={p.className} d={['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z','M12 16v-4','M12 8h.01']} />,
 };

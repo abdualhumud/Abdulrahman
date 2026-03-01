@@ -297,7 +297,92 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
         </div>
       </div>
 
-      <div className="card overflow-hidden">
+      {/* ── Mobile: card list (hidden on sm+) ── */}
+      <div className="sm:hidden space-y-3">
+        {rows.map(b => {
+          const st = getStatus(b);
+          return (
+            <div
+              key={b.id}
+              className="card p-4 cursor-pointer active:scale-[0.99] transition-transform"
+              onClick={() => setViewBooking(b)}
+            >
+              {/* Guest row */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0 bg-indigo-50 text-indigo-600">
+                    {b.guest.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-800 text-sm leading-none">{b.guest}</p>
+                    <p className="text-[10px] font-mono text-slate-400 mt-0.5">{b.id}</p>
+                  </div>
+                </div>
+                <span className={`badge text-[10px] ${STATUS_STYLE[st] ?? 'bg-slate-100 text-slate-500'}`}>
+                  {t.status[st as keyof typeof t.status] ?? st}
+                </span>
+              </div>
+              {/* Details grid */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs mb-3">
+                <div>
+                  <p className="text-slate-400 text-[10px] uppercase font-bold mb-0.5">{t.table.channel}</p>
+                  <p className="font-bold" style={{ color: b.channelColor }}>● {b.channel}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-[10px] uppercase font-bold mb-0.5">{t.table.amountSAR}</p>
+                  <p className="font-extrabold text-slate-900" style={{ direction: 'ltr' }}>SAR {b.amount.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-[10px] uppercase font-bold mb-0.5">{t.table.checkIn}</p>
+                  <p className="font-mono font-semibold text-slate-700">{b.checkIn}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-[10px] uppercase font-bold mb-0.5">{t.table.checkOut}</p>
+                  <p className="font-mono font-semibold text-slate-700">{b.checkOut}</p>
+                </div>
+              </div>
+              {/* Action buttons */}
+              <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                {st === 'CHECKED_IN' && (
+                  <button
+                    onClick={() => handleCheckOut(b)}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 rounded-xl bg-amber-500 text-white text-xs font-bold hover:bg-amber-600 transition-all"
+                    style={{ minHeight: 44 }}
+                  >
+                    <Icons.arrowRight size={13} /> {t.table.checkOut}
+                  </button>
+                )}
+                {st === 'PENDING' && (
+                  <button
+                    onClick={() => setPayLinkBooking(b)}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all"
+                    style={{ minHeight: 44 }}
+                  >
+                    <Icons.link size={13} /> {t.transactions?.generateLink ?? 'Pay Link'}
+                  </button>
+                )}
+                <button
+                  onClick={() => setViewBooking(b)}
+                  className="flex items-center justify-center gap-1.5 px-3 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-all"
+                  style={{ minHeight: 44 }}
+                >
+                  <Icons.eye size={13} /> {t.bookings.view}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {rows.length === 0 && (
+          <div className="card py-14 text-center">
+            <p className="text-slate-300 text-3xl mb-2">📭</p>
+            <p className="text-slate-400 text-sm font-medium">{t.bookings.noResults}</p>
+          </div>
+        )}
+      </div>
+
+      {/* ── Desktop/tablet: data table (hidden on mobile) ── */}
+      <div className="hidden sm:block card overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full data-table">
           <thead className="bg-slate-50 border-b border-slate-100">
             <tr>
@@ -406,7 +491,8 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
             )}
           </tbody>
         </table>
-      </div>
+        </div>{/* overflow-x-auto */}
+      </div>{/* hidden sm:block */}
 
       {/* Booking detail slide-over */}
       {viewBooking && (

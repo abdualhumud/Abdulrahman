@@ -16,6 +16,7 @@ import { useState, useEffect } from 'react';
 import { useJourney }    from '@/lib/journey-context';
 import { useMode }       from '@/lib/mode-context';
 import { useLang }       from '@/lib/language-context';
+import { Icons }         from '@/lib/icons';
 import {
   getStagingSession, loginStagingUser, registerStagingUser, logoutStagingUser,
   stagingOnboardingKey, type StagingUser,
@@ -176,10 +177,12 @@ export default function AppShell() {
   const { envMode, isDemo, isStaging } = useMode();
   const { markDone } = useJourney();
 
-  const [activePage,     setActivePage]     = useState<Page>('overview');
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [stagingUser,    setStagingUser]    = useState<StagingUser | null>(null);
-  const [stagingChecked, setStagingChecked] = useState(false);
+  const [activePage,      setActivePage]      = useState<Page>('overview');
+  const [showOnboarding,  setShowOnboarding]  = useState(false);
+  const [stagingUser,     setStagingUser]     = useState<StagingUser | null>(null);
+  const [stagingChecked,  setStagingChecked]  = useState(false);
+  const [mobileMenuOpen,  setMobileMenuOpen]  = useState(false);
+  const { lang } = useLang();
 
   useEffect(() => {
     if (isDemo) {
@@ -230,7 +233,10 @@ export default function AppShell() {
     setActivePage('overview');
   };
 
-  const navigate = (p: string) => setActivePage(p as Page);
+  const navigate = (p: string) => {
+    setActivePage(p as Page);
+    setMobileMenuOpen(false); // always close drawer on navigation
+  };
 
   const handleCheckoutCleaning = (_unit: string, _bookingId: string) => {
     setActivePage('cleaning');
@@ -269,16 +275,88 @@ export default function AppShell() {
     );
   }
 
+  /* ── Bottom navigation items (mobile only) ── */
+  const BOTTOM_NAV: Array<{
+    id: Page;
+    Icon: (p: { size?: number; className?: string }) => React.JSX.Element;
+    labelEn: string;
+    labelAr: string;
+    badge?: number;
+  }> = [
+    { id: 'overview',   Icon: Icons.overview,   labelEn: 'Home',       labelAr: 'الرئيسية' },
+    { id: 'bookings',   Icon: Icons.bookings,   labelEn: 'Bookings',   labelAr: 'الحجوزات', badge: 1 },
+    { id: 'inbox',      Icon: Icons.inbox,      labelEn: 'Inbox',      labelAr: 'الرسائل',  badge: 2 },
+    { id: 'cleaning',   Icon: Icons.cleaning,   labelEn: 'Cleaning',   labelAr: 'التنظيف' },
+    { id: 'properties', Icon: Icons.properties, labelEn: 'Properties', labelAr: 'الأملاك' },
+  ];
+
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      <Sidebar activePage={activePage} onNavigate={navigate} />
+      <Sidebar
+        activePage={activePage}
+        onNavigate={navigate}
+        mobileOpen={mobileMenuOpen}
+        onMobileClose={() => setMobileMenuOpen(false)}
+      />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <TopBar activePage={activePage} onNavigate={navigate} />
+        <TopBar
+          activePage={activePage}
+          onNavigate={navigate}
+          onMenuToggle={() => setMobileMenuOpen(v => !v)}
+        />
         {isDemo    && <DemoBanner />}
         {isStaging && <StagingBanner onLogout={handleStagingLogout} user={stagingUser} />}
         {!isDemo && !isStaging && <JourneyBanner onNavigate={navigate} />}
-        <main className="flex-1 overflow-auto">{renderPage()}</main>
+
+        {/* Main content — extra bottom padding on mobile for the bottom nav bar */}
+        <main className="flex-1 overflow-auto lg:pb-0 bottom-nav-spacing">{renderPage()}</main>
       </div>
+
+      {/* ── Bottom navigation bar (mobile / tablet only) ── */}
+      <nav
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-100"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
+        <div className="flex items-stretch justify-around h-14 px-1">
+          {BOTTOM_NAV.map(({ id, Icon, labelEn, labelAr, badge }) => {
+            const active = activePage === id;
+            const label  = lang === 'ar' ? labelAr : labelEn;
+            return (
+              <button
+                key={id}
+                onClick={() => navigate(id)}
+                className={`flex-1 flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all mx-0.5 my-1 relative
+                  ${active ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+                style={{ minHeight: 44 }}
+              >
+                {/* Active indicator */}
+                {active && (
+                  <span className="absolute top-0.5 left-1/2 -translate-x-1/2 w-5 h-0.5 bg-blue-600 rounded-full" />
+                )}
+                {/* Icon with optional badge */}
+                <span className="relative">
+                  <Icon size={20} />
+                  {badge && !active && (
+                    <span className="absolute -top-1 -end-1.5 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
+                      {badge}
+                    </span>
+                  )}
+                </span>
+                <span className="text-[9px] font-semibold leading-none">{label}</span>
+              </button>
+            );
+          })}
+          {/* More — opens full sidebar */}
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all mx-0.5 my-1 text-slate-400 hover:text-slate-600"
+            style={{ minHeight: 44 }}
+          >
+            <Icons.menu size={20} />
+            <span className="text-[9px] font-semibold leading-none">{lang === 'ar' ? 'المزيد' : 'More'}</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 }

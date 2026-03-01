@@ -50,17 +50,50 @@ body {
   .btn-primary {
     @apply bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-semibold text-sm
            px-4 py-2.5 rounded-xl transition-all inline-flex items-center gap-2 cursor-pointer;
+    min-height: 44px; /* touch target */
   }
   .btn-ghost {
     @apply bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-sm
            px-4 py-2.5 rounded-xl transition-all inline-flex items-center gap-2 cursor-pointer;
+    min-height: 44px; /* touch target */
   }
   .input {
     @apply w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm
            text-slate-800 placeholder-slate-400 bg-white
            focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all;
+    min-height: 44px; /* touch target */
   }
   .badge {
     @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
   }
 }
+
+/* ── Mobile: prevent iOS input auto-zoom (requires font-size ≥ 16px) ── */
+@media (max-width: 1024px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
+/* ── Safe-area utilities for notched devices ── */
+.pb-safe  { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.mb-safe  { margin-bottom:  env(safe-area-inset-bottom, 0px); }
+
+/* Bottom nav safe-area spacing */
+.bottom-nav-spacing {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 56px);
+}
+
+/* ── Mobile slide-up animation (for bottom sheets) ── */
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.slide-up { animation: slideUp 0.25s cubic-bezier(0.32, 0.72, 0, 1); }

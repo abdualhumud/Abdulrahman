@@ -34,6 +34,9 @@ export default function InboxPage({ onNavigate }: InboxPageProps) {
   const [autoTranslate, setAutoTranslate] = useState(false);
   const [translations, setTranslations] = useState<Record<string, string>>({});
   const [translating, setTranslating] = useState(false);
+  // Mobile panel state: 'list' → message list, 'chat' → conversation view
+  const [mobilePanel,      setMobilePanel]      = useState<'list' | 'chat'>('list');
+  const [showMobileInfo,   setShowMobileInfo]   = useState(false);
 
   const selected = msgs.find(m => m.id === selId);
   const unread   = msgs.filter(m => !m.isRead).length;
@@ -42,6 +45,7 @@ export default function InboxPage({ onNavigate }: InboxPageProps) {
   const pick = (id: string) => {
     setSelId(id);
     setMsgs(ms => ms.map(m => m.id === id ? { ...m, isRead: true } : m));
+    setMobilePanel('chat'); // switch to chat view on mobile
   };
 
   const send = async () => {
@@ -77,10 +81,12 @@ export default function InboxPage({ onNavigate }: InboxPageProps) {
     : null;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex h-[calc(100dvh-3.5rem)] lg:h-screen overflow-hidden bg-slate-50">
 
-      {/* ── Sidebar list ── */}
-      <div className="w-80 flex-shrink-0 bg-white border-e border-slate-100 flex flex-col">
+      {/* ── Message list panel (full-width on mobile when active, fixed 320px on desktop) ── */}
+      <div className={`bg-white border-e border-slate-100 flex-col
+        w-full lg:w-80 lg:flex-shrink-0
+        ${mobilePanel === 'chat' ? 'hidden lg:flex' : 'flex'}`}>
 
         {/* Header */}
         <div className="px-4 pt-5 pb-3 border-b border-slate-50">
@@ -158,14 +164,23 @@ export default function InboxPage({ onNavigate }: InboxPageProps) {
         </div>
       </div>
 
-      {/* ── Message detail + reservation panel ── */}
-      <div className="flex-1 flex min-w-0 overflow-hidden">
+      {/* ── Chat + reservation panel (full-width on mobile when chat active) ── */}
+      <div className={`flex-1 min-w-0 overflow-hidden
+        ${mobilePanel === 'list' ? 'hidden lg:flex' : 'flex'}`}>
       {/* Message detail */}
       <div className="flex-1 flex flex-col min-w-0">
         {selected ? (
           <>
             {/* Convo header */}
-            <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center gap-3 flex-shrink-0">
+            <div className="bg-white border-b border-slate-100 px-3 sm:px-6 py-3 sm:py-4 flex items-center gap-2 sm:gap-3 flex-shrink-0">
+              {/* ← Back button (mobile only) */}
+              <button
+                onClick={() => setMobilePanel('list')}
+                aria-label={lang === 'ar' ? 'رجوع' : 'Back'}
+                className="lg:hidden w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition-all flex-shrink-0"
+              >
+                <Icons.chevronLeft size={18} />
+              </button>
               <div className="w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm flex-shrink-0"
                 style={{ background: selected.channelColor + '18', color: selected.channelColor }}>
                 {selected.guest.charAt(0)}
@@ -184,24 +199,34 @@ export default function InboxPage({ onNavigate }: InboxPageProps) {
                   <span className="font-mono" style={{ direction: 'ltr', unicodeBidi: 'embed' }}>{selected.bookingId}</span>
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                {/* Auto-translate toggle */}
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {/* Auto-translate toggle — icon-only on mobile */}
                 <button
                   onClick={toggleAutoTranslate}
                   title={lang === 'ar' ? 'ترجمة تلقائية' : 'Auto-Translate'}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
                     autoTranslate
                       ? 'bg-blue-600 text-white border-blue-600'
                       : 'bg-slate-100 text-slate-500 border-slate-200 hover:border-slate-400'
                   }`}
+                  style={{ minHeight: 36 }}
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M5 8l6 6" /><path d="M4 14l6-6 2-3" /><path d="M2 5h12" /><path d="M7 2h1" />
                     <path d="M22 22l-5-10-5 10" /><path d="M14 18h6" />
                   </svg>
-                  {lang === 'ar' ? 'ترجمة' : 'Translate'}
+                  <span className="hidden sm:inline">{lang === 'ar' ? 'ترجمة' : 'Translate'}</span>
                 </button>
-                <button onClick={() => onNavigate?.('bookings')} className="btn-ghost text-xs py-1.5 px-3">{t.inbox.viewBooking}</button>
+                {/* Booking info — mobile only (desktop uses the side panel) */}
+                <button
+                  onClick={() => setShowMobileInfo(true)}
+                  title={lang === 'ar' ? 'تفاصيل الحجز' : 'Booking Details'}
+                  className="lg:hidden w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-all flex-shrink-0"
+                  style={{ minHeight: 36 }}
+                >
+                  <Icons.info size={16} />
+                </button>
+                <button onClick={() => onNavigate?.('bookings')} className="hidden sm:flex btn-ghost text-xs py-1.5 px-3">{t.inbox.viewBooking}</button>
               </div>
             </div>
 
@@ -284,8 +309,8 @@ export default function InboxPage({ onNavigate }: InboxPageProps) {
         )}
       </div>{/* end message detail */}
 
-      {/* ── Reservation details panel ── */}
-      <div className="w-72 flex-shrink-0 bg-white border-s border-slate-100 flex flex-col overflow-y-auto">
+      {/* ── Reservation details panel (desktop sidebar only) ── */}
+      <div className="hidden lg:flex w-72 flex-shrink-0 bg-white border-s border-slate-100 flex-col overflow-y-auto">
         <div className="px-4 py-3 border-b border-slate-100 flex-shrink-0">
           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.inbox.reservationDetails}</p>
         </div>
@@ -393,6 +418,86 @@ export default function InboxPage({ onNavigate }: InboxPageProps) {
         )}
       </div>
       </div>{/* end message detail + reservation panel wrapper */}
+
+      {/* ── Mobile: reservation bottom sheet ── */}
+      {showMobileInfo && (
+        <div
+          className="fixed inset-0 z-50 lg:hidden"
+          onClick={() => setShowMobileInfo(false)}
+        >
+          <div
+            className="absolute bottom-0 inset-x-0 bg-white rounded-t-3xl shadow-2xl max-h-[75vh] overflow-y-auto slide-up"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Handle bar */}
+            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1" />
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 sticky top-0 bg-white">
+              <p className="text-sm font-extrabold text-slate-800">{t.inbox.reservationDetails}</p>
+              <button
+                onClick={() => setShowMobileInfo(false)}
+                className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-colors"
+              >
+                <Icons.x size={15} />
+              </button>
+            </div>
+
+            {/* Reservation content */}
+            {selectedBooking ? (
+              <div className="p-5 space-y-4">
+                {/* Guest */}
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-base flex-shrink-0"
+                    style={{ background: selectedBooking.channelColor + '18', color: selectedBooking.channelColor }}>
+                    {selectedBooking.guest.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-900 text-sm truncate">{selectedBooking.guest}</p>
+                    <p className="text-[11px] font-semibold mt-0.5" style={{ color: selectedBooking.channelColor }}>
+                      ● {selectedBooking.channel}
+                    </p>
+                  </div>
+                </div>
+                {/* Booking ID */}
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{lang === 'ar' ? 'رقم الحجز' : 'Booking ID'}</p>
+                  <p className="font-mono text-xs font-bold text-slate-700" style={{ direction: 'ltr' }}>{selectedBooking.id}</p>
+                </div>
+                {/* Dates */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-blue-50 rounded-xl p-2.5">
+                    <p className="text-[9px] font-bold text-blue-400 uppercase tracking-wider mb-1">{lang === 'ar' ? 'الوصول' : 'Check-in'}</p>
+                    <p className="text-xs font-extrabold text-blue-700" style={{ direction: 'ltr' }}>{selectedBooking.checkIn}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-2.5">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">{lang === 'ar' ? 'المغادرة' : 'Check-out'}</p>
+                    <p className="text-xs font-extrabold text-slate-700" style={{ direction: 'ltr' }}>{selectedBooking.checkOut}</p>
+                  </div>
+                </div>
+                {/* Payment */}
+                <div className="flex items-center justify-between px-3 py-3 bg-slate-50 rounded-xl">
+                  <p className="text-xl font-extrabold text-slate-900" style={{ direction: 'ltr' }}>
+                    SAR {selectedBooking.amount.toLocaleString()}
+                  </p>
+                  <span className={`badge text-[10px] ${selectedBooking.statusColor}`}>
+                    {t.status[selectedBooking.status as keyof typeof t.status] ?? selectedBooking.status}
+                  </span>
+                </div>
+                {/* View booking */}
+                <button onClick={() => { onNavigate?.('bookings'); setShowMobileInfo(false); }}
+                  className="w-full btn-primary py-2.5 text-xs justify-center">
+                  <Icons.bookings size={12} />
+                  {t.inbox.viewBooking}
+                </button>
+              </div>
+            ) : (
+              <div className="p-10 text-center">
+                <p className="text-xs text-slate-400 font-medium">{lang === 'ar' ? 'لا يوجد حجز مرتبط' : 'No booking linked'}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

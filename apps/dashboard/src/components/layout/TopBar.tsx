@@ -22,15 +22,25 @@ const PAGE_TITLES: Record<string, { en: string; ar: string; icon: keyof typeof i
 interface Props {
   activePage: string;
   onNavigate: (p: string) => void;
+  onMenuToggle?: () => void;
 }
 
-export default function TopBar({ activePage, onNavigate }: Props) {
+export default function TopBar({ activePage, onNavigate, onMenuToggle }: Props) {
   const { t, lang, toggle } = useLang();
   const { isDemo } = useMode();
   const pageInfo = PAGE_TITLES[activePage] ?? PAGE_TITLES.overview;
 
   return (
-    <header className="bg-white border-b border-slate-100 flex-shrink-0 h-14 flex items-center px-5 gap-4">
+    <header className="bg-white border-b border-slate-100 flex-shrink-0 h-14 flex items-center px-3 sm:px-5 gap-2 sm:gap-4">
+
+      {/* Hamburger — mobile only */}
+      <button
+        onClick={onMenuToggle}
+        aria-label={lang === 'ar' ? 'فتح القائمة' : 'Open menu'}
+        className="lg:hidden w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition-all flex-shrink-0"
+      >
+        <Icons.menu size={18} />
+      </button>
 
       {/* Page title */}
       <div className="flex-1 flex items-center gap-2 min-w-0">
