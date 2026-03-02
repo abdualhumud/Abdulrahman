@@ -90,7 +90,7 @@ const LS_KEY   = 'rems-moyasar-key';
  * Safe to ship in frontend bundle (publishable keys are public by design).
  * Never use a secret key (sk_*) here.
  */
-export const STAGING_MOYASAR_TEST_KEY = 'pk_test_7wgXcuKDuNaqoJVyt9igNr3VZbr5P1eEuKzFDyF5';
+export const STAGING_MOYASAR_TEST_KEY = ''; // empty → DemoCardForm renders in staging (no real API calls)
 
 /** Returns the configured publishable/secret key from localStorage. */
 export function getMoyasarKey(): string {

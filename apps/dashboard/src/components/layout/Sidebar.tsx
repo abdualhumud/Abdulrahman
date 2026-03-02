@@ -5,7 +5,6 @@ import { Icons } from '@/lib/icons';
 import { OWNER } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
 
-const NAV_IDS = ['overview','properties','calendar','bookings','channels','cleaning','inbox','analytics','financials','shipments','settings'] as const;
 const NAV_ICONS = {
   overview:   Icons.overview,
   properties: Icons.properties,
@@ -20,6 +19,31 @@ const NAV_ICONS = {
   settings:   Icons.settings,
 };
 const NAV_BADGES: Record<string, number> = { bookings: 1, inbox: 2, cleaning: 1 };
+
+const NAV_SECTIONS = [
+  {
+    labelEn: 'Main',
+    labelAr: 'الرئيسية',
+    items: ['overview', 'properties'] as const,
+  },
+  {
+    labelEn: 'Operations',
+    labelAr: 'العمليات',
+    items: ['calendar', 'bookings', 'channels', 'cleaning', 'inbox'] as const,
+  },
+  {
+    labelEn: 'Analytics & Finance',
+    labelAr: 'التحليلات والمالية',
+    items: ['analytics', 'financials'] as const,
+  },
+  {
+    labelEn: 'Admin',
+    labelAr: 'الإدارة',
+    items: ['shipments', 'settings'] as const,
+  },
+] as const;
+
+type NavId = 'overview'|'properties'|'calendar'|'bookings'|'channels'|'cleaning'|'inbox'|'analytics'|'financials'|'shipments'|'settings';
 
 const PROPS_QUICK = [
   { name: { en: 'Riyadh Apt.',    ar: 'شقة الرياض'    }, occ: 82, color: '#10B981' },
@@ -98,44 +122,58 @@ export default function Sidebar({ activePage, onNavigate, mobileOpen = false, on
           </button>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
-          {!collapsed && (
-            <p className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.12em] px-2 pb-1.5 pt-1">
-              {t.nav.menu}
-            </p>
-          )}
-          {NAV_IDS.map(id => {
-            const Icon   = NAV_ICONS[id];
-            const label  = t.nav[id];
-            const badge  = NAV_BADGES[id] ?? 0;
-            const active = activePage === id;
-            return (
-              <button
-                key={id}
-                onClick={() => handleNavigate(id)}
-                title={collapsed ? label : undefined}
-                className={`w-full flex items-center gap-3 px-2.5 rounded-xl text-sm font-semibold transition-all
-                  ${active ? 'text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:text-white hover:bg-white/6'}`}
-                style={{
-                  ...(active ? { background: 'linear-gradient(135deg,#2563EB,#4F46E5)' } : {}),
-                  minHeight: '44px', // touch target
-                }}
-              >
-                <Icon size={17} className="flex-shrink-0" />
-                {!collapsed && (
-                  <>
-                    <span className="flex-1 text-start">{label}</span>
-                    {badge > 0 && (
-                      <span className="w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                        {badge}
-                      </span>
-                    )}
-                  </>
-                )}
-              </button>
-            );
-          })}
+        {/* Nav — grouped into sections */}
+        <nav className="flex-1 py-3 px-2 overflow-y-auto overflow-x-hidden">
+          {NAV_SECTIONS.map((section, si) => (
+            <div key={section.labelEn} className={si > 0 ? 'mt-4' : ''}>
+              {/* Section label — hidden when sidebar is collapsed */}
+              {!collapsed && (
+                <div className="flex items-center gap-2 px-2 pb-1.5">
+                  <p className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.12em] leading-none">
+                    {lang === 'ar' ? section.labelAr : section.labelEn}
+                  </p>
+                  {si > 0 && <div className="flex-1 h-px bg-white/5" />}
+                </div>
+              )}
+              {collapsed && si > 0 && (
+                <div className="mx-2 mb-2 h-px bg-white/5" />
+              )}
+              <div className="space-y-0.5">
+                {section.items.map(id => {
+                  const navId  = id as NavId;
+                  const Icon   = NAV_ICONS[navId];
+                  const label  = t.nav[navId];
+                  const badge  = NAV_BADGES[navId] ?? 0;
+                  const active = activePage === navId;
+                  return (
+                    <button
+                      key={navId}
+                      onClick={() => handleNavigate(navId)}
+                      title={collapsed ? label : undefined}
+                      className={`w-full flex items-center gap-3 px-2.5 rounded-xl text-sm font-semibold transition-all
+                        ${active ? 'text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:text-white hover:bg-white/6'}`}
+                      style={{
+                        ...(active ? { background: 'linear-gradient(135deg,#2563EB,#4F46E5)' } : {}),
+                        minHeight: '44px',
+                      }}
+                    >
+                      <Icon size={17} className="flex-shrink-0" />
+                      {!collapsed && (
+                        <>
+                          <span className="flex-1 text-start">{label}</span>
+                          {badge > 0 && (
+                            <span className="w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                              {badge}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         {/* Portfolio quick view */}

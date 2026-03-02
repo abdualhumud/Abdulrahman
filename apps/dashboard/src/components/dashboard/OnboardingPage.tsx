@@ -15,11 +15,42 @@ type OnboardingMode = 'signup' | 'login';
 const PLANS = ['Basic', 'Pro', 'Enterprise'] as const;
 
 const INPUT =
-  'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-slate-300';
+  'w-full border border-slate-200 dark:border-slate-600 rounded-xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-slate-300 dark:placeholder-slate-500';
 
 const REQ_DOT = (
   <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 mb-0.5 ms-0.5" title="Required" />
 );
+
+function DarkModeToggle({ lang }: { lang: string }) {
+  const [dark, setDark] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return document.documentElement.classList.contains('dark');
+  });
+  const toggle = () => {
+    const next = !dark;
+    setDark(next);
+    if (next) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('rems-dark-mode', '1');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.removeItem('rems-dark-mode');
+    }
+  };
+  return (
+    <button
+      onClick={toggle}
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all border border-white/20"
+      aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+    >
+      {dark
+        ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      }
+      {dark ? (lang === 'ar' ? 'فاتح' : 'Light') : (lang === 'ar' ? 'داكن' : 'Dark')}
+    </button>
+  );
+}
 
 interface Props {
   onComplete: (plan?: string, promoCode?: string) => void;
@@ -262,8 +293,9 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
 
       <div className="relative w-full max-w-2xl">
 
-        {/* Language toggle */}
-        <div className="flex justify-end mb-4">
+        {/* Language + dark mode toggles */}
+        <div className="flex items-center justify-between mb-4">
+          <DarkModeToggle lang={lang} />
           <button onClick={toggle}
             className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all border border-white/20">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -313,7 +345,7 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
             LOGIN MODE
         ════════════════════════════════════════════════════════════ */}
         {mode === 'login' && (
-          <div className="bg-white rounded-3xl p-8 shadow-2xl space-y-5">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-2xl space-y-5 border border-transparent dark:border-slate-700">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">
                 {o.loginEmail ?? (lang === 'ar' ? 'البريد الإلكتروني' : 'Email Address')}
@@ -354,7 +386,7 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
             </div>
 
             {loginError && (
-              <p className="text-xs text-red-500 font-semibold bg-red-50 rounded-xl px-3 py-2">
+              <p className="text-xs text-red-500 font-semibold bg-red-50 dark:bg-red-900/20 rounded-xl px-3 py-2">
                 {loginError}
               </p>
             )}
@@ -428,7 +460,7 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
             </div>
 
             {/* ────────────── Card ────────────── */}
-            <div className="bg-white rounded-3xl p-8 shadow-2xl">
+            <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-2xl border border-transparent dark:border-slate-700">
 
               {/* ── Step 1: Business Registration ── */}
               {step === 1 && (
