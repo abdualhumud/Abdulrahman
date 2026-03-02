@@ -202,6 +202,9 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
     setTimeout(() => setShowNewReq(false), 1800);
   }
 
+  // ── Mobile panel state (list ↔ detail) ─────────────────────────────────
+  const [showDetail, setShowDetail] = useState(false);
+
   // ── Filtered providers for assign modal ─────────────────────────────────
   const filteredProviders = CLEANING_PROVIDERS.filter(p =>
     providerFilter === 'ALL' || p.type === providerFilter
@@ -226,14 +229,14 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
     <div className="flex flex-col h-full overflow-hidden bg-slate-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
 
       {/* ── Header ───────────────────────────────────────────────────────── */}
-      <div className="flex-shrink-0 bg-white border-b border-slate-100 px-6 py-4">
+      <div className="flex-shrink-0 bg-white border-b border-slate-100 px-4 sm:px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-lg font-extrabold text-slate-900">{tc.title}</h1>
             <p className="text-xs text-slate-500 mt-0.5">{tc.subtitle}</p>
           </div>
           <button
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20"
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20"
             onClick={() => {
               setNewReqForm({ unit: 'Riyadh — Unit A', priority: 'NORMAL', notes: '', autoDispatch: true, providerId: '' });
               setNewReqSaving(false);
@@ -242,25 +245,26 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
             }}
           >
             <Icons.plus size={14} />
-            {tc.newRequest}
+            <span className="hidden sm:inline">{tc.newRequest}</span>
+            <span className="sm:hidden">{lang === 'ar' ? 'جديد' : 'New'}</span>
           </button>
         </div>
 
-        {/* KPI strip */}
-        <div className="grid grid-cols-4 gap-3 mt-4">
+        {/* KPI strip — 2 cols on mobile, 4 on sm+ */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mt-4">
           {[
             { icon: Icons.cleaning,   label: tc.activeReq,       value: activeCount,    color: 'text-blue-600',    bg: 'bg-blue-50'    },
             { icon: Icons.sparkles,   label: tc.completedToday,  value: completedCount, color: 'text-emerald-600', bg: 'bg-emerald-50' },
             { icon: Icons.clock,      label: tc.avgDuration,     value: '48 min',       color: 'text-purple-600',  bg: 'bg-purple-50'  },
             { icon: Icons.userCheck,  label: tc.providersOnline, value: `${onlineCount}/${CLEANING_PROVIDERS.length}`, color: 'text-amber-600', bg: 'bg-amber-50' },
           ].map(({ icon: Icon, label, value, color, bg }) => (
-            <div key={label} className="flex items-center gap-3 bg-white rounded-xl px-4 py-3 border border-slate-100">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${bg}`}>
-                <Icon size={17} className={color} />
+            <div key={label} className="flex items-center gap-2 sm:gap-3 bg-white rounded-xl px-3 sm:px-4 py-3 border border-slate-100">
+              <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${bg}`}>
+                <Icon size={16} className={color} />
               </div>
-              <div>
-                <p className="text-xs text-slate-500 leading-none mb-1">{label}</p>
-                <p className="text-lg font-extrabold text-slate-900 leading-none">{value}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-slate-500 leading-none mb-1 truncate">{label}</p>
+                <p className="text-base sm:text-lg font-extrabold text-slate-900 leading-none">{value}</p>
               </div>
             </div>
           ))}
@@ -270,8 +274,8 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
       {/* ── Main split layout ─────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0 gap-0">
 
-        {/* ── Left: Request list ──────────────────────────────────────────── */}
-        <div className="w-80 flex-shrink-0 border-e border-slate-200 bg-white flex flex-col overflow-hidden">
+        {/* ── Left: Request list — full width on mobile, fixed sidebar on md+ ── */}
+        <div className={`${showDetail ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-80 md:flex-shrink-0 border-e border-slate-200 bg-white overflow-hidden`}>
           <div className="px-4 py-3 border-b border-slate-100 flex-shrink-0">
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
               {tc.activeReq} ({requests.length})
@@ -282,7 +286,7 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
             {requests.map(req => (
               <button
                 key={req.id}
-                onClick={() => setSelectedId(req.id)}
+                onClick={() => { setSelectedId(req.id); setShowDetail(true); }}
                 className={`w-full text-start px-4 py-3.5 hover:bg-slate-50 transition-all ${selectedId === req.id ? 'bg-blue-50 border-e-2 border-blue-500' : ''}`}
               >
                 <div className="flex items-start justify-between gap-2 mb-1">
@@ -317,13 +321,22 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
 
         {/* ── Right: Detail + chat ────────────────────────────────────────── */}
         {selected && (
-          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <div className={`${!showDetail ? 'hidden md:flex' : 'flex'} flex-1 flex-col min-w-0 overflow-hidden`}>
 
             {/* Detail header */}
-            <div className="flex-shrink-0 bg-white border-b border-slate-100 px-5 py-4">
-              <div className="flex items-start justify-between gap-4">
+            <div className="flex-shrink-0 bg-white border-b border-slate-100 px-4 sm:px-5 py-4">
+              {/* Mobile back button */}
+              <button
+                className="md:hidden flex items-center gap-1.5 text-xs font-bold text-blue-600 mb-3 hover:text-blue-800 transition-colors"
+                onClick={() => setShowDetail(false)}
+              >
+                <Icons.arrowRight size={13} className={lang === 'ar' ? '' : 'rotate-180'} />
+                {lang === 'ar' ? 'القائمة' : 'Back to list'}
+              </button>
+
+              <div className="flex items-start justify-between gap-2 sm:gap-4">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${STATUS_COLOR[selected.status]}`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[selected.status]}`} />
                       {tc[`status_${selected.status}` as keyof typeof tc]}
@@ -342,30 +355,30 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
                   {selected.status === 'PENDING' && (
                     <button
                       onClick={() => setShowAssign(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 text-blue-700 text-xs font-bold hover:bg-blue-50 transition-all"
+                      className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-blue-200 text-blue-700 text-xs font-bold hover:bg-blue-50 transition-all"
                     >
                       <Icons.userCheck size={12} />
-                      {tc.assign}
+                      <span className="hidden sm:inline">{tc.assign}</span>
                     </button>
                   )}
                   {selected.status !== 'INSPECTION_DONE' && (
                     <button
                       onClick={() => advanceStatus(selected.id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all shadow-sm"
+                      className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all shadow-sm"
                     >
                       <Icons.arrowRight size={12} />
-                      {nextActionLabel(selected.status)}
+                      <span className="hidden xs:inline">{nextActionLabel(selected.status)}</span>
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Provider + deposit row */}
-              <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100">
+              {/* Provider + deposit row — wraps on mobile */}
+              <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t border-slate-100">
                 {/* Provider info */}
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center">

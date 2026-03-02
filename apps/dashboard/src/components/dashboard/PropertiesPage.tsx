@@ -324,7 +324,15 @@ function NationalAddressField({
     setStatus('idle');
   };
 
-  /* Nominatim fallback */
+  /**
+   * Saudi National Address short-code detector.
+   * Format: exactly 4 ASCII letters followed by exactly 4 digits (e.g. RQFB7199).
+   * Short codes are only resolvable via the SPL official API — Nominatim has no
+   * knowledge of them and returns unrelated global results (e.g. Muscat, Oman).
+   */
+  const isSaudiShortCode = (s: string) => /^[A-Za-z]{4}\d{4}$/.test(s.trim());
+
+  /* Nominatim fallback — strictly Saudi Arabia only (countrycodes=sa) */
   const nominatimFallback = useCallback(async (searchText: string) => {
     const lv = searchText.toLowerCase();
     for (const [city, districts] of Object.entries(SAUDI_CITIES)) {
@@ -343,21 +351,31 @@ function NationalAddressField({
         return;
       }
     }
-    // Try Nominatim geocoding
+    // Try Nominatim geocoding — countrycodes=sa enforces Saudi Arabia only
+    // (prevents bare numbers like "7199" from resolving to Muscat, Oman)
     try {
       const res  = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchText + ', Saudi Arabia')}&format=json&limit=1&addressdetails=1`,
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchText)}&format=json&limit=3&addressdetails=1&countrycodes=sa`,
         { headers: { 'Accept-Language': 'en' } }
       );
       const data = await res.json();
-      if (data[0]) {
-        const addr = data[0].address ?? {};
+      // Accept only results that Nominatim places inside Saudi Arabia
+      const saResult = (data as { lat: string; lon: string; address?: Record<string, string> }[])
+        .find(r => {
+          const addr = r.address ?? {};
+          return (
+            addr.country_code === 'sa' ||
+            (addr.country ?? '').toLowerCase().includes('saudi')
+          );
+        });
+      if (saResult) {
+        const addr = saResult.address ?? {};
         onAutoFill({
-          city:     addr.city || addr.state || 'Riyadh',
+          city:     addr.city || addr.town || addr.state || 'Riyadh',
           district: addr.suburb || addr.neighbourhood || addr.quarter || '',
           street:   addr.road || '',
-          lat:      parseFloat(data[0].lat),
-          lng:      parseFloat(data[0].lon),
+          lat:      parseFloat(saResult.lat),
+          lng:      parseFloat(saResult.lon),
           verified: false,
         });
         setStatus('fallback');
@@ -377,6 +395,22 @@ function NationalAddressField({
     setStatus('loading');
     setErrorMsg('');
     setVerMeta(null);
+
+    /* ── 0. Short-code guard — block Nominatim for SNA codes ── */
+    if (mode === 'freetext' && isSaudiShortCode(query)) {
+      if (!hasKey) {
+        // Nominatim cannot resolve Saudi National Address short codes.
+        // Prompt the user to connect an SPL key instead.
+        setStatus('error');
+        setErrorMsg(
+          isAr
+            ? 'الرمز القصير (مثل RQFB7199) يتطلب مفتاح SPL API للاستعلام عن العنوان الوطني الرسمي — اربط مفتاحك أعلاه'
+            : 'Short code (e.g. RQFB7199) requires an SPL API key to query the official National Address registry — connect your key above'
+        );
+        return;
+      }
+      // Has key → fall through to SPL lookup below
+    }
 
     /* ── 1. Try SPL API (only when key is present) ── */
     if (hasKey) {
@@ -405,19 +439,27 @@ function NationalAddressField({
         }
         if (err instanceof SplNotFoundError) {
           setStatus('error');
-          setErrorMsg(isAr ? 'العنوان غير موجود في قاعدة العنوان الوطني' : 'Address not found in the National Address database');
+          // If user searched a short code specifically, give a targeted error
+          const detail = mode === 'freetext' && isSaudiShortCode(query)
+            ? (isAr ? `الرمز القصير "${query.toUpperCase()}" غير موجود في سجل العنوان الوطني` : `Short code "${query.toUpperCase()}" was not found in the National Address registry`)
+            : (isAr ? 'العنوان غير موجود في قاعدة العنوان الوطني' : 'Address not found in the National Address database');
+          setErrorMsg(detail);
           return;
         }
-        // Network / CORS error → fall through to Nominatim
+        // Network / CORS error → fall through to Nominatim (only if not a short code)
+        if (mode === 'freetext' && isSaudiShortCode(query)) {
+          setStatus('error');
+          setErrorMsg(isAr ? 'تعذّر الاتصال بخادم SPL — تحقق من اتصالك بالإنترنت' : 'Could not reach SPL server — check your internet connection');
+          return;
+        }
         if (process.env.NODE_ENV !== 'production') console.warn('SPL unreachable (likely CORS), falling back to Nominatim:', (err as Error).message);
       }
     }
 
-    /* ── 2. Fallback: static city match + Nominatim ── */
+    /* ── 2. Fallback: static city match + Nominatim (Saudi Arabia only) ── */
     const searchText = mode === 'freetext' ? query : `${buildingNo} ${zipCode}`;
     await nominatimFallback(searchText);
     if (hasKey) {
-      // Amend the status message to mention the fallback reason
       setStatus('fallback');
     }
   }, [mode, query, buildingNo, addlNo, zipCode, apiKey, hasKey, isAr, onAutoFill, nominatimFallback]);

@@ -138,16 +138,16 @@ export default function CalendarPage({ onNavigate }: CalendarPageProps) {
     <div className="flex h-full overflow-hidden" style={{ direction: lang === 'ar' ? 'rtl' : 'ltr' }}>
 
       {/* ── Main calendar area ──────────────────────────────────────── */}
-      <div className="flex-1 min-w-0 overflow-auto p-6 space-y-5">
-        <div className="flex items-start justify-between">
+      <div className="flex-1 min-w-0 overflow-auto p-3 sm:p-6 space-y-4 sm:space-y-5">
+        <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">{t.calendar.title}</h1>
-            <p className="text-sm text-slate-400 mt-1">{t.calendar.subtitle}</p>
+            <h1 className="text-lg sm:text-2xl font-extrabold text-slate-900 tracking-tight">{t.calendar.title}</h1>
+            <p className="text-xs sm:text-sm text-slate-400 mt-0.5">{t.calendar.subtitle}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button disabled className="btn-ghost py-2 px-3 text-xs opacity-40 cursor-not-allowed" title={lang === 'ar' ? 'البيانات ثابتة لهذا الشهر' : 'Demo data fixed to this month'}><Icons.chevronLeft size={14} /></button>
-            <div className="bg-blue-600 text-white text-sm font-bold px-4 py-2 rounded-xl">{lang === 'ar' ? 'فبراير 2026' : 'Feb 2026'}</div>
-            <button disabled className="btn-ghost py-2 px-3 text-xs opacity-40 cursor-not-allowed" title={lang === 'ar' ? 'البيانات ثابتة لهذا الشهر' : 'Demo data fixed to this month'}><Icons.chevronRight size={14} /></button>
+            <button disabled className="btn-ghost py-1.5 px-2.5 text-xs opacity-40 cursor-not-allowed" title={lang === 'ar' ? 'البيانات ثابتة لهذا الشهر' : 'Demo data fixed to this month'}><Icons.chevronLeft size={14} /></button>
+            <div className="bg-blue-600 text-white text-xs sm:text-sm font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl">{lang === 'ar' ? 'فبراير 2026' : 'Feb 2026'}</div>
+            <button disabled className="btn-ghost py-1.5 px-2.5 text-xs opacity-40 cursor-not-allowed" title={lang === 'ar' ? 'البيانات ثابتة لهذا الشهر' : 'Demo data fixed to this month'}><Icons.chevronRight size={14} /></button>
           </div>
         </div>
 
@@ -256,9 +256,14 @@ export default function CalendarPage({ onNavigate }: CalendarPageProps) {
         </div>
       </div>
 
-      {/* ── Booking Detail Side Panel ──────────────────────────────── */}
+      {/* ── Mobile backdrop for side panel ── */}
+      {selected && (
+        <div className="fixed inset-0 z-30 bg-black/30 md:hidden" onClick={() => setSelected(null)} />
+      )}
+
+      {/* ── Booking Detail Side Panel — overlay on mobile, sidebar on md+ ── */}
       {selected && chStyle && (
-        <div className="w-72 flex-shrink-0 bg-white border-s border-slate-200 flex flex-col overflow-hidden shadow-lg">
+        <div className="fixed inset-y-0 end-0 z-40 w-full max-w-sm md:static md:z-auto md:w-72 md:max-w-none md:flex-shrink-0 bg-white md:border-s border-slate-200 flex flex-col overflow-hidden shadow-xl md:shadow-none">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between"
             style={{ background: chStyle.bg }}>
             <div className="flex items-center gap-2">
@@ -428,7 +433,7 @@ export default function CalendarPage({ onNavigate }: CalendarPageProps) {
                 <input className="input" value={bookingForm.guestName}
                   onChange={e => setBookingForm(p => ({ ...p, guestName: e.target.value }))} />
               </Field>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label={t.calendar.guestId}>
                   <input className="input" value={bookingForm.guestId}
                     onChange={e => setBookingForm(p => ({ ...p, guestId: e.target.value }))} />
@@ -445,7 +450,7 @@ export default function CalendarPage({ onNavigate }: CalendarPageProps) {
                   {UNITS.map(u => <option key={u}>{u}</option>)}
                 </select>
               </Field>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label={t.calendar.checkIn}>
                   <input className="input" type="date" value={bookingForm.checkIn}
                     onChange={e => setBookingForm(p => ({ ...p, checkIn: e.target.value }))}
@@ -457,7 +462,7 @@ export default function CalendarPage({ onNavigate }: CalendarPageProps) {
                     style={{ direction: 'ltr' }} />
                 </Field>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label={t.calendar.totalPrice}>
                   <input className="input" type="number" value={bookingForm.price}
                     onChange={e => setBookingForm(p => ({ ...p, price: e.target.value }))}
@@ -515,7 +520,7 @@ export default function CalendarPage({ onNavigate }: CalendarPageProps) {
                   {UNITS.map(u => <option key={u}>{u}</option>)}
                 </select>
               </Field>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label={t.calendar.maintFrom}>
                   <input className="input" type="date" value={maintForm.from}
                     onChange={e => setMaintForm(p => ({ ...p, from: e.target.value }))}
@@ -579,7 +584,7 @@ export default function CalendarPage({ onNavigate }: CalendarPageProps) {
                   {UNITS.map(u => <option key={u}>{u}</option>)}
                 </select>
               </Field>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label={t.calendar.openFrom}>
                   <input className="input" type="date" value={openForm.from}
                     onChange={e => setOpenForm(p => ({ ...p, from: e.target.value }))}
