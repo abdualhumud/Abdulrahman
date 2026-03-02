@@ -1293,6 +1293,457 @@ suite('Reservation Engine — <500ms Ultimate Overlap Protection', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// ──  SECTION 10: Agoda Service  ──────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Agoda service reimplemented in plain JS ──────────────────────────────────
+
+const AGODA_BASE_URL = 'https://api.agoda.com/v2';
+
+function buildAgodaBlockBody(req) {
+  return {
+    updates: [
+      {
+        dateRange: { startDate: req.dateFrom, endDate: req.dateTo },
+        allotment: req.available ? (req.allotment ?? 1) : 0,
+        stopSell:  !req.available,
+      },
+    ],
+  };
+}
+
+function buildAgodaRateBody(req) {
+  const entry = {
+    dateRange: { startDate: req.dateFrom, endDate: req.dateTo },
+    rate: { baseRate: req.nightlyRate, currency: 'SAR' },
+  };
+  if (req.minStay !== undefined) entry.minimumStay = req.minStay;
+  if (req.cleaningFee !== undefined) {
+    entry.surcharges = [{ type: 'CLEANING_FEE', amount: req.cleaningFee, currency: 'SAR' }];
+  }
+  return { updates: [entry] };
+}
+
+async function agodaPushBlock(req, fetchFn) {
+  const url  = `${AGODA_BASE_URL}/properties/${req.propertyId}/rooms/${req.roomTypeId}/calendar`;
+  const body = buildAgodaBlockBody(req);
+  const res  = await fetchFn(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `apikey ${req.apiKey}` },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401 || res.status === 403) throw new Error('AgodaAuthError');
+  if (!res.ok) throw new Error(`Agoda error ${res.status}`);
+  return body;
+}
+
+async function agodaPushRates(req, fetchFn) {
+  const url  = `${AGODA_BASE_URL}/properties/${req.propertyId}/rooms/${req.roomTypeId}/rates/${req.ratePlanId}`;
+  const body = buildAgodaRateBody(req);
+  const res  = await fetchFn(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `apikey ${req.apiKey}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Agoda rate error ${res.status}`);
+  return body;
+}
+
+function generateAgodaICalFeed(propertyId, blockedDates) {
+  const now = new Date().toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z';
+  const events = blockedDates.map((b, idx) => {
+    const dtStart = b.dateFrom.replace(/-/g, '');
+    const dtEnd   = b.dateTo.replace(/-/g, '');
+    return [
+      'BEGIN:VEVENT',
+      `UID:agoda-block-${propertyId}-${idx}-${Date.now()}@rems.agoda.api`,
+      `DTSTAMP:${now}`,
+      `DTSTART;VALUE=DATE:${dtStart}`,
+      `DTEND;VALUE=DATE:${dtEnd}`,
+      `SUMMARY:${b.label ?? 'Not available'}`,
+      'STATUS:CONFIRMED',
+      'END:VEVENT',
+    ].join('\r\n');
+  });
+  return ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//REMS//Agoda iCal Export//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH',...events,'END:VCALENDAR'].join('\r\n');
+}
+
+suite('10. Agoda Service', () => {
+  test('pushAgodaBlock sends PATCH with correct URL and headers', async () => {
+    let capturedUrl, capturedMethod, capturedHeaders, capturedBody;
+    const mockFetch = async (url, opts) => {
+      capturedUrl     = url;
+      capturedMethod  = opts.method;
+      capturedHeaders = opts.headers;
+      capturedBody    = JSON.parse(opts.body);
+      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => ({}) };
+    };
+    await agodaPushBlock({
+      apiKey: 'agoda-key-123', propertyId: 'AGD-5678', roomTypeId: 'u1',
+      dateFrom: '2026-05-01', dateTo: '2026-05-05', available: false, allotment: 0,
+    }, mockFetch);
+    assert.ok(capturedUrl.includes('/properties/AGD-5678/rooms/u1/calendar'), 'URL must include property + room path');
+    assert.equal(capturedMethod, 'PATCH', 'must use PATCH method');
+    assert.equal(capturedHeaders['Authorization'], 'apikey agoda-key-123', 'must send apikey header');
+  });
+
+  test('pushAgodaBlock body has allotment=0 and stopSell=true when blocking', async () => {
+    let capturedBody;
+    const mockFetch = async (url, opts) => {
+      capturedBody = JSON.parse(opts.body);
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({}) };
+    };
+    await agodaPushBlock({
+      apiKey: 'k', propertyId: 'p1', roomTypeId: 'r1',
+      dateFrom: '2026-06-01', dateTo: '2026-06-05', available: false,
+    }, mockFetch);
+    const update = capturedBody.updates[0];
+    assert.equal(update.allotment, 0,    'allotment must be 0 for block');
+    assert.equal(update.stopSell,  true, 'stopSell must be true for block');
+    assert.equal(update.dateRange.startDate, '2026-06-01', 'start date must match');
+    assert.equal(update.dateRange.endDate,   '2026-06-05', 'end date must match');
+  });
+
+  test('pushAgodaBlock body has allotment=1 and stopSell=false when opening', async () => {
+    let capturedBody;
+    const mockFetch = async (url, opts) => {
+      capturedBody = JSON.parse(opts.body);
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({}) };
+    };
+    await agodaPushBlock({
+      apiKey: 'k', propertyId: 'p1', roomTypeId: 'r1',
+      dateFrom: '2026-06-10', dateTo: '2026-06-15', available: true,
+    }, mockFetch);
+    const update = capturedBody.updates[0];
+    assert.equal(update.allotment, 1,     'allotment must be 1 when available=true');
+    assert.equal(update.stopSell,  false, 'stopSell must be false when available=true');
+  });
+
+  test('pushAgodaBlock throws AgodaAuthError on 401', async () => {
+    const mockFetch = async () => ({ ok: false, status: 401, headers: { get: () => null } });
+    await assert.rejects(
+      () => agodaPushBlock({ apiKey: 'bad', propertyId: 'p', roomTypeId: 'r', dateFrom: '2026-01-01', dateTo: '2026-01-05', available: false }, mockFetch),
+      /AgodaAuthError/,
+      'must throw AgodaAuthError on 401',
+    );
+  });
+
+  test('pushAgodaRates includes cleaningFee as surcharge when provided', async () => {
+    let capturedBody;
+    const mockFetch = async (url, opts) => {
+      capturedBody = JSON.parse(opts.body);
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({}) };
+    };
+    await agodaPushRates({
+      apiKey: 'k', propertyId: 'p', roomTypeId: 'r', ratePlanId: 'BAR',
+      dateFrom: '2026-03-01', dateTo: '2026-03-31',
+      nightlyRate: 1248, cleaningFee: 150, minStay: 2,
+    }, mockFetch);
+    const entry = capturedBody.updates[0];
+    assert.equal(entry.rate.baseRate, 1248, 'baseRate must equal nightlyRate');
+    assert.equal(entry.minimumStay,   2,    'minimumStay must be set');
+    assert.ok(Array.isArray(entry.surcharges), 'surcharges must be an array');
+    assert.equal(entry.surcharges[0].type,   'CLEANING_FEE', 'surcharge type must be CLEANING_FEE');
+    assert.equal(entry.surcharges[0].amount, 150,            'surcharge amount must match');
+  });
+
+  test('pushAgodaRates omits cleaningFee and minStay when not provided', async () => {
+    let capturedBody;
+    const mockFetch = async (url, opts) => {
+      capturedBody = JSON.parse(opts.body);
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({}) };
+    };
+    await agodaPushRates({
+      apiKey: 'k', propertyId: 'p', roomTypeId: 'r', ratePlanId: 'BAR',
+      dateFrom: '2026-04-01', dateTo: '2026-04-30', nightlyRate: 900,
+    }, mockFetch);
+    const entry = capturedBody.updates[0];
+    assert.equal(entry.surcharges, undefined, 'surcharges must be absent when cleaningFee not provided');
+    assert.equal(entry.minimumStay, undefined, 'minimumStay must be absent when minStay not provided');
+  });
+
+  test('generateAgodaICalFeed produces valid RFC 5545 structure', () => {
+    const feed = generateAgodaICalFeed('AGD-5678', [
+      { dateFrom: '2026-05-01', dateTo: '2026-05-05', label: 'Blocked' },
+    ]);
+    assert.ok(feed.startsWith('BEGIN:VCALENDAR'), 'must start with VCALENDAR');
+    assert.ok(feed.includes('END:VCALENDAR'),    'must end with VCALENDAR');
+    assert.ok(feed.includes('BEGIN:VEVENT'),      'must contain VEVENT');
+    assert.ok(feed.includes('DTSTART;VALUE=DATE:20260501'), 'must have correct start date (no dashes)');
+    assert.ok(feed.includes('DTEND;VALUE=DATE:20260505'),   'must have correct end date (no dashes)');
+    assert.ok(feed.includes('SUMMARY:Blocked'),             'must include summary label');
+  });
+
+  test('Agoda rates are in SAR (not cents)', async () => {
+    let capturedBody;
+    const mockFetch = async (url, opts) => {
+      capturedBody = JSON.parse(opts.body);
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({}) };
+    };
+    await agodaPushRates({
+      apiKey: 'k', propertyId: 'p', roomTypeId: 'r', ratePlanId: 'BAR',
+      dateFrom: '2026-05-01', dateTo: '2026-05-31', nightlyRate: 1750,
+    }, mockFetch);
+    const entry = capturedBody.updates[0];
+    // Agoda uses SAR directly — NOT cents. 1750 SAR should appear as 1750, not 175000.
+    assert.equal(entry.rate.baseRate, 1750, 'Agoda rate must be in SAR, not cents');
+    assert.equal(entry.rate.currency, 'SAR', 'currency must be SAR');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// ──  SECTION 11: Expedia EQC Service  ────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Expedia EQC service reimplemented in plain JS ────────────────────────────
+
+const EQC_BASE_URL  = 'https://services.expediapartnercentral.com/eqc';
+const EQC_NAMESPACE = 'http://www.expedia.com/EQC/AR/2011/06';
+
+function makeBasicAuthHeader(username, password) {
+  return `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
+}
+
+function buildEqcAvailXml(req) {
+  const status = req.available ? 'Open'  : 'Close';
+  const count  = req.available ? (req.count ?? 1) : 0;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<AvailRateUpdateRQ xmlns="${EQC_NAMESPACE}">
+  <Authentication username="${req.credentials.username}" password="${req.credentials.password}"/>
+  <Hotel id="${req.credentials.hotelId}"/>
+  <AvailRateUpdate>
+    <DateRange from="${req.dateFrom}" to="${req.dateTo}"/>
+    <RoomType id="${req.roomTypeId}" closed="${req.available ? 'false' : 'true'}">
+      <Inventory totalInventoryAvailable="${count}"/>
+      <RatePlan id="${req.ratePlanId}" status="${status}">
+        <Availability>
+          <Status>
+            <StatusApplicationControl Mon="true" Tue="true" Wed="true"
+              Thu="true" Fri="true" Sat="true" Sun="true"/>
+            <OpenStatus>${status}</OpenStatus>
+          </Status>
+        </Availability>
+      </RatePlan>
+    </RoomType>
+  </AvailRateUpdate>
+</AvailRateUpdateRQ>`;
+}
+
+function buildEqcRateXml(req) {
+  const minStayNode = req.minStay !== undefined ? `\n        <MinLOS value="${req.minStay}"/>` : '';
+  const maxStayNode = req.maxStay !== undefined ? `\n        <MaxLOS value="${req.maxStay}"/>` : '';
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<AvailRateUpdateRQ xmlns="${EQC_NAMESPACE}">
+  <Authentication username="${req.credentials.username}" password="${req.credentials.password}"/>
+  <Hotel id="${req.credentials.hotelId}"/>
+  <AvailRateUpdate>
+    <DateRange from="${req.dateFrom}" to="${req.dateTo}"/>
+    <RoomType id="${req.roomTypeId}">
+      <RatePlan id="${req.ratePlanId}" status="Open">
+        <Rate currency="SAR">
+          <BaseRate amount="${req.nightlyRate.toFixed(2)}"/>${minStayNode}${maxStayNode}
+        </Rate>
+      </RatePlan>
+    </RoomType>
+  </AvailRateUpdate>
+</AvailRateUpdateRQ>`;
+}
+
+function buildEqcBrXml(creds, since) {
+  const sinceNode = since ? `\n  <BookingDateFilter start="${since}" end="${new Date().toISOString()}"/>` : '';
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<BookingRetrievalRQ xmlns="http://www.expedia.com/EQC/BR/2014/01">
+  <Authentication username="${creds.username}" password="${creds.password}"/>
+  <Hotel id="${creds.hotelId}"/>${sinceNode}
+  <ReservationStatusFilter status="pending,confirmed,modified"/>
+</BookingRetrievalRQ>`;
+}
+
+function buildEqcBcXml(creds, expediaBookingId, internalId) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<BookingConfirmRQ xmlns="http://www.expedia.com/EQC/BC/2014/01">
+  <Authentication username="${creds.username}" password="${creds.password}"/>
+  <Hotel id="${creds.hotelId}"/>
+  <BookingConfirmNumbers>
+    <BookingConfirmNumber bookingId="${expediaBookingId}"
+      bookingType="Book"
+      confirmNumber="${internalId}"
+      confirmTime="${new Date().toISOString()}"/>
+  </BookingConfirmNumbers>
+</BookingConfirmRQ>`;
+}
+
+async function eqcPost(endpoint, creds, xmlBody, fetchFn) {
+  const url = `${EQC_BASE_URL}/${endpoint}`;
+  const res = await fetchFn(url, {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'text/xml; charset=UTF-8',
+      'Authorization': makeBasicAuthHeader(creds.username, creds.password),
+    },
+    body: xmlBody,
+  });
+  if (res.status === 401 || res.status === 403) throw new Error('ExpediaAuthError');
+  if (!res.ok) throw new Error(`EQC error ${res.status}`);
+  return res.text ? res.text() : '';
+}
+
+const EXP_CREDS = { username: 'rems_partner', password: 'secret', hotelId: '12345678' };
+
+suite('11. Expedia EQC Service', () => {
+  test('buildEqcAvailXml generates Close XML when available=false', () => {
+    const xml = buildEqcAvailXml({
+      credentials: EXP_CREDS, roomTypeId: 'u1', ratePlanId: 'BAR',
+      dateFrom: '2026-05-01', dateTo: '2026-05-05', available: false,
+    });
+    assert.ok(xml.includes('<OpenStatus>Close</OpenStatus>'),              'must have Close status');
+    assert.ok(xml.includes('closed="true"'),                               'RoomType must be closed=true');
+    assert.ok(xml.includes('totalInventoryAvailable="0"'),                 'inventory must be 0');
+    assert.ok(xml.includes('status="Close"'),                              'RatePlan must have Close status');
+    assert.ok(xml.includes(`from="2026-05-01" to="2026-05-05"`),          'date range must match');
+  });
+
+  test('buildEqcAvailXml generates Open XML when available=true', () => {
+    const xml = buildEqcAvailXml({
+      credentials: EXP_CREDS, roomTypeId: 'u1', ratePlanId: 'BAR',
+      dateFrom: '2026-05-10', dateTo: '2026-05-15', available: true, count: 1,
+    });
+    assert.ok(xml.includes('<OpenStatus>Open</OpenStatus>'),  'must have Open status');
+    assert.ok(xml.includes('closed="false"'),                 'RoomType must be closed=false');
+    assert.ok(xml.includes('totalInventoryAvailable="1"'),    'inventory must be 1');
+  });
+
+  test('buildEqcRateXml includes BaseRate with SAR currency', () => {
+    const xml = buildEqcRateXml({
+      credentials: EXP_CREDS, roomTypeId: 'u1', ratePlanId: 'BAR',
+      dateFrom: '2026-03-01', dateTo: '2026-03-31', nightlyRate: 1248,
+    });
+    assert.ok(xml.includes('<BaseRate amount="1248.00"/>'), 'BaseRate must be formatted to 2dp');
+    assert.ok(xml.includes('currency="SAR"'),               'currency must be SAR');
+    assert.ok(!xml.includes('<MinLOS'),                     'MinLOS must be absent when minStay not set');
+    assert.ok(!xml.includes('<MaxLOS'),                     'MaxLOS must be absent when maxStay not set');
+  });
+
+  test('buildEqcRateXml includes MinLOS and MaxLOS when provided', () => {
+    const xml = buildEqcRateXml({
+      credentials: EXP_CREDS, roomTypeId: 'u1', ratePlanId: 'BAR',
+      dateFrom: '2026-04-01', dateTo: '2026-04-30', nightlyRate: 950,
+      minStay: 2, maxStay: 14,
+    });
+    assert.ok(xml.includes('<MinLOS value="2"/>'),  'MinLOS must appear when minStay provided');
+    assert.ok(xml.includes('<MaxLOS value="14"/>'), 'MaxLOS must appear when maxStay provided');
+  });
+
+  test('buildEqcBrXml produces BookingRetrievalRQ with hotel ID', () => {
+    const xml = buildEqcBrXml(EXP_CREDS, '2026-03-01T00:00:00.000Z');
+    assert.ok(xml.includes('<BookingRetrievalRQ'),                   'must have BookingRetrievalRQ root');
+    assert.ok(xml.includes(`<Hotel id="${EXP_CREDS.hotelId}"/>`),   'must include hotel ID');
+    assert.ok(xml.includes('status="pending,confirmed,modified"'),   'must filter by relevant statuses');
+    assert.ok(xml.includes('BookingDateFilter'),                     'must include date filter when since provided');
+  });
+
+  test('buildEqcBcXml produces BookingConfirmRQ with booking ref', () => {
+    const xml = buildEqcBcXml(EXP_CREDS, 'EXP-2026-ABCXYZ', 'BK-REMS-001');
+    assert.ok(xml.includes('<BookingConfirmRQ'),           'must have BookingConfirmRQ root');
+    assert.ok(xml.includes('bookingId="EXP-2026-ABCXYZ"'),'must include Expedia booking ID');
+    assert.ok(xml.includes('confirmNumber="BK-REMS-001"'),'must include internal confirm number');
+    assert.ok(xml.includes('bookingType="Book"'),          'must have bookingType=Book');
+  });
+
+  test('eqcPost sends XML body with Basic Auth header', async () => {
+    let capturedUrl, capturedMethod, capturedHeaders, capturedBody;
+    const mockFetch = async (url, opts) => {
+      capturedUrl     = url;
+      capturedMethod  = opts.method;
+      capturedHeaders = opts.headers;
+      capturedBody    = opts.body;
+      return { ok: true, status: 200, text: async () => '<AvailRateUpdateRS/>' };
+    };
+    const xml = buildEqcAvailXml({
+      credentials: EXP_CREDS, roomTypeId: 'u1', ratePlanId: 'BAR',
+      dateFrom: '2026-05-01', dateTo: '2026-05-05', available: false,
+    });
+    await eqcPost('ar', EXP_CREDS, xml, mockFetch);
+    assert.ok(capturedUrl.endsWith('/eqc/ar'),                     'URL must end with /eqc/ar');
+    assert.equal(capturedMethod, 'POST',                            'must use POST');
+    assert.ok(capturedHeaders['Authorization'].startsWith('Basic '),'must use Basic Auth');
+    assert.ok(capturedBody.includes('<AvailRateUpdateRQ'),          'body must contain AR XML root');
+  });
+
+  test('eqcPost throws ExpediaAuthError on 401', async () => {
+    const mockFetch = async () => ({ ok: false, status: 401, text: async () => '' });
+    await assert.rejects(
+      () => eqcPost('ar', EXP_CREDS, '<xml/>', mockFetch),
+      /ExpediaAuthError/,
+      'must throw ExpediaAuthError on 401',
+    );
+  });
+
+  test('Expedia EQC rates are in SAR (not cents)', () => {
+    const xml = buildEqcRateXml({
+      credentials: EXP_CREDS, roomTypeId: 'u1', ratePlanId: 'BAR',
+      dateFrom: '2026-06-01', dateTo: '2026-06-30', nightlyRate: 1750,
+    });
+    // EQC AR expects the face-value SAR amount (1750), not 175000
+    assert.ok(xml.includes('amount="1750.00"'), 'EQC rate must be SAR face value, not cents');
+    assert.ok(!xml.includes('amount="175000"'), 'EQC must NOT send amount in cents');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// ──  SECTION 12: 5-Channel Overlap Race (Booking.com+Airbnb+Gathern+Agoda+Expedia)  ──
+// ════════════════════════════════════════════════════════════════════════════
+
+suite('12. 5-Channel Concurrent Overlap Race', () => {
+  test('exactly 1 winner in 5-way concurrent race across all channels', async () => {
+    engClearState();
+    const channels = ['Booking.com', 'Airbnb', 'Gathern', 'Agoda', 'Expedia'];
+    const results  = await Promise.all(
+      channels.map(ch =>
+        engProcess({ unitId: 'u-race', channel: ch, checkIn: '2026-09-01', checkOut: '2026-09-05', guestName: `${ch} Guest`, amount: 5000 })
+      )
+    );
+    const confirmed = results.filter(r => r.status === 'CONFIRMED');
+    const rejected  = results.filter(r => r.status !== 'CONFIRMED');
+    assert.equal(confirmed.length, 1, 'exactly 1 booking must be confirmed across all 5 channels');
+    assert.equal(rejected.length,  4, 'remaining 4 bookings must be rejected');
+    assert.ok(rejected.every(r => r.status === 'REJECTED_OVERLAP' || r.status === 'REJECTED_LOCK_TIMEOUT'),
+      'losers must be REJECTED_OVERLAP or REJECTED_LOCK_TIMEOUT');
+  });
+
+  test('Agoda and Expedia are accepted as valid ChannelId values', async () => {
+    engClearState();
+    const r1 = await engProcess({ unitId: 'u-ch-test', channel: 'Agoda',   checkIn: '2026-10-01', checkOut: '2026-10-05', guestName: 'Agoda G', amount: 4000 });
+    const r2 = await engProcess({ unitId: 'u-ch-test', channel: 'Expedia', checkIn: '2026-10-06', checkOut: '2026-10-10', guestName: 'Expedia G', amount: 4200 });
+    assert.equal(r1.status, 'CONFIRMED', 'Agoda booking on empty unit must confirm');
+    assert.equal(r2.status, 'CONFIRMED', 'Expedia back-to-back booking must confirm (no overlap)');
+  });
+
+  test('Agoda booking blocks Expedia for same dates', async () => {
+    engClearState();
+    const r1 = await engProcess({ unitId: 'u-block', channel: 'Agoda',   checkIn: '2026-11-01', checkOut: '2026-11-05', guestName: 'Agoda first', amount: 5000 });
+    const r2 = await engProcess({ unitId: 'u-block', channel: 'Expedia', checkIn: '2026-11-02', checkOut: '2026-11-06', guestName: 'Expedia late', amount: 4800 });
+    assert.equal(r1.status, 'CONFIRMED',       'Agoda booking must confirm');
+    assert.equal(r2.status, 'REJECTED_OVERLAP','Expedia overlap must be rejected');
+  });
+
+  test('all 5 channels can book non-overlapping dates independently', async () => {
+    engClearState();
+    const channels = ['Booking.com', 'Airbnb', 'Gathern', 'Agoda', 'Expedia'];
+    const results  = await Promise.all(
+      channels.map((ch, i) => {
+        const d = i * 7;  // each booking 1 week apart
+        const ci = `2026-12-0${1 + d}`.slice(0, 10);
+        const co = `2026-12-0${5 + d}`.slice(0, 10);
+        return engProcess({ unitId: 'u-independent', channel: ch, checkIn: `2026-12-${String(1 + i*7).padStart(2,'0')}`, checkOut: `2026-12-${String(5 + i*7).padStart(2,'0')}`, guestName: `${ch} G`, amount: 3000 });
+      })
+    );
+    const allConfirmed = results.every(r => r.status === 'CONFIRMED');
+    assert.ok(allConfirmed, 'all 5 non-overlapping bookings across 5 channels must confirm');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // ──  Run  ────────────────────────────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════════════════════
 

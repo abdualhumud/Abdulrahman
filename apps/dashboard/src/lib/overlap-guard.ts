@@ -3,7 +3,7 @@
  * =================================================================
  * Prevents double-bookings (overlaps) when simultaneous reservation
  * requests arrive from multiple OTA channels (Booking.com, Airbnb,
- * Gathern, Direct).
+ * Gathern, Agoda, Expedia, Direct).
  *
  * Architecture
  * ────────────
@@ -25,7 +25,9 @@
  *   │   [5] broadcastBlock() to all other channels         │
  *   │        ├── Booking.com → OTA_HotelAvailNotifRQ       │
  *   │        ├── Gathern     → PUT /units/:id/availability  │
- *   │        └── Airbnb      → iCal feed regeneration       │
+ *   │        ├── Airbnb      → iCal feed regeneration       │
+ *   │        ├── Agoda       → PATCH /calendar (REST/JSON)  │
+ *   │        └── Expedia     → POST /eqc/ar (EQC XML)       │
  *   └─────────────────────────────────────────────────────┘
  *
  * Production notes
@@ -40,10 +42,13 @@
 import type { BookingComCredentials } from './booking-com-service';
 import { pushAvailabilityBlock }      from './booking-com-service';
 import { pushGathernBlock }           from './gathern-service';
+import { pushAgodaBlock }             from './agoda-service';
+import { pushExpediaBlock }           from './expedia-service';
+import type { ExpediaCredentials }    from './expedia-service';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type ChannelId = 'Booking.com' | 'Airbnb' | 'Gathern' | 'Direct';
+export type ChannelId = 'Booking.com' | 'Airbnb' | 'Gathern' | 'Agoda' | 'Expedia' | 'Direct';
 
 export interface DateRange {
   checkIn:  string;   // YYYY-MM-DD (inclusive)
@@ -78,8 +83,11 @@ export type BookingResult =
   | { success: false; reason: 'LOCK_TIMEOUT' | 'DATES_UNAVAILABLE' | 'LOCK_EXPIRED' };
 
 export interface SyncCredentials {
-  bookingCom?: BookingComCredentials;
+  bookingCom?:   BookingComCredentials;
   gathernApiKey?: string;
+  agodaApiKey?:  string;
+  agodaPropertyId?: string;
+  expedia?:      ExpediaCredentials;
 }
 
 // ── In-Memory Store ────────────────────────────────────────────────────────
@@ -276,6 +284,8 @@ export async function processBookingRequest(
  *   Gathern     → PUT /units/:id/availability  (available: false)
  *   Airbnb      → iCal feed regeneration (no direct block API; the updated
  *                 iCal export is picked up by Airbnb on next poll, ~15 min)
+ *   Agoda       → PATCH /properties/:id/rooms/:id/calendar (REST/JSON, allotment=0)
+ *   Expedia     → POST /eqc/ar (EQC XML, status=Close, inventory=0)
  */
 async function broadcastAvailabilityBlock(
   booking: ConfirmedBooking,
@@ -304,6 +314,34 @@ async function broadcastAvailabilityBlock(
         dateFrom:  booking.checkIn,
         dateTo:    booking.checkOut,
         available: false,
+      }),
+    );
+  }
+
+  if (booking.channel !== 'Agoda' && creds?.agodaApiKey && creds?.agodaPropertyId) {
+    tasks.push(
+      pushAgodaBlock({
+        apiKey:      creds.agodaApiKey,
+        propertyId:  creds.agodaPropertyId,
+        roomTypeId:  booking.unitId,
+        dateFrom:    booking.checkIn,
+        dateTo:      booking.checkOut,
+        available:   false,
+        allotment:   0,
+      }),
+    );
+  }
+
+  if (booking.channel !== 'Expedia' && creds?.expedia) {
+    tasks.push(
+      pushExpediaBlock({
+        credentials: creds.expedia,
+        roomTypeId:  booking.unitId,
+        ratePlanId:  'BAR',
+        dateFrom:    booking.checkIn,
+        dateTo:      booking.checkOut,
+        available:   false,
+        count:       0,
       }),
     );
   }

@@ -10,7 +10,9 @@
  * │           ├── Local registry scan      <1ms            │
  * │           ├── Booking.com avail check  <100ms (opt)    │
  * │           ├── Airbnb calendar check    <100ms (opt)    │
- * │           └── Gathern avail check      <100ms (opt)    │
+ * │           ├── Gathern avail check      <100ms (opt)    │
+ * │           ├── Agoda avail check        <100ms (opt)    │
+ * │           └── Expedia avail check      <100ms (opt)    │
  * │                                                        │
  * │  Phase 2  Lock             [atomic]    <50ms budget    │
  * │           └── CAS on (unitId+dates)                    │
@@ -21,7 +23,9 @@
  * │  Phase 4  Broadcast        [parallel]  <250ms budget   │
  * │           ├── Booking.com AvailNotifRQ                 │
  * │           ├── Airbnb calendar_operations PUT           │
- * │           └── Gathern PUT /availability                │
+ * │           ├── Gathern PUT /availability                │
+ * │           ├── Agoda   PATCH /calendar                  │
+ * │           └── Expedia POST /eqc/ar                     │
  * └────────────────────────────────────────────────────────│
  *   TOTAL guaranteed end-to-end ≤ 500ms
  *
@@ -36,10 +40,13 @@ import type { BookingComCredentials } from './booking-com-service';
 import { pushAvailabilityBlock }       from './booking-com-service';
 import { pushGathernBlock }            from './gathern-service';
 import { pushAirbnbBlock }             from './airbnb-service';
+import { pushAgodaBlock }              from './agoda-service';
+import { pushExpediaBlock }            from './expedia-service';
+import type { ExpediaCredentials }     from './expedia-service';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type ChannelId = 'Booking.com' | 'Airbnb' | 'Gathern' | 'Direct';
+export type ChannelId = 'Booking.com' | 'Airbnb' | 'Gathern' | 'Agoda' | 'Expedia' | 'Direct';
 
 export interface DateRange {
   checkIn:  string;   // YYYY-MM-DD
@@ -68,9 +75,12 @@ export interface LockHandle {
 }
 
 export interface ChannelCredentials {
-  bookingCom?:     BookingComCredentials;
-  airbnbToken?:    string;    // Airbnb access token for the property owner
-  gathernApiKey?:  string;
+  bookingCom?:       BookingComCredentials;
+  airbnbToken?:      string;    // Airbnb access token for the property owner
+  gathernApiKey?:    string;
+  agodaApiKey?:      string;
+  agodaPropertyId?:  string;
+  expedia?:          ExpediaCredentials;
 }
 
 export type TransactionStatus =
@@ -130,7 +140,7 @@ const _metrics: EngineMetrics = {
   rejectedTimeout: 0,
   avgDurationMs:   0,
   maxDurationMs:   0,
-  channelLatency:  { 'Booking.com': 0, 'Airbnb': 0, 'Gathern': 0, 'Direct': 0 },
+  channelLatency:  { 'Booking.com': 0, 'Airbnb': 0, 'Gathern': 0, 'Agoda': 0, 'Expedia': 0, 'Direct': 0 },
 };
 
 // ── Main Entry Point ───────────────────────────────────────────────────────
@@ -155,7 +165,8 @@ export async function processBooking(
 
   const phases = { preCheckMs: 0, lockMs: 0, commitMs: 0, broadcastMs: 0 };
   const broadcastResults: Record<ChannelId, 'sent' | 'skipped' | 'failed'> = {
-    'Booking.com': 'skipped', 'Airbnb': 'skipped', 'Gathern': 'skipped', 'Direct': 'skipped',
+    'Booking.com': 'skipped', 'Airbnb': 'skipped', 'Gathern': 'skipped',
+    'Agoda': 'skipped', 'Expedia': 'skipped', 'Direct': 'skipped',
   };
 
   const record = (status: TransactionStatus, booking?: ConfirmedBooking): TransactionRecord => {
@@ -398,6 +409,34 @@ async function broadcastBlock(
     ));
   }
 
+  if (booking.channel !== 'Agoda' && creds?.agodaApiKey && creds?.agodaPropertyId) {
+    tasks.push(push('Agoda', () =>
+      pushAgodaBlock({
+        apiKey:     creds.agodaApiKey!,
+        propertyId: creds.agodaPropertyId!,
+        roomTypeId: booking.unitId,
+        dateFrom:   booking.checkIn,
+        dateTo:     booking.checkOut,
+        available:  false,
+        allotment:  0,
+      }),
+    ));
+  }
+
+  if (booking.channel !== 'Expedia' && creds?.expedia) {
+    tasks.push(push('Expedia', () =>
+      pushExpediaBlock({
+        credentials: creds.expedia!,
+        roomTypeId:  booking.unitId,
+        ratePlanId:  'BAR',
+        dateFrom:    booking.checkIn,
+        dateTo:      booking.checkOut,
+        available:   false,
+        count:       0,
+      }),
+    ));
+  }
+
   await Promise.allSettled(tasks);
 }
 
@@ -449,6 +488,13 @@ export function _clearState(): void {
   _registry.clear();
   _locks.clear();
   _txLog.length = 0;
+  _metrics.totalProcessed  = 0;
+  _metrics.confirmed       = 0;
+  _metrics.rejectedOverlap = 0;
+  _metrics.rejectedTimeout = 0;
+  _metrics.avgDurationMs   = 0;
+  _metrics.maxDurationMs   = 0;
+  _metrics.channelLatency  = { 'Booking.com': 0, 'Airbnb': 0, 'Gathern': 0, 'Agoda': 0, 'Expedia': 0, 'Direct': 0 };
 }
 
 // ── Internal Helpers ───────────────────────────────────────────────────────
