@@ -17,7 +17,7 @@
  *   />
  */
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLang } from '@/lib/language-context';
 import { isMoyasarConfigured, getMoyasarKey, loadMoyasarForm, type MoyasarPayment } from '@/lib/moyasar-service';
 
@@ -99,7 +99,7 @@ function DemoCardForm({
   onSuccess,
   onFail,
 }: Pick<MoyasarCheckoutProps, 'amountSAR' | 'description' | 'onSuccess' | 'onFail'>) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const p = t.payment;
   const [cardNum,  setCardNum]  = useState('');
   const [expiry,   setExpiry]   = useState('');
@@ -107,6 +107,11 @@ function DemoCardForm({
   const [name,     setName]     = useState('');
   const [paying,   setPaying]   = useState(false);
   const [method,   setMethod]   = useState<'card' | 'mada' | 'applepay' | 'stcpay'>('card');
+
+  /* Apple Pay: only available on Safari/iOS with ApplePaySession */
+  const applePayAvailable = typeof window !== 'undefined' &&
+    'ApplePaySession' in window &&
+    (window as unknown as { ApplePaySession: { canMakePayments(): boolean } }).ApplePaySession.canMakePayments();
 
   const INPUT = 'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-slate-300';
 
@@ -149,13 +154,24 @@ function DemoCardForm({
       {/* Method tabs */}
       <div>
         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{p.payMethods}</p>
-        <div className="grid grid-cols-4 gap-2">
+        {/* Apple Pay: only show on capable devices */}
+        {method === 'applepay' && !applePayAvailable && (
+          <div className="mb-3 flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-500">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            {lang === 'ar'
+              ? 'Apple Pay متاح فقط على أجهزة Apple (iPhone/Mac) مع Safari'
+              : 'Apple Pay is only available on Apple devices (iPhone/Mac) with Safari'}
+          </div>
+        )}
+        <div className={`grid gap-2 ${applePayAvailable ? 'grid-cols-4' : 'grid-cols-3'}`}>
           {([
             { key: 'card',     label: 'Credit Card', logo: <VisaLogo /> },
             { key: 'mada',     label: 'Mada',        logo: <MadaLogo /> },
-            { key: 'applepay', label: 'Apple Pay',   logo: <ApplePayLogo /> },
+            ...(applePayAvailable ? [{ key: 'applepay' as const, label: 'Apple Pay', logo: <ApplePayLogo /> }] : []),
             { key: 'stcpay',   label: 'STC Pay',     logo: <STCPayLogo /> },
-          ] as const).map(m => (
+          ] as { key: 'card' | 'mada' | 'applepay' | 'stcpay'; label: string; logo: React.ReactNode }[]).map(m => (
             <button key={m.key} onClick={() => setMethod(m.key)}
               className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all
                 ${method === m.key ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-100 hover:border-slate-300'}`}>

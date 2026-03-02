@@ -5,7 +5,7 @@ import { Icons } from '@/lib/icons';
 import { OWNER } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
 
-const NAV_IDS = ['overview','properties','calendar','bookings','channels','cleaning','inbox','analytics','financials','settings'] as const;
+const NAV_IDS = ['overview','properties','calendar','bookings','channels','cleaning','inbox','analytics','financials','shipments','settings'] as const;
 const NAV_ICONS = {
   overview:   Icons.overview,
   properties: Icons.properties,
@@ -16,6 +16,7 @@ const NAV_ICONS = {
   inbox:      Icons.inbox,
   analytics:  Icons.analytics,
   financials: Icons.financials,
+  shipments:  Icons.truck,
   settings:   Icons.settings,
 };
 const NAV_BADGES: Record<string, number> = { bookings: 1, inbox: 2, cleaning: 1 };

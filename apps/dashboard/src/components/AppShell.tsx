@@ -57,13 +57,14 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
   const { t, lang, toggle } = useLang();
   const s = t.staging;
 
-  const [mode,     setMode]    = useState<'login' | 'register'>('login');
-  const [email,    setEmail]   = useState('');
-  const [password, setPassword] = useState('');
-  const [name,     setName]    = useState('');
-  const [company,  setCompany] = useState('');
-  const [error,    setError]   = useState('');
-  const [loading,  setLoading] = useState(false);
+  const [mode,          setMode]         = useState<'login' | 'register'>('login');
+  const [email,         setEmail]        = useState('');
+  const [password,      setPassword]     = useState('');
+  const [showPassword,  setShowPassword] = useState(false);
+  const [name,          setName]         = useState('');
+  const [company,       setCompany]      = useState('');
+  const [error,         setError]        = useState('');
+  const [loading,       setLoading]      = useState(false);
 
   const handleLogin = async () => {
     setError(''); setLoading(true);
@@ -140,10 +141,27 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="owner@example.com"
               className={INPUT} style={{ direction: 'ltr' }} />
           </div>
+          {/* Password with eye toggle */}
           <div>
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">{s.loginPassword}</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••"
-              className={INPUT} style={{ direction: 'ltr' }} />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className={INPUT + ' pe-10'}
+                style={{ direction: 'ltr' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute inset-y-0 end-0 pe-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <Icons.eyeOff size={16} /> : <Icons.eye size={16} />}
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -183,6 +201,30 @@ export default function AppShell() {
   const [stagingChecked,  setStagingChecked]  = useState(false);
   const [mobileMenuOpen,  setMobileMenuOpen]  = useState(false);
   const { lang } = useLang();
+
+  /* ── Dark mode (persisted in localStorage) ── */
+  const [darkMode, setDarkMode] = useState(false);
+
+  /* ── Viewport simulator (desktop only visual feature) ── */
+  const [viewportMode, setViewportMode] = useState<'desktop' | 'mobile'>('desktop');
+
+  /* Sync darkMode pref with html class and localStorage */
+  useEffect(() => {
+    const stored = typeof window !== 'undefined'
+      ? localStorage.getItem('rems-dark-mode') === '1'
+      : false;
+    setDarkMode(stored);
+  }, []);
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('rems-dark-mode', '1');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.removeItem('rems-dark-mode');
+    }
+  }, [darkMode]);
 
   useEffect(() => {
     if (isDemo) {
@@ -259,6 +301,15 @@ export default function AppShell() {
     }
   };
 
+  // Staging: show spinner while checking session
+  if (isStaging && !stagingChecked) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <span className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   // Staging: show auth gate until user is authenticated
   if (isStaging && stagingChecked && !stagingUser) {
     return <StagingAuthGate onAuthenticated={handleStagingAuthenticated} />;
@@ -291,18 +342,28 @@ export default function AppShell() {
   ];
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className={`flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden transition-colors ${
+      viewportMode === 'mobile' ? 'bg-slate-800 dark:bg-black' : ''
+    }`}>
       <Sidebar
         activePage={activePage}
         onNavigate={navigate}
         mobileOpen={mobileMenuOpen}
         onMobileClose={() => setMobileMenuOpen(false)}
       />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+      {/* Main content wrapper — constrained when mobile viewport is active */}
+      <div className={`flex-1 flex flex-col min-w-0 overflow-hidden transition-all duration-300 ${
+        viewportMode === 'mobile' ? 'viewport-mobile-panel' : ''
+      }`}>
         <TopBar
           activePage={activePage}
           onNavigate={navigate}
           onMenuToggle={() => setMobileMenuOpen(v => !v)}
+          darkMode={darkMode}
+          onToggleDark={() => setDarkMode(v => !v)}
+          viewportMode={viewportMode}
+          onToggleViewport={() => setViewportMode(v => v === 'desktop' ? 'mobile' : 'desktop')}
         />
         {isDemo    && <DemoBanner />}
         {isStaging && <StagingBanner onLogout={handleStagingLogout} user={stagingUser} />}
@@ -314,7 +375,7 @@ export default function AppShell() {
 
       {/* ── Bottom navigation bar (mobile / tablet only) ── */}
       <nav
-        className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-100"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 transition-colors"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         <div className="flex items-stretch justify-around h-14 px-1">
@@ -326,7 +387,7 @@ export default function AppShell() {
                 key={id}
                 onClick={() => navigate(id)}
                 className={`flex-1 flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all mx-0.5 my-1 relative
-                  ${active ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+                  ${active ? 'text-blue-600' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}
                 style={{ minHeight: 44 }}
               >
                 {/* Active indicator */}
@@ -349,7 +410,7 @@ export default function AppShell() {
           {/* More — opens full sidebar */}
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all mx-0.5 my-1 text-slate-400 hover:text-slate-600"
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all mx-0.5 my-1 text-slate-400 dark:text-slate-500 hover:text-slate-600"
             style={{ minHeight: 44 }}
           >
             <Icons.menu size={20} />

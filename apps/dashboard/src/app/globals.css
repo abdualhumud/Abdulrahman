@@ -97,3 +97,34 @@ body {
   to   { transform: translateY(0);    opacity: 1; }
 }
 .slide-up { animation: slideUp 0.25s cubic-bezier(0.32, 0.72, 0, 1); }
+
+/* ── Dark Mode ── */
+html.dark {
+  color-scheme: dark;
+}
+html.dark body {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+html.dark .card {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+}
+html.dark ::-webkit-scrollbar-thumb { background: #475569; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+/* ── Viewport Mobile Simulator ── */
+.viewport-mobile-panel {
+  max-width: 390px;
+  width: 100%;
+  margin: 0 auto;
+  border-inline: 2px solid #e2e8f0;
+  box-shadow: 0 0 40px rgba(0,0,0,0.12);
+}
+html.dark .viewport-mobile-panel { border-color: #334155; }
+
+@keyframes fadeUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.fade-up { animation: fadeUp 0.25s ease-out; }

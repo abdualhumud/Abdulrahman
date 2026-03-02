@@ -96,6 +96,26 @@ export default function PaymentLinkModal({
 
       setCreated(record);
       onCreated?.(record);
+      // Auto-open WhatsApp with full reservation details
+      setTimeout(() => {
+        const lines = [
+          `🏠 *${lang === 'ar' ? 'طلب دفع — REMS' : 'Payment Request — REMS'}*`,
+          '',
+          `👤 ${lang === 'ar' ? 'الضيف' : 'Guest'}: *${guestName || '—'}*`,
+          ...(bookingId ? [`🔖 ${lang === 'ar' ? 'رقم الحجز' : 'Booking ID'}: ${bookingId}`] : []),
+          ...(description ? [`📋 ${lang === 'ar' ? 'التفاصيل' : 'Details'}: ${description}`] : []),
+          '',
+          `💰 ${lang === 'ar' ? 'المبلغ المطلوب' : 'Amount Due'}: *SAR ${amountNum.toLocaleString()}*`,
+          '',
+          `🔗 ${lang === 'ar' ? 'رابط الدفع الآمن' : 'Secure Payment Link'}:`,
+          link.url,
+          '',
+          `✅ ${lang === 'ar' ? 'مدعوم بـ Mada · Visa · Mastercard · STC Pay' : 'Pay with Mada · Visa · Mastercard · STC Pay'}`,
+          `🔒 ${lang === 'ar' ? 'مؤمّن بتشفير 256-bit SSL | Moyasar' : '256-bit SSL secured | Powered by Moyasar'}`,
+        ];
+        const waUrl = `https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`;
+        if (typeof window !== 'undefined') window.open(waUrl, '_blank', 'noopener,noreferrer');
+      }, 300);
     } catch (e) {
       setError((e as Error).message ?? 'Failed to create payment link');
     } finally {
@@ -119,10 +139,27 @@ export default function PaymentLinkModal({
     return `sms:${phone}?body=${encodeURIComponent(msg)}`;
   }
 
-  function buildWhatsAppHref() {
-    const msg = `${description}\nالمبلغ: ${amountNum.toLocaleString()} ر.س\nرابط الدفع: ${created?.paymentLinkUrl}`;
-    return `https://wa.me/?text=${encodeURIComponent(msg)}`;
+  function buildWhatsAppHref(phoneNumber?: string) {
+    const lines = [
+      `🏠 *${lang === 'ar' ? 'طلب دفع — REMS' : 'Payment Request — REMS'}*`,
+      '',
+      `👤 ${lang === 'ar' ? 'الضيف' : 'Guest'}: *${guestName || '—'}*`,
+      ...(bookingId ? [`🔖 ${lang === 'ar' ? 'رقم الحجز' : 'Booking ID'}: ${bookingId}`] : []),
+      ...(description ? [`📋 ${lang === 'ar' ? 'التفاصيل' : 'Details'}: ${description}`] : []),
+      '',
+      `💰 ${lang === 'ar' ? 'المبلغ المطلوب' : 'Amount Due'}: *SAR ${amountNum.toLocaleString()}*`,
+      '',
+      `🔗 ${lang === 'ar' ? 'رابط الدفع الآمن' : 'Secure Payment Link'}:`,
+      created?.paymentLinkUrl ?? '',
+      '',
+      `✅ ${lang === 'ar' ? 'مدعوم بـ Mada · Visa · Mastercard · STC Pay' : 'Pay with Mada · Visa · Mastercard · STC Pay'}`,
+      `🔒 ${lang === 'ar' ? 'مؤمّن بتشفير 256-bit SSL | Moyasar' : '256-bit SSL secured | Powered by Moyasar'}`,
+    ];
+    const msg = lines.join('\n');
+    const base = phoneNumber ? `https://wa.me/${phoneNumber.replace(/\D/g, '')}` : 'https://wa.me/';
+    return `${base}?text=${encodeURIComponent(msg)}`;
   }
+
 
   function buildEmailHref() {
     const subject = encodeURIComponent(`Payment Request — ${description}`);

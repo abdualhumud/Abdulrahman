@@ -37,10 +37,12 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
 
   /* ── Mode: signup wizard or returning-user login ── */
   const [mode, setMode] = useState<OnboardingMode>('signup');
-  const [loginEmail,    setLoginEmail]    = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [loginError,    setLoginError]    = useState('');
-  const [loginLoading,  setLoginLoading]  = useState(false);
+  const [loginEmail,        setLoginEmail]       = useState('');
+  const [loginPassword,     setLoginPassword]    = useState('');
+  const [loginError,        setLoginError]       = useState('');
+  const [loginLoading,      setLoginLoading]     = useState(false);
+  const [showLoginPwd,      setShowLoginPwd]     = useState(false);
+  const [showSignupPwd,     setShowSignupPwd]    = useState(false);
 
   /* ── Wizard state ── */
   // Staging: all optional. Production: validation enforced.
@@ -280,21 +282,23 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
             style={{ background: 'linear-gradient(135deg,#3B82F6,#6366F1)' }}>R
           </div>
 
-          {/* Login / Sign Up tab toggle */}
-          <div className="inline-flex items-center gap-1 bg-white/10 rounded-2xl p-1 mb-4">
-            {(['signup', 'login'] as OnboardingMode[]).map(m => (
-              <button
-                key={m}
-                onClick={() => { setMode(m); setLoginError(''); }}
-                className={`px-5 py-2 rounded-xl text-sm font-bold transition-all
-                  ${mode === m ? 'bg-white text-slate-900 shadow' : 'text-white/70 hover:text-white'}`}
-              >
-                {m === 'signup'
-                  ? (o.signupTitle ?? (lang === 'ar' ? 'إنشاء حساب' : 'Create Account'))
-                  : (o.loginTitle  ?? (lang === 'ar' ? 'تسجيل الدخول' : 'Sign In'))}
-              </button>
-            ))}
-          </div>
+          {/* Login / Sign Up tab toggle — hidden in staging (auth handled by StagingAuthGate) */}
+          {!isStaging && (
+            <div className="inline-flex items-center gap-1 bg-white/10 rounded-2xl p-1 mb-4">
+              {(['signup', 'login'] as OnboardingMode[]).map(m => (
+                <button
+                  key={m}
+                  onClick={() => { setMode(m); setLoginError(''); }}
+                  className={`px-5 py-2 rounded-xl text-sm font-bold transition-all
+                    ${mode === m ? 'bg-white text-slate-900 shadow' : 'text-white/70 hover:text-white'}`}
+                >
+                  {m === 'signup'
+                    ? (o.signupTitle ?? (lang === 'ar' ? 'إنشاء حساب' : 'Create Account'))
+                    : (o.loginTitle  ?? (lang === 'ar' ? 'تسجيل الدخول' : 'Sign In'))}
+                </button>
+              ))}
+            </div>
+          )}
 
           <p className="text-slate-400 text-sm">
             {mode === 'login'
@@ -328,15 +332,25 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">
                 {o.loginPassword ?? (lang === 'ar' ? 'كلمة المرور' : 'Password')}
               </label>
-              <input
-                type="password"
-                value={loginPassword}
-                onChange={e => setLoginPassword(e.target.value)}
-                placeholder="••••••••"
-                autoComplete="current-password"
-                className={INPUT}
-                style={{ direction: 'ltr' }}
-              />
+              <div className="relative">
+                <input
+                  type={showLoginPwd ? 'text' : 'password'}
+                  value={loginPassword}
+                  onChange={e => setLoginPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  className={INPUT + ' pe-10'}
+                  style={{ direction: 'ltr' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPwd(v => !v)}
+                  className="absolute inset-y-0 end-0 pe-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                  aria-label={showLoginPwd ? 'Hide password' : 'Show password'}
+                >
+                  {showLoginPwd ? <Icons.eyeOff size={16} /> : <Icons.eye size={16} />}
+                </button>
+              </div>
             </div>
 
             {loginError && (
@@ -657,14 +671,24 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
                           {o.accountPassword ?? (lang === 'ar' ? 'كلمة المرور' : 'Create Password')}{strictMode && !isStaging && REQ_DOT}
                         </label>
-                        <input
-                          type="password"
-                          value={form.password} onChange={set('password')}
-                          placeholder={o.accountPasswordPh ?? (lang === 'ar' ? '8 أحرف على الأقل' : 'Min. 8 characters')}
-                          autoComplete="new-password"
-                          className={`${INPUT} ${!isStaging ? fieldErr(form.password, 8) : ''}`}
-                          style={{ direction: 'ltr' }}
-                        />
+                        <div className="relative">
+                          <input
+                            type={showSignupPwd ? 'text' : 'password'}
+                            value={form.password} onChange={set('password')}
+                            placeholder={o.accountPasswordPh ?? (lang === 'ar' ? '8 أحرف على الأقل' : 'Min. 8 characters')}
+                            autoComplete="new-password"
+                            className={`${INPUT} pe-10 ${!isStaging ? fieldErr(form.password, 8) : ''}`}
+                            style={{ direction: 'ltr' }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowSignupPwd(v => !v)}
+                            className="absolute inset-y-0 end-0 pe-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                            aria-label={showSignupPwd ? 'Hide password' : 'Show password'}
+                          >
+                            {showSignupPwd ? <Icons.eyeOff size={16} /> : <Icons.eye size={16} />}
+                          </button>
+                        </div>
                         <p className="mt-1 text-[11px] text-slate-400">
                           {lang === 'ar' ? 'يدعم اقتراح كلمة مرور قوية من المتصفح' : "Browser's strong password suggestion supported"}
                         </p>
@@ -759,6 +783,17 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
                           </div>
                         )}
                       </div>
+                      {/* Enter Dashboard — primary CTA after successful payment */}
+                      <button
+                        onClick={() => { if (promoApplied) redeemPromoCode(promoApplied); onComplete(selectedPlan, promoApplied); }}
+                        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-extrabold text-sm text-white transition-all hover:opacity-90 shadow-lg shadow-emerald-500/20"
+                        style={{ background: 'linear-gradient(135deg,#059669,#10B981)' }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        {o.completeProd ?? (lang === 'ar' ? 'الدخول إلى لوحة التحكم' : 'Enter Dashboard')}
+                      </button>
                     </div>
                   );
                 }
