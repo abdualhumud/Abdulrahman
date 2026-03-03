@@ -113,11 +113,11 @@ function DemoCardForm({
     'ApplePaySession' in window &&
     (window as unknown as { ApplePaySession: { canMakePayments(): boolean } }).ApplePaySession.canMakePayments();
 
-  const INPUT = 'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-slate-300';
+  const INPUT = 'w-full border border-slate-200 dark:border-slate-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-400 transition-all placeholder-slate-300 dark:placeholder-slate-500 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100';
 
   const handlePay = async () => {
     setPaying(true);
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 1800));
     // Demo: fail if card number ends in 0000
     const fail = cardNum.replace(/\s/g, '').endsWith('0000');
     if (fail) {
@@ -128,7 +128,8 @@ function DemoCardForm({
     setPaying(false);
   };
 
-  const canPay = method !== 'card' || (
+  // mada: same card fields as creditcard — require them too
+  const canPay = (method === 'applepay' || method === 'stcpay') || (
     cardNum.replace(/\s/g, '').length >= 16 &&
     expiry.length >= 5 &&
     cvv.length >= 3 &&
@@ -143,12 +144,20 @@ function DemoCardForm({
   return (
     <div className="space-y-5">
       {/* Demo notice */}
-      <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round">
+      <div className="flex items-start gap-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-2xl px-4 py-3">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+          className="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5">
           <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
           <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
         </svg>
-        <p className="text-xs font-semibold text-amber-700">{p.checkoutDemoNote}</p>
+        <div>
+          <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">{p.checkoutDemoNote}</p>
+          <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+            {lang === 'ar'
+              ? 'استخدم البطاقة التجريبية: 4111 1111 1111 1111 · أي تاريخ/CVV · ينتهي بـ 0000 = فشل'
+              : 'Test card: 4111 1111 1111 1111 · any expiry/CVV · ending 0000 = fail'}
+          </p>
+        </div>
       </div>
 
       {/* Method tabs */}
@@ -174,9 +183,11 @@ function DemoCardForm({
           ] as { key: 'card' | 'mada' | 'applepay' | 'stcpay'; label: string; logo: React.ReactNode }[]).map(m => (
             <button key={m.key} onClick={() => setMethod(m.key)}
               className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all
-                ${method === m.key ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-100 hover:border-slate-300'}`}>
+                ${method === m.key
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/25 shadow-sm'
+                  : 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500 dark:bg-slate-800/50'}`}>
               {m.logo}
-              <span className="text-[10px] font-semibold text-slate-500">{m.label}</span>
+              <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">{m.label}</span>
             </button>
           ))}
         </div>
@@ -230,8 +241,15 @@ function DemoCardForm({
               style={{ direction: 'ltr' }}
             />
           </div>
-          <p className="text-[11px] text-slate-400">
-            Test card: <span className="font-mono">4111 1111 1111 1111</span> · Use any expiry/CVV · Ending in 0000 = fail
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">
+            {lang === 'ar'
+              ? 'رقم البطاقة التجريبية'
+              : 'Quick-fill test card'}{': '}
+            <button type="button"
+              onClick={() => { setCardNum('4111 1111 1111 1111'); setExpiry('12/27'); setCvv('123'); setName('Test User'); }}
+              className="font-mono text-blue-600 dark:text-blue-400 hover:underline">
+              4111 1111 1111 1111
+            </button>
           </p>
         </div>
       )}
@@ -257,13 +275,15 @@ function DemoCardForm({
       )}
 
       {/* Amount summary */}
-      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-        <p className="text-xs text-slate-500 mb-0.5">{description}</p>
-        <p className="text-2xl font-extrabold text-slate-900" style={{ direction: 'ltr' }}>
+      <div className="bg-slate-50 dark:bg-slate-900/60 rounded-2xl p-4 border border-slate-100 dark:border-slate-700">
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">{description}</p>
+        <p className="text-2xl font-extrabold text-slate-900 dark:text-slate-100" style={{ direction: 'ltr' }}>
           SAR {amountSAR.toLocaleString()}
         </p>
-        <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-slate-200">
-          <span className="text-[10px] text-slate-400 font-semibold me-0.5">Accepted:</span>
+        <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+          <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold me-0.5">
+            {lang === 'ar' ? 'وسائل الدفع:' : 'Accepted:'}
+          </span>
           <VisaLogo />
           <MadaLogo />
           <MastercardLogo />
@@ -295,7 +315,7 @@ function DemoCardForm({
       </button>
 
       {/* Security badges */}
-      <div className="flex items-center justify-center gap-4 text-xs text-slate-400">
+      <div className="flex items-center justify-center gap-4 text-xs text-slate-400 dark:text-slate-500">
         <div className="flex items-center gap-1">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -379,8 +399,8 @@ export default function MoyasarCheckout(props: MoyasarCheckoutProps) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
-        <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
+      <div className="flex items-center gap-3 pb-4 border-b border-slate-100 dark:border-slate-700">
+        <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
           style={{ background: 'linear-gradient(135deg,#2563EB,#4F46E5)' }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
             <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
@@ -388,13 +408,13 @@ export default function MoyasarCheckout(props: MoyasarCheckoutProps) {
           </svg>
         </div>
         <div>
-          <p className="font-extrabold text-slate-900 leading-none">{p.checkoutTitle}</p>
-          <p className="text-xs text-slate-400 mt-0.5">{p.checkoutSubtitle}</p>
+          <p className="font-extrabold text-slate-900 dark:text-slate-100 leading-none">{p.checkoutTitle}</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{p.checkoutSubtitle}</p>
         </div>
         {props.onBack && (
           <button
             onClick={props.onBack}
-            className="ms-auto text-xs font-semibold text-slate-400 hover:text-slate-700 transition-colors flex items-center gap-1"
+            className="ms-auto text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1"
           >
             ← {p.backToPlan}
           </button>

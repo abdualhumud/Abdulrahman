@@ -466,8 +466,8 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
               {step === 1 && (
                 <div className="space-y-5">
                   <div>
-                    <h2 className="text-lg font-extrabold text-slate-900">{o.step1Title}</h2>
-                    <p className="text-sm text-slate-400 mt-0.5">{o.step1DescFlexible ?? o.step1Desc}</p>
+                    <h2 className="text-lg font-extrabold text-slate-900 dark:text-slate-100">{o.step1Title}</h2>
+                    <p className="text-sm text-slate-400 dark:text-slate-500 mt-0.5">{o.step1DescFlexible ?? o.step1Desc}</p>
                   </div>
 
                   {/* Business Type Toggle */}
@@ -613,15 +613,15 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
               {step === 2 && (
                 <div className="space-y-5">
                   <div>
-                    <h2 className="text-lg font-extrabold text-slate-900">{o.step2Title}</h2>
-                    <p className="text-sm text-slate-400 mt-0.5">{o.step2Desc}</p>
+                    <h2 className="text-lg font-extrabold text-slate-900 dark:text-slate-100">{o.step2Title}</h2>
+                    <p className="text-sm text-slate-400 dark:text-slate-500 mt-0.5">{o.step2Desc}</p>
                   </div>
 
                   {/* Google autofill CTA */}
                   <button
                     onClick={handleGoogleAutofill}
                     disabled={googleFilling}
-                    className="w-full flex items-center justify-center gap-3 py-3 rounded-xl border-2 border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 transition-all text-sm font-semibold text-slate-700 disabled:opacity-60"
+                    className="w-full flex items-center justify-center gap-3 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800/60 hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-all text-sm font-semibold text-slate-700 dark:text-slate-300 disabled:opacity-60"
                   >
                     {googleFilling ? (
                       <span className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
@@ -638,11 +638,11 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
                   </button>
 
                   <div className="flex items-center gap-3">
-                    <div className="flex-1 h-px bg-slate-100" />
-                    <span className="text-xs text-slate-400 font-semibold">
+                    <div className="flex-1 h-px bg-slate-100 dark:bg-slate-700" />
+                    <span className="text-xs text-slate-400 dark:text-slate-500 font-semibold">
                       {lang === 'ar' ? 'أو أدخل البيانات يدوياً' : 'or fill in manually'}
                     </span>
-                    <div className="flex-1 h-px bg-slate-100" />
+                    <div className="flex-1 h-px bg-slate-100 dark:bg-slate-700" />
                   </div>
 
                   {/* Personal info fields */}
@@ -675,14 +675,14 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
                   </div>
 
                   {/* Account Security: Username + Password */}
-                  <div className="border-t border-slate-100 pt-4">
+                  <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
                     <div className="flex items-center gap-2 mb-3">
-                      <div className="w-7 h-7 bg-blue-50 rounded-lg flex items-center justify-center">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round">
+                      <div className="w-7 h-7 bg-blue-50 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60A5FA" strokeWidth="2" strokeLinecap="round">
                           <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                         </svg>
                       </div>
-                      <p className="text-sm font-bold text-slate-700">
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
                         {lang === 'ar' ? 'أمان الحساب' : 'Account Security'}
                       </p>
                     </div>
@@ -729,18 +729,18 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
                   </div>
 
                   {/* Bank — Optional */}
-                  <div className="border-t border-slate-100 pt-4">
+                  <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
                     <div className="flex items-center gap-2 mb-3">
-                      <div className="w-7 h-7 bg-blue-50 rounded-lg flex items-center justify-center">
-                        <Icons.creditCard size={14} className="text-blue-600" />
+                      <div className="w-7 h-7 bg-blue-50 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                        <Icons.creditCard size={14} className="text-blue-500 dark:text-blue-400" />
                       </div>
-                      <p className="text-sm font-bold text-slate-700">{o.bankVerification}</p>
-                      <span className="text-xs text-slate-400">({lang === 'ar' ? 'اختياري' : 'Optional'})</span>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{o.bankVerification}</p>
+                      <span className="text-xs text-slate-400 dark:text-slate-500">({lang === 'ar' ? 'اختياري' : 'Optional'})</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">{o.bankName}</label>
-                        <select className={INPUT + ' bg-white'} value={form.bankName} onChange={set('bankName')}>
+                        <select className={INPUT + ' bg-white dark:bg-slate-900'} value={form.bankName} onChange={set('bankName')}>
                           <option value="">— {o.selectBank} —</option>
                           {['Al Rajhi Bank','SNB (NCB)','Riyad Bank','Arab National Bank','Banque Saudi Fransi','Saudi British Bank (SABB)'].map(b => (
                             <option key={b} value={b}>{b}</option>
@@ -978,7 +978,7 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
 
               {/* ── Navigation footer ── */}
               {!(step === 3 && showPayment && (paySubStep === 'checkout' || paySubStep === 'success' || paySubStep === 'failed')) && (
-                <div className="flex items-center justify-between mt-7 pt-5 border-t border-slate-100">
+                <div className="flex items-center justify-between mt-7 pt-5 border-t border-slate-100 dark:border-slate-700">
                   <div className="flex items-center gap-3">
                     {step > 1 && (
                       <button onClick={() => setStep(s => (s - 1) as Step)}

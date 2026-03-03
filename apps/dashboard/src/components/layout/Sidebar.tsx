@@ -129,10 +129,10 @@ export default function Sidebar({ activePage, onNavigate, mobileOpen = false, on
               {/* Section label — hidden when sidebar is collapsed */}
               {!collapsed && (
                 <div className="flex items-center gap-2 px-2 pb-1.5">
-                  <p className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.12em] leading-none">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.12em] leading-none">
                     {lang === 'ar' ? section.labelAr : section.labelEn}
                   </p>
-                  {si > 0 && <div className="flex-1 h-px bg-white/5" />}
+                  {si > 0 && <div className="flex-1 h-px bg-white/10" />}
                 </div>
               )}
               {collapsed && si > 0 && (
@@ -151,7 +151,7 @@ export default function Sidebar({ activePage, onNavigate, mobileOpen = false, on
                       onClick={() => handleNavigate(navId)}
                       title={collapsed ? label : undefined}
                       className={`w-full flex items-center gap-3 px-2.5 rounded-xl text-sm font-semibold transition-all
-                        ${active ? 'text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:text-white hover:bg-white/6'}`}
+                        ${active ? 'text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}
                       style={{
                         ...(active ? { background: 'linear-gradient(135deg,#2563EB,#4F46E5)' } : {}),
                         minHeight: '44px',
@@ -179,7 +179,7 @@ export default function Sidebar({ activePage, onNavigate, mobileOpen = false, on
         {/* Portfolio quick view */}
         {!collapsed && (
           <div className="px-2 pb-2">
-            <p className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.12em] px-2 pb-2">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.12em] px-2 pb-2">
               {t.nav.portfolio}
             </p>
             <div className="bg-white/4 rounded-xl px-3 py-2.5 space-y-2">

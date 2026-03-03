@@ -140,33 +140,33 @@ html.dark .border-slate-300 { border-color: #64748b !important; }
 /* Input / select / textarea */
 html.dark .input {
   background-color: #0f172a !important;
-  border-color: #475569 !important;
+  border-color: #64748b !important;   /* slate-500 — brighter than slate-600 for clarity */
   color: #f1f5f9 !important;
 }
-html.dark .input::placeholder { color: #64748b !important; }
+html.dark .input::placeholder { color: #94a3b8 !important; }  /* slate-400 — more visible placeholder */
 html.dark input:not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]),
 html.dark select,
 html.dark textarea {
   background-color: #0f172a;
-  border-color: #475569;
+  border-color: #64748b;              /* slate-500 — clearly visible border */
   color: #f1f5f9;
   color-scheme: dark;
 }
 html.dark input:not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"])::placeholder,
 html.dark textarea::placeholder {
-  color: #64748b;
+  color: #94a3b8;                     /* slate-400 — readable placeholder */
 }
 html.dark input:not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):focus,
 html.dark select:focus,
 html.dark textarea:focus {
-  border-color: #3b82f6;
+  border-color: #60a5fa;              /* blue-400 — brighter focus ring in dark */
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.18);
+  box-shadow: 0 0 0 3px rgba(96,165,250,0.20);
 }
 
 /* Labels */
 html.dark label {
-  color: #94a3b8;
+  color: #cbd5e1;                     /* slate-300 — brighter label text for legibility */
 }
 
 /* Buttons */
@@ -204,6 +204,38 @@ html.dark [class*="rounded"][class*="bg-white"] {
   background-color: #1e293b;
   border: 1px solid #334155;
 }
+
+/* ── Coloured notice / highlight boxes — dark-mode friendly versions ── */
+/* Amber (payment demo notice, warning banners) */
+html.dark .bg-amber-50  { background-color: rgba(120,53,15, 0.25) !important; }
+html.dark .border-amber-200 { border-color: rgba(180,83,9, 0.45) !important; }
+html.dark .text-amber-700 { color: #fcd34d !important; }   /* amber-300 */
+html.dark .text-amber-600 { color: #fbbf24 !important; }   /* amber-400 */
+
+/* Blue (selected tabs, active highlights) */
+html.dark .bg-blue-50   { background-color: rgba(30,58,138, 0.25) !important; }
+html.dark .border-blue-100 { border-color: rgba(30,58,138, 0.40) !important; }
+
+/* Emerald (success / promo applied boxes) */
+html.dark .bg-emerald-50  { background-color: rgba(6,78,59, 0.25) !important; }
+html.dark .bg-emerald-100 { background-color: rgba(6,78,59, 0.35) !important; }
+html.dark .border-emerald-100 { border-color: rgba(6,78,59, 0.40) !important; }
+html.dark .border-emerald-200 { border-color: rgba(6,78,59, 0.55) !important; }
+html.dark .text-emerald-700 { color: #34d399 !important; }  /* emerald-400 */
+html.dark .text-emerald-600 { color: #6ee7b7 !important; }  /* emerald-300 */
+
+/* Red (error / failed boxes) */
+html.dark .bg-red-50    { background-color: rgba(127,29,29, 0.25) !important; }
+html.dark .bg-red-100   { background-color: rgba(127,29,29, 0.35) !important; }
+html.dark .border-red-200 { border-color: rgba(127,29,29, 0.50) !important; }
+html.dark .text-red-700 { color: #f87171 !important; }      /* red-400 */
+
+/* Violet (staging trial notice) */
+html.dark .bg-violet-50  { background-color: rgba(76,29,149, 0.25) !important; }
+html.dark .border-violet-100 { border-color: rgba(76,29,149, 0.40) !important; }
+
+/* Slate chips / optional badges inside forms */
+html.dark .bg-slate-100.px-1\.5 { background-color: #334155 !important; }
 
 /* ── Viewport Mobile Simulator (phone frame) ── */
 .viewport-phone-outer {
@@ -283,3 +315,29 @@ html.dark .viewport-mobile-panel { border-color: #334155; }
   to   { transform: translateY(0);    opacity: 1; }
 }
 .fade-up { animation: fadeUp 0.25s ease-out; }
+
+/* ── Phone-frame viewport simulator: force mobile layout ──────────────
+   When the desktop app renders inside the 393px phone frame, Tailwind's
+   lg: breakpoints still fire (viewport is still ≥1024px). These rules
+   reverse that — showing mobile-only elements and hiding desktop-only ones.
+   Uses attribute value selectors which match on class token strings.
+   ─────────────────────────────────────────────────────────────────────── */
+/* Show elements that are normally hidden at lg breakpoint (mobile-only views) */
+.viewport-phone-screen [class~="lg:hidden"] {
+  display: revert !important;
+}
+/* Flex mobile-only elements that combine hidden + lg:flex visibility trigger */
+.viewport-phone-screen [class~="hidden"][class~="lg:flex"] {
+  display: none !important;
+}
+.viewport-phone-screen [class~="hidden"][class~="lg:block"] {
+  display: none !important;
+}
+.viewport-phone-screen [class~="hidden"][class~="lg:grid"] {
+  display: none !important;
+}
+/* Prevent horizontal overflow inside the frame */
+.viewport-phone-screen > * {
+  max-width: 393px;
+  overflow-x: hidden;
+}
