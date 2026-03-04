@@ -425,6 +425,7 @@ export default function AppShell() {
             activePage={activePage}
             onNavigate={navigate}
             onMenuToggle={() => setMobileMenuOpen(v => !v)}
+            mobileMenuOpen={mobileMenuOpen}
             darkMode={darkMode}
             onToggleDark={() => setDarkMode(v => !v)}
             viewportMode={viewportMode}

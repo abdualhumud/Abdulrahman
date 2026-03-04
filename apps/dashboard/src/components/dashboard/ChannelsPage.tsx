@@ -1561,9 +1561,18 @@ export default function ChannelsPage() {
                     {ch.channel}
                   </p>
                   <div className="flex items-center gap-1.5 mt-1">
-                    <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      !isActive ? 'bg-slate-300' :
+                      ch.failed > 0 ? 'bg-red-400 animate-pulse' :
+                      ch.pending > 0 ? 'bg-amber-400' :
+                      'bg-emerald-400'
+                    }`} />
                     <span className="text-xs text-slate-400 font-medium">
-                      {isActive ? t.channels.connected : (lang === 'ar' ? 'متوقف' : 'Paused')}
+                      {!isActive
+                        ? (lang === 'ar' ? 'متوقف' : 'Paused')
+                        : ch.failed > 0
+                          ? (lang === 'ar' ? 'خطأ في المزامنة' : 'Sync error')
+                          : t.channels.connected}
                     </span>
                   </div>
                 </div>
@@ -1572,14 +1581,23 @@ export default function ChannelsPage() {
                 </span>
               </div>
 
+              {ch.failed > 0 && (
+                <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                  <Icons.x size={13} className="text-red-500 flex-shrink-0" />
+                  <p className="text-xs text-red-600 dark:text-red-400 font-semibold">
+                    {ch.failed} {lang === 'ar' ? 'عملية مزامنة فشلت — تحقق من الاتصال' : 'sync failure(s) — check connection'}
+                  </p>
+                </div>
+              )}
+
               <div className="grid grid-cols-3 gap-2 mb-4">
                 {[
                   { label: t.channels.today,   value: ch.bookingsToday, hi: false },
                   { label: t.channels.pending, value: ch.pending,       hi: ch.pending > 0 },
                   { label: t.channels.failed,  value: ch.failed,        hi: ch.failed > 0 },
                 ].map(s => (
-                  <div key={s.label} className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
-                    <p className={`text-xl font-extrabold leading-none ${s.hi ? 'text-red-500' : 'text-slate-800'}`}>{s.value}</p>
+                  <div key={s.label} className="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-3 text-center border border-slate-100 dark:border-slate-700">
+                    <p className={`text-xl font-extrabold leading-none ${s.hi ? 'text-red-500' : 'text-slate-800 dark:text-slate-200'}`}>{s.value}</p>
                     <p className="text-[10px] text-slate-400 mt-1 font-semibold uppercase tracking-wide">{s.label}</p>
                   </div>
                 ))}

@@ -23,13 +23,14 @@ interface Props {
   activePage: string;
   onNavigate: (p: string) => void;
   onMenuToggle?: () => void;
+  mobileMenuOpen?: boolean;
   darkMode?: boolean;
   onToggleDark?: () => void;
   viewportMode?: 'desktop' | 'mobile';
   onToggleViewport?: () => void;
 }
 
-export default function TopBar({ activePage, onNavigate, onMenuToggle, darkMode, onToggleDark, viewportMode, onToggleViewport }: Props) {
+export default function TopBar({ activePage, onNavigate, onMenuToggle, mobileMenuOpen, darkMode, onToggleDark, viewportMode, onToggleViewport }: Props) {
   const { t, lang, toggle } = useLang();
   const { isDemo } = useMode();
   const pageInfo = PAGE_TITLES[activePage] ?? PAGE_TITLES.overview;
@@ -41,6 +42,8 @@ export default function TopBar({ activePage, onNavigate, onMenuToggle, darkMode,
       <button
         onClick={onMenuToggle}
         aria-label={lang === 'ar' ? 'فتح القائمة' : 'Open menu'}
+        aria-expanded={mobileMenuOpen ?? false}
+        aria-controls="sidebar-nav"
         className="lg:hidden w-9 h-9 rounded-xl bg-slate-50 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 transition-all flex-shrink-0"
       >
         <Icons.menu size={18} />
@@ -73,7 +76,9 @@ export default function TopBar({ activePage, onNavigate, onMenuToggle, darkMode,
           className="relative w-8 h-8 rounded-xl bg-slate-50 dark:bg-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all"
         >
           <Icons.inbox size={16} />
-          <span className="absolute top-1 end-1 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-slate-800 animate-pulse" />
+          {activePage !== 'inbox' && (
+            <span className="absolute top-1 end-1 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-slate-800 animate-pulse" />
+          )}
         </button>
 
         {/* ── Viewport Switcher (hidden on mobile — only useful on desktop) ── */}
@@ -129,13 +134,16 @@ export default function TopBar({ activePage, onNavigate, onMenuToggle, darkMode,
           <span>{lang === 'en' ? 'عربي' : 'EN'}</span>
         </button>
 
-        {/* Avatar */}
-        <div
-          className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white flex-shrink-0 cursor-pointer"
+        {/* Avatar → settings */}
+        <button
+          onClick={() => onNavigate('settings')}
+          className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs text-white flex-shrink-0 hover:opacity-80 transition-opacity"
           style={{ background: 'linear-gradient(135deg,#7C3AED,#6366F1)' }}
-          title={OWNER.fullName}>
+          title={lang === 'ar' ? 'الإعدادات' : 'Settings'}
+          aria-label={lang === 'ar' ? 'إعدادات الحساب' : 'Account settings'}
+        >
           {OWNER.fullName.charAt(0)}
-        </div>
+        </button>
       </div>
     </header>
   );

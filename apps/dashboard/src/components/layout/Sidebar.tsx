@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Icons } from '@/lib/icons';
-import { OWNER } from '@/lib/mock-data';
+import { OWNER, RECENT_BOOKINGS, CLEANING_REQUESTS, INBOX_MESSAGES } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
 
 const NAV_ICONS = {
@@ -18,7 +18,17 @@ const NAV_ICONS = {
   shipments:  Icons.truck,
   settings:   Icons.settings,
 };
-const NAV_BADGES: Record<string, number> = { bookings: 1, inbox: 2, cleaning: 1 };
+// Badges are computed from live data at module level (static mock, so useMemo isn't needed)
+function getNavBadges(): Record<string, number> {
+  const pendingBookings = RECENT_BOOKINGS.filter(b => b.status === 'PENDING').length;
+  const unreadMessages  = INBOX_MESSAGES.filter(m => !m.isRead).length;
+  const pendingCleaning = CLEANING_REQUESTS.filter(c => c.status === 'PENDING').length;
+  return {
+    ...(pendingBookings > 0 ? { bookings: pendingBookings } : {}),
+    ...(unreadMessages  > 0 ? { inbox:    unreadMessages  } : {}),
+    ...(pendingCleaning > 0 ? { cleaning: pendingCleaning } : {}),
+  };
+}
 
 const NAV_SECTIONS = [
   {
@@ -62,6 +72,7 @@ interface Props {
 export default function Sidebar({ activePage, onNavigate, mobileOpen = false, onMobileClose }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const { t, lang } = useLang();
+  const NAV_BADGES = useMemo(() => getNavBadges(), []);
 
   const handleNavigate = (id: string) => {
     onNavigate(id);
@@ -80,6 +91,7 @@ export default function Sidebar({ activePage, onNavigate, mobileOpen = false, on
 
       {/* ── Sidebar ── */}
       <aside
+        id="sidebar-nav"
         className={[
           'flex flex-col bg-slate-950 text-white h-full',
           // Mobile: fixed drawer sliding from start edge
@@ -160,7 +172,7 @@ export default function Sidebar({ activePage, onNavigate, mobileOpen = false, on
                       <Icon size={17} className="flex-shrink-0" />
                       {!collapsed && (
                         <>
-                          <span className="flex-1 text-start">{label}</span>
+                          <span className="flex-1 text-start truncate">{label}</span>
                           {badge > 0 && (
                             <span className="w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                               {badge}

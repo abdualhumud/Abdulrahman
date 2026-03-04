@@ -14,10 +14,10 @@ import {
 } from '@/lib/mock-data';
 
 const STATUS_STYLE: Record<string, string> = {
-  CONFIRMED:   'bg-emerald-50 text-emerald-700 border border-emerald-200',
-  CHECKED_IN:  'bg-blue-50 text-blue-700 border border-blue-200',
-  CHECKED_OUT: 'bg-slate-100 text-slate-500 border border-slate-200',
-  PENDING:     'bg-amber-50 text-amber-700 border border-amber-200',
+  CONFIRMED:   'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800',
+  CHECKED_IN:  'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800',
+  CHECKED_OUT: 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-600',
+  PENDING:     'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800',
 };
 
 function KpiCard({ label, value, sub, trendVal, trendLabel, icon, accent, onClick }: {
@@ -26,17 +26,18 @@ function KpiCard({ label, value, sub, trendVal, trendLabel, icon, accent, onClic
 }) {
   const { t } = useLang();
   const up = (trendVal ?? 0) >= 0;
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <div
+    <Tag
       onClick={onClick}
-      className={`card p-5 transition-all ${onClick ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:translate-y-0' : ''}`}
+      className={`card p-5 transition-all w-full text-start ${onClick ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:translate-y-0' : ''}`}
     >
       <div className="flex items-start justify-between mb-3">
         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider leading-none">{label}</p>
         <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
           style={{ background: accent + '15', color: accent }}>{icon}</div>
       </div>
-      <p className="text-[1.6rem] font-extrabold text-slate-900 tracking-tight leading-none">{value}</p>
+      <p className="text-[1.6rem] font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-none">{value}</p>
       {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
       {trendVal !== undefined && (
         <div className={`flex items-center gap-1 mt-3 text-xs font-bold ${up ? 'text-emerald-600' : 'text-red-500'}`}>
@@ -49,16 +50,16 @@ function KpiCard({ label, value, sub, trendVal, trendLabel, icon, accent, onClic
           <Icons.arrowRight size={9} /> {t.bookings.view}
         </p>
       )}
-    </div>
+    </Tag>
   );
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-slate-100 shadow-xl rounded-xl px-4 py-3 text-left" style={{ direction: 'ltr' }}>
-      <p className="text-xs text-slate-400 mb-1 font-medium">{label}</p>
-      <p className="text-base font-bold text-slate-900">SAR {Number(payload[0].value).toLocaleString()}</p>
+    <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-xl rounded-xl px-4 py-3 text-left" style={{ direction: 'ltr' }}>
+      <p className="text-xs text-slate-400 dark:text-slate-500 mb-1 font-medium">{label}</p>
+      <p className="text-base font-bold text-slate-900 dark:text-slate-100">SAR {Number(payload[0].value).toLocaleString()}</p>
     </div>
   );
 };
@@ -73,11 +74,14 @@ export default function OverviewPage({ onNavigate }: Props) {
   const firstName = OWNER.fullName.split(' ')[0];
 
   // ✅ Journey Step 4 — "Go Live": auto-mark when user reaches overview after steps 1-3
+  // Use completed.size (primitive) as dep to avoid re-running on same-set reference changes
+  const completedSize = completed.size;
   useEffect(() => {
-    if (completed.size >= 3 && !completed.has(4)) {
+    if (completedSize >= 3 && !completed.has(4)) {
       markDone(4);
     }
-  }, [completed, markDone]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completedSize, markDone]);
 
   const nav = (page: string) => onNavigate?.(page);
 
@@ -87,7 +91,7 @@ export default function OverviewPage({ onNavigate }: Props) {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
             {t.overview.greeting}، {lang === 'ar' ? 'عبدالرحمن' : firstName} 👋
           </h1>
           <p className="text-sm text-slate-400 mt-1">{t.overview.subtitle}</p>
@@ -136,7 +140,7 @@ export default function OverviewPage({ onNavigate }: Props) {
         <div className="lg:col-span-5 card">
           <div className="px-6 pt-5 pb-0 flex items-start justify-between">
             <div>
-              <p className="font-bold text-slate-900">{t.overview.monthlyRevenue}</p>
+              <p className="font-bold text-slate-900 dark:text-slate-100">{t.overview.monthlyRevenue}</p>
               <p className="text-xs text-slate-400 mt-0.5">{t.overview.period}</p>
             </div>
             <button
@@ -171,7 +175,7 @@ export default function OverviewPage({ onNavigate }: Props) {
         <div className="lg:col-span-2 card p-5 flex flex-col gap-4">
           <div className="flex items-start justify-between">
             <div>
-              <p className="font-bold text-slate-900">{t.overview.revenueSplit}</p>
+              <p className="font-bold text-slate-900 dark:text-slate-100">{t.overview.revenueSplit}</p>
               <p className="text-xs text-slate-400 mt-0.5">{t.overview.byChannel}</p>
             </div>
             <button onClick={() => nav('channels')}
@@ -215,81 +219,90 @@ export default function OverviewPage({ onNavigate }: Props) {
         {/* Channel Sync — clickable → channels page */}
         <div className="lg:col-span-2 card p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <p className="font-bold text-slate-900">{t.overview.channelSync}</p>
-            <span className="badge bg-emerald-50 text-emerald-600 border border-emerald-100">{t.overview.live}</span>
+            <p className="font-bold text-slate-900 dark:text-slate-100">{t.overview.channelSync}</p>
+            <span className="badge bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800">{t.overview.live}</span>
           </div>
-          {CHANNEL_SYNC_STATUS.map(ch => (
-            <button key={ch.channel} onClick={() => nav('channels')}
-              className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 w-full text-start hover:bg-blue-50 hover:border-blue-100 transition-colors">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{ background: ch.bg }}>
-                {ch.logo}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-800 leading-none">{ch.channel}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{ch.lastSync}</p>
-              </div>
-              <div className="flex flex-col items-end gap-1">
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${ch.syncMethod.includes('Webhook') ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
-                  {ch.syncMethod.includes('Webhook') ? 'WH' : 'Poll'}
-                </span>
-                <span className="w-2 h-2 bg-emerald-400 rounded-full" />
-              </div>
-            </button>
-          ))}
+          {CHANNEL_SYNC_STATUS.map(ch => {
+            const dotColor = ch.failed > 0
+              ? 'bg-red-400'
+              : ch.pending > 0
+                ? 'bg-amber-400'
+                : 'bg-emerald-400';
+            return (
+              <button key={ch.channel} onClick={() => nav('channels')}
+                className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 w-full text-start hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-100 dark:hover:border-blue-800 transition-colors">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{ background: ch.bg }}>
+                  {ch.logo}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 leading-none">{ch.channel}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{ch.lastSync}</p>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${ch.syncMethod.includes('Webhook') ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'}`}>
+                    {ch.syncMethod.includes('Webhook') ? 'WH' : 'Poll'}
+                  </span>
+                  <span className={`w-2 h-2 rounded-full ${dotColor}`} />
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         {/* Recent Bookings — rows navigate to bookings page */}
         <div className="lg:col-span-5 card overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
-            <p className="font-bold text-slate-900">{t.overview.recentBookings}</p>
+          <div className="px-5 py-4 border-b border-slate-50 dark:border-slate-700 flex items-center justify-between">
+            <p className="font-bold text-slate-900 dark:text-slate-100">{t.overview.recentBookings}</p>
             <button onClick={() => nav('bookings')}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors">
+              className="text-xs font-semibold text-blue-600 hover:text-blue-800 dark:hover:text-blue-400 flex items-center gap-1 transition-colors">
               {t.common.viewAll} <Icons.chevronRight size={12} />
             </button>
           </div>
-          <table className="w-full data-table">
-            <thead className="bg-slate-50/80 border-b border-slate-100">
-              <tr>
-                {[t.table.guest, t.table.property, t.table.channel, t.table.dates, t.table.amount, t.table.status].map(h => (
-                  <th key={h}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {RECENT_BOOKINGS.slice(0, 5).map(b => (
-                <tr key={b.id} onClick={() => nav('bookings')}
-                  className="hover:bg-blue-50/40 transition-colors cursor-pointer">
-                  <td>
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0"
-                        style={{ background: '#EFF6FF', color: '#2563EB' }}>
-                        {b.guest.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-800 text-sm leading-none">{b.guest}</p>
-                        <p className="text-xs text-slate-400 mt-0.5 font-mono">{b.id}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <p className="text-slate-700 text-xs font-medium truncate max-w-[130px]">{b.property}</p>
-                    <p className="text-slate-400 text-xs">{b.unit}</p>
-                  </td>
-                  <td><span className="text-xs font-bold" style={{ color: b.channelColor }}>● {b.channel}</span></td>
-                  <td>
-                    <p className="text-xs text-slate-600 font-medium font-mono">{b.checkIn}</p>
-                    <p className="text-xs text-slate-400 font-mono">{b.checkOut}</p>
-                  </td>
-                  <td className="font-bold text-slate-900">{t.common.sar} {b.amount.toLocaleString()}</td>
-                  <td>
-                    <span className={`badge ${STATUS_STYLE[b.status] ?? 'bg-slate-100 text-slate-500'}`}>
-                      {t.status[b.status as keyof typeof t.status] ?? b.status}
-                    </span>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full data-table">
+              <thead className="bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700">
+                <tr>
+                  {[t.table.guest, t.table.property, t.table.channel, t.table.dates, t.table.amount, t.table.status].map(h => (
+                    <th key={h}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+                {RECENT_BOOKINGS.slice(0, 5).map(b => (
+                  <tr key={b.id} onClick={() => nav('bookings')}
+                    className="hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors cursor-pointer">
+                    <td>
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0"
+                          style={{ background: '#EFF6FF', color: '#2563EB' }}>
+                          {b.guest.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-none">{b.guest}</p>
+                          <p className="text-xs text-slate-400 mt-0.5 font-mono">{b.id}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <p className="text-slate-700 dark:text-slate-300 text-xs font-medium truncate max-w-[130px]">{b.property}</p>
+                      <p className="text-slate-400 text-xs">{b.unit}</p>
+                    </td>
+                    <td><span className="text-xs font-bold" style={{ color: b.channelColor }}>● {b.channel}</span></td>
+                    <td>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 font-medium font-mono">{b.checkIn}</p>
+                      <p className="text-xs text-slate-400 font-mono">{b.checkOut}</p>
+                    </td>
+                    <td className="font-bold text-slate-900 dark:text-slate-100">{t.common.sar} {b.amount.toLocaleString()}</td>
+                    <td>
+                      <span className={`badge ${STATUS_STYLE[b.status] ?? 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>
+                        {t.status[b.status as keyof typeof t.status] ?? b.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
