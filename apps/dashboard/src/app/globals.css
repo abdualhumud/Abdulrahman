@@ -344,3 +344,33 @@ html.dark .viewport-mobile-panel { border-color: #334155; }
   max-width: 393px;
   overflow-x: hidden;
 }
+
+/* ── sm: breakpoint overrides inside the phone frame ─────────────────
+   Tailwind's sm: breakpoints fire based on the real viewport width
+   (≥640px), not the 393px phone-frame container width. These overrides
+   restore mobile-first behaviour inside the simulated phone screen:
+     • sm:hidden  → should be visible   (mobile-only element)
+     • hidden sm:block/flex/grid → should be hidden   (desktop-only element)
+   ─────────────────────────────────────────────────────────────────── */
+.viewport-phone-screen [class~="sm:hidden"] {
+  display: block !important;
+}
+.viewport-phone-screen [class~="hidden"][class~="sm:block"] {
+  display: none !important;
+}
+.viewport-phone-screen [class~="hidden"][class~="sm:flex"] {
+  display: none !important;
+}
+.viewport-phone-screen [class~="hidden"][class~="sm:grid"] {
+  display: none !important;
+}
+/* Also handle md: variants for completeness */
+.viewport-phone-screen [class~="md:hidden"] {
+  display: block !important;
+}
+.viewport-phone-screen [class~="hidden"][class~="md:block"] {
+  display: none !important;
+}
+.viewport-phone-screen [class~="hidden"][class~="md:flex"] {
+  display: none !important;
+}

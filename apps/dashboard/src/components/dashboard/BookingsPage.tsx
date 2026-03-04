@@ -7,6 +7,284 @@ import { useMode } from '@/lib/mode-context';
 import { RECENT_BOOKINGS, INSURANCE_RECORDS } from '@/lib/mock-data';
 import PaymentLinkModal from './PaymentLinkModal';
 
+/* ── Manual bookings localStorage helpers ─────────────────────────── */
+const MANUAL_BOOKINGS_KEY = 'rems-manual-bookings';
+
+function loadManualBookings(): typeof RECENT_BOOKINGS {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(MANUAL_BOOKINGS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveManualBookings(bookings: typeof RECENT_BOOKINGS): void {
+  try { localStorage.setItem(MANUAL_BOOKINGS_KEY, JSON.stringify(bookings)); }
+  catch { /* storage quota */ }
+}
+
+const CHANNEL_COLORS: Record<string, string> = {
+  'Booking.com': '#003580',
+  'Airbnb':      '#FF5A5F',
+  'Gathern':     '#00a651',
+  'Direct':      '#F59E0B',
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  CONFIRMED:   'bg-emerald-100 text-emerald-700',
+  PENDING:     'bg-amber-100 text-amber-700',
+  CHECKED_IN:  'bg-blue-100 text-blue-700',
+  CHECKED_OUT: 'bg-slate-100 text-slate-500',
+};
+
+/* ── Manual Booking Modal ──────────────────────────────────────────── */
+function ManualBookingModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (b: typeof RECENT_BOOKINGS[number]) => void;
+}) {
+  const { t, lang } = useLang();
+  const isAr = lang === 'ar';
+
+  const [guestName,  setGuestName]  = useState('');
+  const [property,   setProperty]   = useState('');
+  const [unit,       setUnit]       = useState('');
+  const [channel,    setChannel]    = useState<keyof typeof CHANNEL_COLORS>('Direct');
+  const [checkIn,    setCheckIn]    = useState('');
+  const [checkOut,   setCheckOut]   = useState('');
+  const [amountStr,  setAmountStr]  = useState('');
+  const [status,     setStatus]     = useState<'CONFIRMED' | 'PENDING'>('CONFIRMED');
+  const [submitting, setSubmitting] = useState(false);
+
+  const nights = checkIn && checkOut
+    ? Math.max(0, Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000))
+    : 0;
+
+  const amount = parseFloat(amountStr) || 0;
+  const canSubmit = guestName.trim() && checkIn && checkOut && nights > 0 && amount > 0;
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    await new Promise(r => setTimeout(r, 400));
+    const booking: typeof RECENT_BOOKINGS[number] = {
+      id: `BK-${String(Date.now()).slice(-4)}`,
+      guest: guestName.trim(),
+      property: property.trim() || unit.trim() || isAr ? 'وحدة' : 'Unit',
+      unit: unit.trim() || property.trim() || isAr ? 'وحدة' : 'Unit',
+      channel,
+      channelColor: CHANNEL_COLORS[channel] ?? '#64748B',
+      checkIn,
+      checkOut,
+      nights,
+      amount,
+      status,
+      statusColor: STATUS_COLORS[status] ?? STATUS_COLORS.CONFIRMED,
+    };
+    onCreated(booking);
+    setSubmitting(false);
+    onClose();
+  };
+
+  const INPUT = 'w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-slate-300 dark:placeholder-slate-500';
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-slate-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}
+        style={{ animation: 'slideUp 0.3s cubic-bezier(0.32,0.72,0,1)', maxHeight: '92vh' }}
+      >
+        {/* Handle + header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex-shrink-0">
+          <div className="sm:hidden absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 bg-slate-200 dark:bg-slate-600 rounded-full" />
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
+              <Icons.plus size={16} className="text-blue-600" />
+            </div>
+            <div>
+              <p className="font-extrabold text-slate-900 dark:text-slate-100 text-sm leading-none">
+                {isAr ? 'حجز يدوي جديد' : 'New Manual Booking'}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {isAr ? 'أضف حجزاً مباشراً' : 'Add a direct / walk-in reservation'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+          >
+            <Icons.x size={14} />
+          </button>
+        </div>
+
+        {/* Form body */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {/* Guest Name */}
+          <div>
+            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">
+              {isAr ? 'اسم الضيف' : 'Guest Name'} *
+            </label>
+            <input
+              value={guestName}
+              onChange={e => setGuestName(e.target.value)}
+              placeholder={isAr ? 'محمد العتيبي' : 'Mohammed Al-Otaibi'}
+              className={INPUT}
+            />
+          </div>
+
+          {/* Property / Unit */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">
+                {isAr ? 'المبنى / العقار' : 'Property'}
+              </label>
+              <input
+                value={property}
+                onChange={e => setProperty(e.target.value)}
+                placeholder={isAr ? 'شقة الرياض' : 'Riyadh Apt.'}
+                className={INPUT}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">
+                {isAr ? 'الوحدة' : 'Unit'}
+              </label>
+              <input
+                value={unit}
+                onChange={e => setUnit(e.target.value)}
+                placeholder={isAr ? 'الوحدة أ' : 'Unit A'}
+                className={INPUT}
+              />
+            </div>
+          </div>
+
+          {/* Channel */}
+          <div>
+            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">
+              {isAr ? 'قناة الحجز' : 'Booking Channel'}
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              {(Object.keys(CHANNEL_COLORS) as Array<keyof typeof CHANNEL_COLORS>).map(ch => (
+                <button
+                  key={ch}
+                  onClick={() => setChannel(ch)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border-2 ${
+                    channel === ch
+                      ? 'text-white border-transparent shadow-sm'
+                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-500 hover:border-slate-300'
+                  }`}
+                  style={channel === ch ? { background: CHANNEL_COLORS[ch], borderColor: CHANNEL_COLORS[ch] } : {}}
+                >
+                  {ch}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">
+                {t.table.checkIn} *
+              </label>
+              <input
+                type="date"
+                value={checkIn}
+                onChange={e => setCheckIn(e.target.value)}
+                className={INPUT}
+                style={{ direction: 'ltr' }}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">
+                {t.table.checkOut} *
+              </label>
+              <input
+                type="date"
+                value={checkOut}
+                onChange={e => setCheckOut(e.target.value)}
+                min={checkIn || undefined}
+                className={INPUT}
+                style={{ direction: 'ltr' }}
+              />
+            </div>
+          </div>
+
+          {/* Nights preview */}
+          {nights > 0 && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl px-4 py-2.5 flex items-center justify-between">
+              <span className="text-xs text-blue-700 dark:text-blue-300 font-semibold">
+                {isAr ? 'عدد الليالي' : 'Total Nights'}
+              </span>
+              <span className="text-sm font-extrabold text-blue-900 dark:text-blue-200">{nights}</span>
+            </div>
+          )}
+
+          {/* Amount */}
+          <div>
+            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">
+              {t.table.amountSAR} *
+            </label>
+            <input
+              value={amountStr}
+              onChange={e => setAmountStr(e.target.value.replace(/[^\d.]/g, ''))}
+              placeholder="0.00"
+              className={INPUT}
+              style={{ direction: 'ltr', fontFamily: 'monospace' }}
+            />
+          </div>
+
+          {/* Status */}
+          <div>
+            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">
+              {t.table.status}
+            </label>
+            <div className="flex gap-2">
+              {(['CONFIRMED', 'PENDING'] as const).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setStatus(s)}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border-2 ${
+                    status === s
+                      ? s === 'CONFIRMED'
+                        ? 'bg-emerald-500 text-white border-emerald-500'
+                        : 'bg-amber-500 text-white border-amber-500'
+                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-500 hover:border-slate-300'
+                  }`}
+                >
+                  {t.status[s as keyof typeof t.status] ?? s}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-slate-100 dark:border-slate-700 p-4 flex-shrink-0 bg-white dark:bg-slate-800">
+          <button
+            onClick={handleSubmit}
+            disabled={!canSubmit || submitting}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-extrabold text-sm text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20"
+            style={{ background: 'linear-gradient(135deg,#2563EB,#4F46E5)' }}
+          >
+            {submitting
+              ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{isAr ? 'جارٍ الحفظ…' : 'Saving…'}</>
+              : <><Icons.plus size={16} />{isAr ? 'إضافة الحجز' : 'Add Booking'}</>
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const STATUS_STYLE: Record<string, string> = {
   CONFIRMED:   'bg-emerald-50 text-emerald-700 border border-emerald-200',
   CHECKED_IN:  'bg-blue-50 text-blue-700 border border-blue-200',
@@ -189,8 +467,22 @@ interface Props {
 export default function BookingsPage({ onCheckoutCleaning }: Props) {
   const { t } = useLang();
   const { isDemo } = useMode();
-  // Fresh-start: production/staging users begin with zero bookings
-  const allBookings = isDemo ? RECENT_BOOKINGS : ([] as typeof RECENT_BOOKINGS);
+
+  /* Manual bookings — persisted in localStorage for production/staging */
+  const [manualBookings, setManualBookings] = useState<typeof RECENT_BOOKINGS>(() =>
+    isDemo ? [] : loadManualBookings()
+  );
+  const allBookings = [
+    ...(isDemo ? RECENT_BOOKINGS : []),
+    ...manualBookings,
+  ];
+
+  const handleManualBookingCreated = (booking: typeof RECENT_BOOKINGS[number]) => {
+    const next = [booking, ...manualBookings];
+    setManualBookings(next);
+    if (!isDemo) saveManualBookings(next);
+  };
+
   const STATUSES = ['ALL', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'PENDING'];
   const [filter, setFilter] = useState('ALL');
   const [search, setSearch] = useState('');
@@ -198,6 +490,7 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
   const [justCheckedOut, setJustCheckedOut] = useState<string | null>(null);
   const [viewBooking, setViewBooking] = useState<typeof RECENT_BOOKINGS[number] | null>(null);
   const [payLinkBooking, setPayLinkBooking] = useState<typeof RECENT_BOOKINGS[number] | null>(null);
+  const [manualBookingOpen, setManualBookingOpen] = useState(false);
 
   const getStatus = (b: typeof RECENT_BOOKINGS[number]) =>
     localStatuses[b.id] ?? b.status;
@@ -241,7 +534,9 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">{t.bookings.title}</h1>
           <p className="text-sm text-slate-400 mt-1">{allBookings.length} {t.bookings.subtitle}</p>
         </div>
-        <button className="btn-primary"><Icons.plus size={16} /> {t.bookings.newBooking}</button>
+        <button className="btn-primary" onClick={() => setManualBookingOpen(true)}>
+          <Icons.plus size={16} /> {t.bookings.newBooking}
+        </button>
       </div>
 
       {/* Checkout notification banner */}
@@ -499,14 +794,27 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
         <BookingDetailModal booking={viewBooking} onClose={() => setViewBooking(null)} />
       )}
 
-      {/* Payment Link modal */}
+      {/* Payment Link modal — passes full reservation details for WhatsApp */}
       {payLinkBooking && (
         <PaymentLinkModal
           bookingId={payLinkBooking.id}
           defaultAmount={payLinkBooking.amount}
-          defaultDescription={`Booking ${payLinkBooking.id} — ${payLinkBooking.unit} (${payLinkBooking.nights} nights)`}
+          defaultDescription={`${payLinkBooking.unit} · ${payLinkBooking.checkIn} → ${payLinkBooking.checkOut} (${payLinkBooking.nights} nights)`}
           guestName={payLinkBooking.guest}
+          checkIn={payLinkBooking.checkIn}
+          checkOut={payLinkBooking.checkOut}
+          property={`${payLinkBooking.property} — ${payLinkBooking.unit}`}
+          channel={payLinkBooking.channel}
+          nights={payLinkBooking.nights}
           onClose={() => setPayLinkBooking(null)}
+        />
+      )}
+
+      {/* Manual Booking modal */}
+      {manualBookingOpen && (
+        <ManualBookingModal
+          onClose={() => setManualBookingOpen(false)}
+          onCreated={handleManualBookingCreated}
         />
       )}
     </div>

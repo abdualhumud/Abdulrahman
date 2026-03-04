@@ -28,6 +28,12 @@ interface PaymentLinkModalProps {
   defaultDescription?: string;
   guestName?: string;
   guestEmail?: string;
+  /** Full reservation details — included in WhatsApp / SMS messages */
+  checkIn?: string;
+  checkOut?: string;
+  property?: string;
+  channel?: string;
+  nights?: number;
   onClose: () => void;
   onCreated?: (tx: TransactionRecord) => void;
 }
@@ -42,6 +48,11 @@ export default function PaymentLinkModal({
   defaultDescription = '',
   guestName: defaultGuestName = '',
   guestEmail: defaultGuestEmail = '',
+  checkIn,
+  checkOut,
+  property,
+  channel,
+  nights,
   onClose,
   onCreated,
 }: PaymentLinkModalProps) {
@@ -96,23 +107,30 @@ export default function PaymentLinkModal({
 
       setCreated(record);
       onCreated?.(record);
-      // Auto-open WhatsApp with full reservation details
+      // Auto-open WhatsApp Business with full reservation details
       setTimeout(() => {
+        const isAr = lang === 'ar';
         const lines = [
-          `🏠 *${lang === 'ar' ? 'طلب دفع — REMS' : 'Payment Request — REMS'}*`,
+          `🏠 *${isAr ? 'طلب دفع — REMS' : 'Payment Request — REMS'}*`,
           '',
-          `👤 ${lang === 'ar' ? 'الضيف' : 'Guest'}: *${guestName || '—'}*`,
-          ...(bookingId ? [`🔖 ${lang === 'ar' ? 'رقم الحجز' : 'Booking ID'}: ${bookingId}`] : []),
-          ...(description ? [`📋 ${lang === 'ar' ? 'التفاصيل' : 'Details'}: ${description}`] : []),
+          `👤 ${isAr ? 'الضيف' : 'Guest'}: *${guestName || '—'}*`,
+          ...(bookingId ? [`🔖 ${isAr ? 'رقم الحجز' : 'Booking ID'}: ${bookingId}`] : []),
+          ...(property  ? [`🏢 ${isAr ? 'الوحدة' : 'Property'}: ${property}`] : []),
+          ...(channel   ? [`📡 ${isAr ? 'القناة' : 'Channel'}: ${channel}`] : []),
+          ...(checkIn   ? [`📅 ${isAr ? 'تاريخ الوصول' : 'Check-in'}: ${checkIn}`] : []),
+          ...(checkOut  ? [`📅 ${isAr ? 'تاريخ المغادرة' : 'Check-out'}: ${checkOut}`] : []),
+          ...(nights    ? [`🌙 ${isAr ? 'عدد الليالي' : 'Nights'}: ${nights}`] : []),
+          ...(description ? [`📋 ${isAr ? 'التفاصيل' : 'Details'}: ${description}`] : []),
           '',
-          `💰 ${lang === 'ar' ? 'المبلغ المطلوب' : 'Amount Due'}: *SAR ${amountNum.toLocaleString()}*`,
+          `💰 ${isAr ? 'المبلغ المطلوب' : 'Amount Due'}: *SAR ${amountNum.toLocaleString()}*`,
           '',
-          `🔗 ${lang === 'ar' ? 'رابط الدفع الآمن' : 'Secure Payment Link'}:`,
+          `🔗 ${isAr ? 'رابط الدفع الآمن' : 'Secure Payment Link'}:`,
           link.url,
           '',
-          `✅ ${lang === 'ar' ? 'مدعوم بـ Mada · Visa · Mastercard · STC Pay' : 'Pay with Mada · Visa · Mastercard · STC Pay'}`,
-          `🔒 ${lang === 'ar' ? 'مؤمّن بتشفير 256-bit SSL | Moyasar' : '256-bit SSL secured | Powered by Moyasar'}`,
+          `✅ ${isAr ? 'مدعوم بـ Mada · Visa · Mastercard · STC Pay' : 'Pay with Mada · Visa · Mastercard · STC Pay'}`,
+          `🔒 ${isAr ? 'مؤمّن بتشفير 256-bit SSL | Moyasar' : '256-bit SSL secured | Powered by Moyasar'}`,
         ];
+        // wa.me without phone → opens WhatsApp contact picker so user selects recipient
         const waUrl = `https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`;
         if (typeof window !== 'undefined') window.open(waUrl, '_blank', 'noopener,noreferrer');
       }, 300);
@@ -140,20 +158,26 @@ export default function PaymentLinkModal({
   }
 
   function buildWhatsAppHref(phoneNumber?: string) {
+    const isAr = lang === 'ar';
     const lines = [
-      `🏠 *${lang === 'ar' ? 'طلب دفع — REMS' : 'Payment Request — REMS'}*`,
+      `🏠 *${isAr ? 'طلب دفع — REMS' : 'Payment Request — REMS'}*`,
       '',
-      `👤 ${lang === 'ar' ? 'الضيف' : 'Guest'}: *${guestName || '—'}*`,
-      ...(bookingId ? [`🔖 ${lang === 'ar' ? 'رقم الحجز' : 'Booking ID'}: ${bookingId}`] : []),
-      ...(description ? [`📋 ${lang === 'ar' ? 'التفاصيل' : 'Details'}: ${description}`] : []),
+      `👤 ${isAr ? 'الضيف' : 'Guest'}: *${guestName || '—'}*`,
+      ...(bookingId ? [`🔖 ${isAr ? 'رقم الحجز' : 'Booking ID'}: ${bookingId}`] : []),
+      ...(property  ? [`🏢 ${isAr ? 'الوحدة' : 'Property'}: ${property}`] : []),
+      ...(channel   ? [`📡 ${isAr ? 'القناة' : 'Channel'}: ${channel}`] : []),
+      ...(checkIn   ? [`📅 ${isAr ? 'تاريخ الوصول' : 'Check-in'}: ${checkIn}`] : []),
+      ...(checkOut  ? [`📅 ${isAr ? 'تاريخ المغادرة' : 'Check-out'}: ${checkOut}`] : []),
+      ...(nights    ? [`🌙 ${isAr ? 'عدد الليالي' : 'Nights'}: ${nights}`] : []),
+      ...(description ? [`📋 ${isAr ? 'التفاصيل' : 'Details'}: ${description}`] : []),
       '',
-      `💰 ${lang === 'ar' ? 'المبلغ المطلوب' : 'Amount Due'}: *SAR ${amountNum.toLocaleString()}*`,
+      `💰 ${isAr ? 'المبلغ المطلوب' : 'Amount Due'}: *SAR ${amountNum.toLocaleString()}*`,
       '',
-      `🔗 ${lang === 'ar' ? 'رابط الدفع الآمن' : 'Secure Payment Link'}:`,
+      `🔗 ${isAr ? 'رابط الدفع الآمن' : 'Secure Payment Link'}:`,
       created?.paymentLinkUrl ?? '',
       '',
-      `✅ ${lang === 'ar' ? 'مدعوم بـ Mada · Visa · Mastercard · STC Pay' : 'Pay with Mada · Visa · Mastercard · STC Pay'}`,
-      `🔒 ${lang === 'ar' ? 'مؤمّن بتشفير 256-bit SSL | Moyasar' : '256-bit SSL secured | Powered by Moyasar'}`,
+      `✅ ${isAr ? 'مدعوم بـ Mada · Visa · Mastercard · STC Pay' : 'Pay with Mada · Visa · Mastercard · STC Pay'}`,
+      `🔒 ${isAr ? 'مؤمّن بتشفير 256-bit SSL | Moyasar' : '256-bit SSL secured | Powered by Moyasar'}`,
     ];
     const msg = lines.join('\n');
     const base = phoneNumber ? `https://wa.me/${phoneNumber.replace(/\D/g, '')}` : 'https://wa.me/';
