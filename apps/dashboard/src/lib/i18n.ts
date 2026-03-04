@@ -35,6 +35,7 @@ export const translations = {
       sar:         'SAR',
       noResults:   'No results found',
       loading:     'Loading…',
+      saving:      'Saving…',
       vsLastMonth: 'vs last month',
     },
 
@@ -975,6 +976,7 @@ export const translations = {
       sar:         'ر.س',
       noResults:   'لا توجد نتائج',
       loading:     'جارٍ التحميل…',
+      saving:      'جارٍ الحفظ…',
       vsLastMonth: 'مقارنة بالشهر الماضي',
     },
 

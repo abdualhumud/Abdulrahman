@@ -481,7 +481,7 @@ export default function CalendarPage({ onNavigate }: CalendarPageProps) {
                 <button onClick={submitBooking} disabled={step === 'saving' || !bookingForm.guestName}
                   className="flex-1 btn-primary justify-center py-2.5 disabled:opacity-50">
                   {step === 'saving'
-                    ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving…</>
+                    ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> {t.common.saving}</>
                     : <><Icons.check size={15} /> {t.calendar.submitBooking}</>
                   }
                 </button>

@@ -415,7 +415,7 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
                   <td className="text-xs text-slate-600 font-mono">{b.checkIn}</td>
                   <td className="text-xs text-slate-600 font-mono">{b.checkOut}</td>
                   <td className="text-center font-semibold text-slate-700">{b.nights}</td>
-                  <td className="font-bold text-slate-900">{b.amount.toLocaleString()}</td>
+                  <td className="font-bold text-slate-900" style={{ direction: 'ltr' }}>SAR {b.amount.toLocaleString()}</td>
                   <td>
                     <span className={`badge ${STATUS_STYLE[st] ?? 'bg-slate-100 text-slate-500'}`}>
                       {t.status[st as keyof typeof t.status] ?? st}
