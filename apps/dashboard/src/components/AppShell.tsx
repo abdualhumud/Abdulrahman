@@ -232,8 +232,10 @@ export default function AppShell() {
   /* ── Dark mode (persisted in localStorage) ── */
   const [darkMode, setDarkMode] = useState(false);
 
-  /* ── Viewport simulator (desktop only visual feature) ── */
+  /* ── Viewport simulator (Demo only — disabled in Staging/Production) ── */
   const [viewportMode, setViewportMode] = useState<'desktop' | 'mobile'>('desktop');
+  // Always force desktop in non-demo environments
+  const effectiveViewportMode = isDemo ? viewportMode : 'desktop';
 
   /* Sync darkMode pref with html class and localStorage */
   useEffect(() => {
@@ -415,8 +417,8 @@ export default function AppShell() {
     </nav>
   );
 
-  /* ── Mobile phone-frame viewport ── */
-  if (viewportMode === 'mobile') {
+  /* ── Mobile phone-frame viewport (Demo only) ── */
+  if (effectiveViewportMode === 'mobile') {
     return (
       <div className="flex h-screen overflow-hidden bg-slate-700 dark:bg-slate-950 transition-colors">
         {/* TopBar visible above the frame for viewport controls */}
@@ -428,8 +430,8 @@ export default function AppShell() {
             mobileMenuOpen={mobileMenuOpen}
             darkMode={darkMode}
             onToggleDark={() => setDarkMode(v => !v)}
-            viewportMode={viewportMode}
-            onToggleViewport={() => setViewportMode(v => v === 'desktop' ? 'mobile' : 'desktop')}
+            viewportMode={effectiveViewportMode}
+            onToggleViewport={isDemo ? () => setViewportMode(v => v === 'desktop' ? 'mobile' : 'desktop') : undefined}
           />
         </div>
 
@@ -478,8 +480,8 @@ export default function AppShell() {
           onMenuToggle={() => setMobileMenuOpen(v => !v)}
           darkMode={darkMode}
           onToggleDark={() => setDarkMode(v => !v)}
-          viewportMode={viewportMode}
-          onToggleViewport={() => setViewportMode(v => v === 'desktop' ? 'mobile' : 'desktop')}
+          viewportMode={effectiveViewportMode}
+          onToggleViewport={isDemo ? () => setViewportMode(v => v === 'desktop' ? 'mobile' : 'desktop') : undefined}
         />
         {isDemo    && <DemoBanner />}
         {isStaging && <StagingBanner onLogout={handleStagingLogout} user={stagingUser} />}

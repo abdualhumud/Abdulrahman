@@ -3,7 +3,66 @@
 import { useState } from 'react';
 import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
+import { useMode } from '@/lib/mode-context';
 import { OWNER } from '@/lib/mock-data';
+
+const PROD_ACCOUNT_KEY    = 'rems-prod-account';
+const ONBOARDING_DONE_KEY = 'rems-onboarding-done';
+
+/** Load production user's registered data from localStorage, fall back to OWNER mock. */
+function loadProdProfile() {
+  try {
+    const raw = typeof window !== 'undefined'
+      ? localStorage.getItem(PROD_ACCOUNT_KEY)
+      : null;
+    if (raw) {
+      const saved = JSON.parse(raw) as {
+        name?: string; email?: string; username?: string;
+        crNumber?: string; vatNumber?: string;
+        phone?: string; nationalId?: string;
+      };
+      return {
+        crNumber:   saved.crNumber  ?? '',
+        vatNumber:  saved.vatNumber ?? '',
+        estNameEn:  OWNER.estNameEn,
+        estNameAr:  OWNER.estNameAr,
+        ownerName:  saved.name      ?? OWNER.fullName,
+        ownerEmail: saved.email     ?? OWNER.email,
+        ownerPhone: saved.phone     ?? '+966 50 000 0000',
+        bankName:   OWNER.bankName,
+        iban:       OWNER.iban,
+      };
+    }
+  } catch { /* ignore */ }
+  return {
+    crNumber:   OWNER.crNumber,
+    vatNumber:  OWNER.vatNumber,
+    estNameEn:  OWNER.estNameEn,
+    estNameAr:  OWNER.estNameAr,
+    ownerName:  OWNER.fullName,
+    ownerEmail: OWNER.email,
+    ownerPhone: '+966 50 000 0000',
+    bankName:   OWNER.bankName,
+    iban:       OWNER.iban,
+  };
+}
+
+/** Persist profile changes back to localStorage for production users. */
+function saveProdProfile(p: ReturnType<typeof loadProdProfile>) {
+  try {
+    const existing = typeof window !== 'undefined'
+      ? JSON.parse(localStorage.getItem(PROD_ACCOUNT_KEY) ?? '{}')
+      : {};
+    localStorage.setItem(PROD_ACCOUNT_KEY, JSON.stringify({
+      ...existing,
+      name:      p.ownerName,
+      email:     p.ownerEmail,
+      phone:     p.ownerPhone,
+      crNumber:  p.crNumber,
+      vatNumber: p.vatNumber,
+    }));
+  } catch { /* quota */ }
+}
 
 type Tab = 'profile' | 'integrations' | 'users' | 'notifications';
 
@@ -85,33 +144,49 @@ function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
 /* ── Main Settings Page ──────────────────────────────────────────── */
 export default function SettingsPage() {
   const { t, lang } = useLang();
+  const { isDemo, isStaging } = useMode();
   const s = (t as any).settings;
 
   const [activeTab, setActiveTab] = useState<Tab>('profile');
 
-  // Profile state
-  const [profile, setProfile] = useState({
-    crNumber:   OWNER.crNumber,
-    vatNumber:  OWNER.vatNumber,
-    estNameEn:  OWNER.estNameEn,
-    estNameAr:  OWNER.estNameAr,
-    ownerName:  OWNER.fullName,
-    ownerEmail: OWNER.email,
-    ownerPhone: '+966 50 000 0000',
-    bankName:   OWNER.bankName,
-    iban:       OWNER.iban,
-  });
+  // Profile state — load real registration data for production users
+  const [profile, setProfile] = useState(() =>
+    (isDemo || isStaging) ? {
+      crNumber:   OWNER.crNumber,
+      vatNumber:  OWNER.vatNumber,
+      estNameEn:  OWNER.estNameEn,
+      estNameAr:  OWNER.estNameAr,
+      ownerName:  OWNER.fullName,
+      ownerEmail: OWNER.email,
+      ownerPhone: '+966 50 000 0000',
+      bankName:   OWNER.bankName,
+      iban:       OWNER.iban,
+    } : loadProdProfile()
+  );
   const [profileSaved, setProfileSaved] = useState(false);
   const [crValidating, setCrValidating] = useState(false);
   const [crValid, setCrValid] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   const handleSaveProfile = async () => {
     setCrValidating(true);
     await new Promise(r => setTimeout(r, 1200));
     setCrValidating(false);
     setCrValid(true);
+    // Persist to localStorage for production users so the data survives page refresh
+    if (!isDemo && !isStaging) saveProdProfile(profile);
     setProfileSaved(true);
     setTimeout(() => setProfileSaved(false), 3000);
+  };
+
+  /** Sign Out (production only): clears the onboarding-done flag so the user
+   *  is returned to the login/sign-up screen. Account credentials are NOT
+   *  cleared, so they can sign back in immediately. */
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    await new Promise(r => setTimeout(r, 400));
+    localStorage.removeItem(ONBOARDING_DONE_KEY);
+    window.location.reload();
   };
 
   // Integrations state
@@ -344,8 +419,22 @@ export default function SettingsPage() {
               </div>
             )}
 
-            <div className="mt-5 flex justify-end">
-              <button onClick={handleSaveProfile} className="btn-primary px-6">
+            <div className="mt-5 flex items-center justify-between gap-3">
+              {/* Sign Out — Production only */}
+              {!isDemo && !isStaging && (
+                <button
+                  onClick={handleSignOut}
+                  disabled={signingOut}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 transition-all disabled:opacity-60"
+                >
+                  {signingOut
+                    ? <span className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                    : <Icons.logOut size={15} />
+                  }
+                  {lang === 'ar' ? 'تسجيل الخروج' : 'Sign Out'}
+                </button>
+              )}
+              <button onClick={handleSaveProfile} className="btn-primary px-6 ms-auto">
                 <Icons.check size={15} />
                 {lang === 'ar' ? s.saveProfile : 'Save Profile'}
               </button>

@@ -32,7 +32,10 @@ interface Props {
 
 export default function TopBar({ activePage, onNavigate, onMenuToggle, mobileMenuOpen, darkMode, onToggleDark, viewportMode, onToggleViewport }: Props) {
   const { t, lang, toggle } = useLang();
-  const { isDemo } = useMode();
+  const { isDemo, isStaging } = useMode();
+  // Viewport toggle only available in Demo environment (showcases responsiveness to prospects).
+  // In Staging and Production it serves no functional purpose and should not be shown.
+  const showViewportToggle = isDemo;
   const pageInfo = PAGE_TITLES[activePage] ?? PAGE_TITLES.overview;
 
   return (
@@ -81,31 +84,33 @@ export default function TopBar({ activePage, onNavigate, onMenuToggle, mobileMen
           )}
         </button>
 
-        {/* ── Viewport Switcher (hidden on mobile — only useful on desktop) ── */}
-        <div className="hidden lg:flex items-center gap-0.5 bg-slate-100 dark:bg-slate-700 rounded-xl p-0.5">
-          <button
-            onClick={() => onToggleViewport?.()}
-            title={lang === 'ar' ? 'عرض سطح المكتب' : 'Desktop view'}
-            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
-              viewportMode !== 'mobile'
-                ? 'bg-white dark:bg-slate-600 text-blue-600 shadow-sm'
-                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-            }`}
-          >
-            <Icons.monitor size={14} />
-          </button>
-          <button
-            onClick={() => onToggleViewport?.()}
-            title={lang === 'ar' ? 'عرض الجوال' : 'Mobile view'}
-            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
-              viewportMode === 'mobile'
-                ? 'bg-white dark:bg-slate-600 text-blue-600 shadow-sm'
-                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-            }`}
-          >
-            <Icons.smartphone size={13} />
-          </button>
-        </div>
+        {/* ── Viewport Switcher (Demo mode only — hidden in Staging/Production) ── */}
+        {showViewportToggle && (
+          <div className="hidden lg:flex items-center gap-0.5 bg-slate-100 dark:bg-slate-700 rounded-xl p-0.5">
+            <button
+              onClick={() => onToggleViewport?.()}
+              title={lang === 'ar' ? 'عرض سطح المكتب' : 'Desktop view'}
+              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
+                viewportMode !== 'mobile'
+                  ? 'bg-white dark:bg-slate-600 text-blue-600 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+              }`}
+            >
+              <Icons.monitor size={14} />
+            </button>
+            <button
+              onClick={() => onToggleViewport?.()}
+              title={lang === 'ar' ? 'عرض الجوال' : 'Mobile view'}
+              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
+                viewportMode === 'mobile'
+                  ? 'bg-white dark:bg-slate-600 text-blue-600 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+              }`}
+            >
+              <Icons.smartphone size={13} />
+            </button>
+          </div>
+        )}
 
         {/* ── Night Mode Toggle ── */}
         <button

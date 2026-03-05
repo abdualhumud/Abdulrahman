@@ -132,7 +132,7 @@ function DemoCardForm({
   const canPay = (method === 'applepay' || method === 'stcpay') || (
     cardNum.replace(/\s/g, '').length >= 16 &&
     expiry.length >= 5 &&
-    cvv.length >= 3 &&
+    cvv.length === 3 &&
     name.trim().length > 0
   );
 
@@ -204,6 +204,8 @@ function DemoCardForm({
               value={cardNum}
               onChange={e => setCardNum(formatCard(e.target.value))}
               placeholder="1234 5678 9012 3456"
+              autoComplete="cc-number"
+              inputMode="numeric"
               className={INPUT}
               style={{ direction: 'ltr', fontFamily: 'monospace', letterSpacing: '0.08em' }}
             />
@@ -215,6 +217,8 @@ function DemoCardForm({
                 value={expiry}
                 onChange={e => setExpiry(formatExpiry(e.target.value))}
                 placeholder="MM/YY"
+                autoComplete="cc-exp"
+                inputMode="numeric"
                 className={INPUT}
                 style={{ direction: 'ltr', fontFamily: 'monospace' }}
               />
@@ -223,9 +227,12 @@ function DemoCardForm({
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">CVV</label>
               <input
                 value={cvv}
-                onChange={e => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                onChange={e => setCvv(e.target.value.replace(/\D/g, '').slice(0, 3))}
                 placeholder="•••"
                 type="password"
+                autoComplete="cc-csc"
+                inputMode="numeric"
+                maxLength={3}
                 className={INPUT}
                 style={{ direction: 'ltr', fontFamily: 'monospace' }}
               />
@@ -237,6 +244,7 @@ function DemoCardForm({
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="Mohammed Al-Otaibi"
+              autoComplete="cc-name"
               className={INPUT}
               style={{ direction: 'ltr' }}
             />

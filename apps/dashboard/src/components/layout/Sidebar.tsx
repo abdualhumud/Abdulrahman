@@ -101,7 +101,10 @@ export default function Sidebar({ activePage, onNavigate, mobileOpen = false, on
             ? 'translate-x-0'
             : 'ltr:-translate-x-full rtl:translate-x-full',
           // Desktop: back in normal flow, always visible
-          'lg:relative lg:flex-shrink-0 lg:h-screen lg:translate-x-0',
+          // lg:!translate-x-0 uses !important to override the ltr:-translate-x-full
+          // attribute-selector class whose specificity (0,1,0) beats media-query-only
+          // class selectors at large breakpoints.
+          'lg:relative lg:flex-shrink-0 lg:h-screen lg:!translate-x-0',
         ].join(' ')}
         style={{ width: collapsed ? 68 : 240 }}
       >

@@ -6,7 +6,7 @@ import { UNITS, INSURANCE_RECORDS } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
 import { useJourney } from '@/lib/journey-context';
 import { useMode } from '@/lib/mode-context';
-import { SAUDI_CITIES, CITY_COORDS, PROPERTY_IMAGES } from '@/lib/saudi-cities';
+import { SAUDI_CITIES, CITY_COORDS, NEIGHBOURHOOD_COORDS, PROPERTY_IMAGES } from '@/lib/saudi-cities';
 import {
   splLookup, getSplApiKey, setSplApiKey, clearSplApiKey,
   SplAuthError, SplNotFoundError,
@@ -27,7 +27,7 @@ type Unit = typeof UNITS[number] & { nameAr?: string; channelKillSwitch?: Record
 type InsuranceStatus = 'HELD' | 'PENDING_INSPECTION' | 'RELEASED';
 
 const AMENITY_KEYS = ['wifi','ac','kitchen','tv','washer','parking','pool','balcony'] as const;
-const CHANNEL_OPTIONS = ['Booking.com','Airbnb','Gathern','Direct'] as const;
+const CHANNEL_OPTIONS = ['Booking.com','Airbnb','Gathern','Agoda','Expedia','Direct'] as const;
 
 const STATUS_STYLE: Record<string, string> = {
   ACTIVE:      'bg-emerald-50 text-emerald-700 border border-emerald-200',
@@ -42,7 +42,12 @@ const INS_STYLE: Record<InsuranceStatus, string> = {
 };
 
 const CHANNEL_COLOR: Record<string, string> = {
-  'Booking.com': '#003580', 'Airbnb': '#FF5A5F', 'Gathern': '#00a651', 'Direct': '#F59E0B',
+  'Booking.com': '#003580',
+  'Airbnb':      '#FF5A5F',
+  'Gathern':     '#00a651',
+  'Agoda':       '#E31837',
+  'Expedia':     '#1C3D7D',
+  'Direct':      '#F59E0B',
 };
 
 /* ── Photo Upload Component ───────────────────────────────────────── */
@@ -859,21 +864,30 @@ function UnitModal({ unit, onClose, onSave }: {
     }));
   };
 
-  // Re-center map when neighbourhood changes — applies a small deterministic
-  // offset within the city so the flyTo effect fires (no district-level GPS data)
+  // Re-center map when neighbourhood changes.
+  // Priority: 1) exact GPS from NEIGHBOURHOOD_COORDS, 2) small circular offset fallback.
   const handleDistrictChange = (district: string) => {
-    const districts = SAUDI_CITIES[form.city ?? 'Riyadh'] ?? [];
-    const idx       = districts.indexOf(district);
-    const count     = Math.max(districts.length, 1);
-    const angle     = (idx / count) * 2 * Math.PI;
-    const radius    = 0.012; // ~1.3 km visual offset
-    const cityCoords = CITY_COORDS[form.city ?? 'Riyadh'] ?? { lat: 24.7136, lng: 46.6753 };
-    setForm(f => ({
-      ...f,
-      district,
-      lat: parseFloat((cityCoords.lat + Math.sin(angle) * radius).toFixed(5)),
-      lng: parseFloat((cityCoords.lng + Math.cos(angle) * radius).toFixed(5)),
-    }));
+    const city = form.city ?? 'Riyadh';
+    const cityCoords = CITY_COORDS[city] ?? { lat: 24.7136, lng: 46.6753 };
+    // Check for precise neighbourhood-level GPS data first
+    const districtCoords = NEIGHBOURHOOD_COORDS[city]?.[district];
+    let newLat: number;
+    let newLng: number;
+    if (districtCoords) {
+      // Exact GPS known — fly directly to the district
+      newLat = districtCoords.lat;
+      newLng = districtCoords.lng;
+    } else {
+      // No precise data — use a small deterministic circular offset so flyTo still fires
+      const districts = SAUDI_CITIES[city] ?? [];
+      const idx    = districts.indexOf(district);
+      const count  = Math.max(districts.length, 1);
+      const angle  = (idx / count) * 2 * Math.PI;
+      const radius = 0.012; // ~1.3 km visual spread
+      newLat = parseFloat((cityCoords.lat + Math.sin(angle) * radius).toFixed(5));
+      newLng = parseFloat((cityCoords.lng + Math.cos(angle) * radius).toFixed(5));
+    }
+    setForm(f => ({ ...f, district, lat: newLat, lng: newLng }));
   };
 
   const handleNatAddressAutoFill = (r: NatFillResult) => {
