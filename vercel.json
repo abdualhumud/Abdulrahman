@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "name": "rems-dashboard",
+  "buildCommand": "npm install --prefix apps/dashboard && npm run build --prefix apps/dashboard",
+  "outputDirectory": "apps/dashboard/out",
+  "installCommand": "echo 'Monorepo root — dashboard installed via buildCommand'",
+  "framework": null
+}

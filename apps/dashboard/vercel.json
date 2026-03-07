@@ -1,5 +1,6 @@
 {
   "version": 2,
   "name": "rems-dashboard",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "outputDirectory": "out"
 }
