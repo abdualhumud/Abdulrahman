@@ -672,7 +672,7 @@ function NationalAddressField({
 function ShareUnitModal({ unit, onClose, onRequestPayment, lang }: {
   unit: Unit; onClose: () => void; onRequestPayment: () => void; lang: string;
 }) {
-  const shareUrl = `https://abdualhumud.github.io/Abdulrahman/unit/${unit.id}`;
+  const shareUrl = `https://abdualhumud.github.io/REMS/unit/${unit.id}`;
   const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(shareUrl)}&size=200x200&margin=10`;
   const [copied, setCopied] = useState(false);
 

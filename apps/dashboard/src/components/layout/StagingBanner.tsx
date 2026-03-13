@@ -17,8 +17,8 @@ export default function StagingBanner({ user, onLogout }: Props) {
   const s = t.staging;
 
   const prodUrl = typeof window !== 'undefined'
-    ? window.location.origin + '/Abdulrahman/'
-    : '/Abdulrahman/';
+    ? window.location.origin + '/REMS/'
+    : '/REMS/';
 
   return (
     <div

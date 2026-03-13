@@ -12,8 +12,8 @@ export default function DemoBanner() {
 
   // basePath-aware production URL
   const prodUrl = typeof window !== 'undefined'
-    ? window.location.origin + '/Abdulrahman/'
-    : '/Abdulrahman/';
+    ? window.location.origin + '/REMS/'
+    : '/REMS/';
 
   return (
     <div

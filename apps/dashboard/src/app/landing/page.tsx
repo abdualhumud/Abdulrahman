@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 
-const PROD_URL = 'https://abdualhumud.github.io/Abdulrahman/';
+const PROD_URL = 'https://abdualhumud.github.io/REMS/';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONTENT — Bilingual EN / AR
