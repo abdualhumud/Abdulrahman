@@ -646,7 +646,7 @@ function AirbnbIntegrationPanel() {
             className="bg-slate-900 p-3 h-36 overflow-y-auto font-mono text-[10px] space-y-0.5"
             style={{ direction: 'ltr' }}>
             {webhookLog.length === 0 && (
-              <p className="text-slate-600 italic">Press "Simulate Instant Book" to see the webhook flow.</p>
+              <p className="text-slate-600 italic">Press &quot;Simulate Instant Book&quot; to see the webhook flow.</p>
             )}
             {webhookLog.map(e => (
               <div key={e.id} className="flex gap-2">
@@ -805,7 +805,7 @@ function AgodaIntegrationPanel() {
           className="bg-slate-900 p-3 h-36 overflow-y-auto font-mono text-[10px] space-y-0.5"
           style={{ direction: 'ltr' }}>
           {pollingLog.length === 0 && (
-            <p className="text-slate-600 italic">Press "Simulate Agoda Booking" to see the polling flow.</p>
+            <p className="text-slate-600 italic">Press &quot;Simulate Agoda Booking&quot; to see the polling flow.</p>
           )}
           {pollingLog.map(e => (
             <div key={e.id} className="flex gap-2">
@@ -1025,7 +1025,7 @@ function ExpediaIntegrationPanel() {
           className="bg-slate-900 p-3 h-36 overflow-y-auto font-mono text-[10px] space-y-0.5"
           style={{ direction: 'ltr' }}>
           {xmlLog.length === 0 && (
-            <p className="text-slate-600 italic">Press "Simulate Expedia Booking" to see the EQC flow.</p>
+            <p className="text-slate-600 italic">Press &quot;Simulate Expedia Booking&quot; to see the EQC flow.</p>
           )}
           {xmlLog.map(e => (
             <div key={e.id} className="flex gap-2">
