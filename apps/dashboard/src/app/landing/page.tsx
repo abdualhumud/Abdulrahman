@@ -155,6 +155,7 @@ const PARTNER_LIST = [
   { name: 'Expedia',       bg: '#FDB927', fg: '#003580', abbr: 'E',     sub: 'expedia' },
   { name: 'SPL',           bg: '#006B3F', fg: '#ffffff', abbr: 'بريد',  sub: 'SPL' },
   { name: 'Moyasar',       bg: '#1B1F3B', fg: '#FFD700', abbr: 'م',     sub: 'moyasar' },
+  { name: 'Waffy',         bg: '#1A6B3C', fg: '#FFD700', abbr: 'W',     sub: 'WAFFY' },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════

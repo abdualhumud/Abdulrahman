@@ -212,6 +212,18 @@ export const CHANNEL_SYNC_STATUS = [
     color: 'text-indigo-700',
     bg: 'bg-indigo-50',
   },
+  {
+    channel: 'Waffy',
+    logo: '🟩',
+    isConnected: true,
+    syncMethod: 'Webhook',
+    lastSync: '8 min ago',
+    bookingsToday: 1,
+    pending: 0,
+    failed: 0,
+    color: 'text-emerald-800',
+    bg: 'bg-emerald-50',
+  },
 ];
 
 export const INBOX_MESSAGES = [
