@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react';
 
-const PROD_URL = 'https://abdualhumud.github.io/REMS/';
+const PROD_URL    = 'https://abdualhumud.github.io/REMS/';
+const STAGING_URL = 'https://abdualhumud.github.io/REMS/staging/';
+const DEMO_URL    = 'https://abdualhumud.github.io/REMS/demo/';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONTENT — Bilingual EN / AR
@@ -13,6 +15,8 @@ const T = {
     nav: {
       logo: 'REMS', tagline: 'Property Management',
       login: 'Login', start: 'Get Started Free',
+      about: 'About', contact: 'Contact', terms: 'Terms',
+      demo: 'View Demo',
     },
     hero: {
       badge: 'Trusted by Saudi Property Owners',
@@ -20,7 +24,8 @@ const T = {
       h1b: 'Like a Pro.',
       h1c: 'Automated. Integrated. Verified.',
       sub: 'Stop managing chaos. REMS unifies bookings, channels, payments, and cleaning workflows — in one platform built for Saudi landlords.',
-      cta: 'Start Your Journey →',
+      cta: 'Start for Free →',
+      ctaDemo: 'View Live Demo',
       ctaNote: '14-day free trial · No credit card required',
       stats: [
         { n: '10,000+', l: 'Properties Managed' },
@@ -41,6 +46,31 @@ const T = {
         { icon: 'broom',    color: 'amber',   title: 'Smart Housekeeping',        body: 'Auto-trigger cleaning tasks on checkout. Assign to internal teams or external providers and track status in real-time.' },
         { icon: 'shield',   color: 'red',     title: 'Overlap Protection Engine', body: 'Exclusive-lock algorithm prevents double-bookings across all OTAs in under 500ms. The most advanced in the Saudi market.' },
         { icon: 'chart',    color: 'indigo',  title: 'Revenue Intelligence',      body: 'Track RevPAR, ADR, occupancy rate, and net payouts — with channel-by-channel breakdowns and monthly trend graphs.' },
+      ],
+    },
+    about: {
+      badge: 'OUR STORY',
+      heading: 'Built for Saudi Property Owners',
+      act1Label: 'The Problem',
+      act1Title: "Managing 10 properties shouldn't feel like managing a crisis.",
+      act1Points: [
+        'Double bookings across channels causing guest complaints',
+        'Unverified property locations causing guest confusion',
+        '3am phone calls, manual spreadsheets, and lost revenue',
+      ],
+      act2Label: 'The Solution',
+      act2Title: 'Then came REMS — built for Saudi property owners, by people who understand the market.',
+      act2Points: [
+        'SPL National Address integration: GPS-verified locations',
+        'OTA sync in <500ms: Booking.com, Airbnb, Gathern all updated instantly',
+        'Automated cleaning workflow triggered on checkout',
+      ],
+      act3Label: 'The Vision',
+      act3Title: 'Our vision: every Saudi property owner managing their portfolio like an enterprise.',
+      act3Points: [
+        'Scale from 1 unit to 500+ without changing software',
+        'Built for Vision 2030: bilingual, compliant, integrated',
+        'Saudi-first: MADA, STC Pay, SPL, and VAT-ready',
       ],
     },
     pricing: {
@@ -68,10 +98,34 @@ const T = {
         { q: 'What kind of support is available?', a: 'Basic: email support with 48h response time. Pro: priority queue with 4h response. Enterprise: dedicated account manager and fully custom onboarding.' },
       ],
     },
+    contact: {
+      badge: 'CONTACT US',
+      heading: 'Get in Touch',
+      sub: "Have a question about REMS? Our team responds within 24 hours.",
+      name: 'Full Name',
+      email: 'Email Address',
+      phone: 'Phone Number',
+      subject: 'Subject',
+      message: 'Message',
+      send: 'Send Message',
+      sending: 'Sending...',
+      successTitle: 'Message Sent!',
+      successSub: "Thank you! We'll respond within 24 hours.",
+      subjects: ['General Inquiry', 'Technical Support', 'Sales', 'Partnership'],
+      phonePlaceholder: '+966 5X XXX XXXX',
+      namePlaceholder: 'Your full name',
+      emailPlaceholder: 'you@company.com',
+      messagePlaceholder: 'Tell us how we can help you...',
+    },
     footer: {
       tagline: 'The future of Saudi property management.',
       ctaBanner: 'Ready to transform your property business?', ctaBtn: 'Start Free Trial',
-      links: [{ label: 'About', href: '#' }, { label: 'Contact', href: '#' }, { label: 'Privacy Policy', href: '#' }, { label: 'Terms of Service', href: '#' }],
+      links: [
+        { label: 'About', href: '#about' },
+        { label: 'Contact', href: '#contact' },
+        { label: 'Terms of Service', href: '/terms/' },
+        { label: 'Privacy Policy', href: '#' },
+      ],
       copy: '© 2026 REMS Real Estate Management System. All rights reserved.',
     },
   },
@@ -80,6 +134,8 @@ const T = {
     nav: {
       logo: 'REMS', tagline: 'إدارة العقارات',
       login: 'تسجيل الدخول', start: 'ابدأ مجاناً',
+      about: 'من نحن', contact: 'تواصل معنا', terms: 'الشروط',
+      demo: 'جرّب العرض',
     },
     hero: {
       badge: 'موثوق من مُلاك العقارات السعوديين',
@@ -87,7 +143,8 @@ const T = {
       h1b: 'كالمحترفين.',
       h1c: 'آلياً. متكاملاً. موثقاً.',
       sub: 'أنهِ الفوضى. REMS يوحّد حجوزاتك وقنواتك ومدفوعاتك وسير عمل التنظيف — في منصة واحدة مبنية لأصحاب العقارات السعوديين.',
-      cta: '← ابدأ رحلتك',
+      cta: '← ابدأ مجانًا',
+      ctaDemo: 'جرّب العرض الحي',
       ctaNote: 'تجربة مجانية 14 يوماً · بدون بطاقة ائتمانية',
       stats: [
         { n: '+10,000', l: 'عقار تحت الإدارة' },
@@ -108,6 +165,31 @@ const T = {
         { icon: 'broom',    color: 'amber',   title: 'تنظيف وصيانة ذكية',            body: 'تشغيل مهام التنظيف تلقائياً عند المغادرة. تعيين للفرق الداخلية أو المزودين الخارجيين مع تتبع الحالة في الوقت الفعلي.' },
         { icon: 'shield',   color: 'red',     title: 'محرك الحماية من التداخل',       body: 'خوارزمية القفل الحصري تمنع الحجوزات المزدوجة عبر جميع القنوات في أقل من 500 مللي ثانية. الأكثر تقدماً في السوق السعودي.' },
         { icon: 'chart',    color: 'indigo',  title: 'ذكاء الإيرادات',               body: 'تتبع RevPAR وADR ومعدل الإشغال وصافي المدفوعات — مع تفاصيل كل قناة على حدة والاتجاهات الشهرية.' },
+      ],
+    },
+    about: {
+      badge: 'قصتنا',
+      heading: 'مبني لأصحاب العقارات السعوديين',
+      act1Label: 'المشكلة',
+      act1Title: 'إدارة ١٠ عقارات لا ينبغي أن تشعر وكأنك تدير أزمة.',
+      act1Points: [
+        'حجوزات مزدوجة عبر القنوات تسبب شكاوى الضيوف',
+        'مواقع عقارات غير موثقة تُربك الضيوف',
+        'اتصالات الساعة 3 صباحاً وجداول البيانات اليدوية والإيرادات الضائعة',
+      ],
+      act2Label: 'الحل',
+      act2Title: 'ثم جاء REMS — مبني لملاك العقارات السعوديين، من أناس يفهمون السوق.',
+      act2Points: [
+        'تكامل العنوان الوطني SPL: مواقع موثقة بنظام GPS',
+        'مزامنة OTA في أقل من 500 مللي ثانية: Booking.com وAirbnb وGathern تُحدَّث فوراً',
+        'سير عمل تنظيف آلي يُشغَّل عند المغادرة',
+      ],
+      act3Label: 'الرؤية',
+      act3Title: 'رؤيتنا: كل مالك عقار سعودي يدير محفظته كمؤسسة كبرى.',
+      act3Points: [
+        'التوسع من وحدة واحدة إلى أكثر من 500 دون تغيير البرنامج',
+        'مبني لرؤية 2030: ثنائي اللغة، متوافق، متكامل',
+        'سعودي أولاً: مدى، STC Pay، SPL، وضريبة القيمة المضافة',
       ],
     },
     pricing: {
@@ -135,17 +217,41 @@ const T = {
         { q: 'ما الدعم الفني المتاح؟', a: 'أساسي: دعم بريد إلكتروني (استجابة 48 ساعة). احترافي: أولوية في قائمة الانتظار (استجابة 4 ساعات). مؤسسي: مدير حساب مخصص وتهيئة مخصصة.' },
       ],
     },
+    contact: {
+      badge: 'تواصل معنا',
+      heading: 'ابقَ على تواصل',
+      sub: 'لديك سؤال حول REMS؟ فريقنا يرد خلال 24 ساعة.',
+      name: 'الاسم الكامل',
+      email: 'البريد الإلكتروني',
+      phone: 'رقم الجوال',
+      subject: 'الموضوع',
+      message: 'الرسالة',
+      send: 'إرسال الرسالة',
+      sending: 'جارٍ الإرسال...',
+      successTitle: 'تم الإرسال!',
+      successSub: 'شكراً لك! سنرد خلال 24 ساعة.',
+      subjects: ['استفسار عام', 'الدعم الفني', 'المبيعات', 'الشراكات'],
+      phonePlaceholder: '+966 5X XXX XXXX',
+      namePlaceholder: 'اسمك الكامل',
+      emailPlaceholder: 'you@company.com',
+      messagePlaceholder: 'أخبرنا كيف يمكننا مساعدتك...',
+    },
     footer: {
       tagline: 'مستقبل إدارة العقارات السعودية.',
       ctaBanner: 'هل أنت مستعد لتحويل أعمالك العقارية؟', ctaBtn: 'ابدأ التجربة المجانية',
-      links: [{ label: 'من نحن', href: '#' }, { label: 'تواصل معنا', href: '#' }, { label: 'سياسة الخصوصية', href: '#' }, { label: 'شروط الخدمة', href: '#' }],
+      links: [
+        { label: 'من نحن', href: '#about' },
+        { label: 'تواصل معنا', href: '#contact' },
+        { label: 'شروط الخدمة', href: '/terms/' },
+        { label: 'سياسة الخصوصية', href: '#' },
+      ],
       copy: '© 2026 REMS نظام إدارة العقارات. جميع الحقوق محفوظة.',
     },
   },
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PARTNER LIST
+// PARTNER LIST — with proper brand chips
 // ═══════════════════════════════════════════════════════════════════════════
 const PARTNER_LIST = [
   { name: 'Booking.com',   bg: '#003580', fg: '#ffffff', abbr: 'B.',    sub: 'BOOKING.COM' },
@@ -155,7 +261,6 @@ const PARTNER_LIST = [
   { name: 'Expedia',       bg: '#FDB927', fg: '#003580', abbr: 'E',     sub: 'expedia' },
   { name: 'SPL',           bg: '#006B3F', fg: '#ffffff', abbr: 'بريد',  sub: 'SPL' },
   { name: 'Moyasar',       bg: '#1B1F3B', fg: '#FFD700', abbr: 'م',     sub: 'moyasar' },
-  { name: 'Waffy',         bg: '#1A6B3C', fg: '#FFD700', abbr: 'W',     sub: 'WAFFY' },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -198,6 +303,105 @@ function CheckIcon({ blue }: { blue?: boolean }) {
     <span className={`flex-shrink-0 mt-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${blue ? 'bg-blue-400/25 text-blue-200' : 'bg-emerald-100 text-emerald-600'}`}>
       ✓
     </span>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONTACT FORM — saves to localStorage for Super-Admin review
+// ═══════════════════════════════════════════════════════════════════════════
+const CONTACT_STORAGE_KEY = 'rems-contact-submissions';
+
+interface ContactFormState {
+  name: string; email: string; phone: string; subject: string; message: string;
+}
+
+function ContactSection({ t, isAr }: { t: typeof T['en']; isAr: boolean }) {
+  const [form, setForm] = useState<ContactFormState>({ name: '', email: '', phone: '', subject: '', message: '' });
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const c = t.contact;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name || !form.email || !form.message) return;
+    setSending(true);
+    setTimeout(() => {
+      try {
+        const existing = JSON.parse(localStorage.getItem(CONTACT_STORAGE_KEY) ?? '[]');
+        existing.unshift({ ...form, submittedAt: new Date().toISOString(), id: `c-${Date.now()}` });
+        localStorage.setItem(CONTACT_STORAGE_KEY, JSON.stringify(existing.slice(0, 200)));
+      } catch { /* ignore */ }
+      setSending(false);
+      setSent(true);
+    }, 1200);
+  };
+
+  const INPUT_CLS = 'contact-input w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all';
+  const LABEL_CLS = 'block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2';
+
+  if (sent) {
+    return (
+      <div className="max-w-lg mx-auto text-center py-16">
+        <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </div>
+        <h3 className="text-2xl font-black text-white mb-3">{c.successTitle}</h3>
+        <p className="text-slate-400">{c.successSub}</p>
+        <button onClick={() => { setSent(false); setForm({ name: '', email: '', phone: '', subject: '', message: '' }); }}
+          className="mt-8 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors">
+          {isAr ? 'إرسال رسالة أخرى' : 'Send Another Message'}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="max-w-2xl mx-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
+        <div>
+          <label className={LABEL_CLS}>{c.name} <span className="text-red-400">*</span></label>
+          <input type="text" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            placeholder={c.namePlaceholder} className={INPUT_CLS} />
+        </div>
+        <div>
+          <label className={LABEL_CLS}>{c.email} <span className="text-red-400">*</span></label>
+          <input type="email" required value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+            placeholder={c.emailPlaceholder} className={INPUT_CLS} />
+        </div>
+        <div>
+          <label className={LABEL_CLS}>{c.phone}</label>
+          <input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+            placeholder={c.phonePlaceholder} className={INPUT_CLS} style={{ direction: 'ltr' }} />
+        </div>
+        <div>
+          <label className={LABEL_CLS}>{c.subject}</label>
+          <select value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
+            className={INPUT_CLS + ' cursor-pointer'} style={{ colorScheme: 'dark' }}>
+            <option value="">{isAr ? '-- اختر الموضوع --' : '-- Select Subject --'}</option>
+            {c.subjects.map((s, i) => <option key={i} value={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="mb-6">
+        <label className={LABEL_CLS}>{c.message} <span className="text-red-400">*</span></label>
+        <textarea required rows={5} value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
+          placeholder={c.messagePlaceholder} className={INPUT_CLS + ' resize-none'} />
+      </div>
+      <button type="submit" disabled={sending}
+        className="w-full py-4 rounded-xl text-white font-bold text-base transition-all hover:opacity-90 disabled:opacity-60 shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2"
+        style={{ background: 'linear-gradient(135deg,#4F46E5,#7C3AED)' }}>
+        {sending ? (
+          <>
+            <svg className="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            {c.sending}
+          </>
+        ) : c.send}
+      </button>
+    </form>
   );
 }
 
@@ -309,6 +513,15 @@ export default function LandingPage() {
           transform: translateY(-8px);
           box-shadow: 0 24px 48px -12px rgba(0,0,0,0.15);
         }
+        /* Story card hover */
+        .story-card {
+          transition: transform 0.4s cubic-bezier(0.4,0,0.2,1), box-shadow 0.4s;
+        }
+        .story-card:hover { transform: translateY(-6px); box-shadow: 0 20px 40px rgba(0,0,0,0.15); }
+
+        /* Contact form field focus glow */
+        .contact-input:focus { box-shadow: 0 0 0 3px rgba(99,102,241,0.25); }
+
         .price-popular {
           background: linear-gradient(145deg, #1D4ED8 0%, #3730A3 55%, #1E3A8A 100%);
           box-shadow: 0 32px 64px -16px rgba(37,99,235,0.45);
@@ -349,6 +562,13 @@ export default function LandingPage() {
             </div>
           </a>
 
+          {/* Nav links — desktop */}
+          <div className="hidden md:flex items-center gap-6">
+            <a href="#about"   className="text-slate-400 hover:text-white text-sm font-medium transition-colors">{t.nav.about}</a>
+            <a href="#contact" className="text-slate-400 hover:text-white text-sm font-medium transition-colors">{t.nav.contact}</a>
+            <a href="/terms/"  className="text-slate-400 hover:text-white text-sm font-medium transition-colors">{t.nav.terms}</a>
+          </div>
+
           {/* Controls */}
           <div className="flex items-center gap-2">
             {/* Dark mode */}
@@ -369,6 +589,14 @@ export default function LandingPage() {
               <span className="hidden sm:inline">{lang === 'en' ? 'العربية' : 'English'}</span>
             </button>
 
+            {/* Demo link */}
+            <a
+              href={DEMO_URL}
+              className="h-9 px-4 rounded-xl border border-white/15 bg-white/5 hover:bg-white/12 text-slate-300 hover:text-white text-sm font-medium transition-all hidden sm:flex items-center"
+            >
+              {t.nav.demo}
+            </a>
+
             {/* Login */}
             <a
               href={PROD_URL}
@@ -379,7 +607,7 @@ export default function LandingPage() {
 
             {/* Get Started */}
             <a
-              href={PROD_URL}
+              href={STAGING_URL}
               className="shimmer-btn h-9 px-5 rounded-xl text-white text-sm font-bold flex items-center shadow-lg shadow-blue-500/25 hover:shadow-blue-500/45 transition-shadow hover:scale-105 active:scale-95"
             >
               {t.nav.start}
@@ -421,17 +649,24 @@ export default function LandingPage() {
             {t.hero.sub}
           </p>
 
-          {/* CTA */}
-          <div className="fade-in-3 flex flex-col items-center gap-3 mb-20">
+          {/* CTAs */}
+          <div className="fade-in-3 flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
             <a
-              href={PROD_URL}
+              href={STAGING_URL}
               className="shimmer-btn text-white font-bold px-10 py-4 rounded-2xl shadow-2xl shadow-blue-500/35 hover:shadow-blue-500/55 hover:scale-105 active:scale-95 transition-all"
               style={{ fontSize: 'clamp(1rem, 2vw, 1.2rem)' }}
             >
               {t.hero.cta}
             </a>
-            <p className="text-slate-500 text-sm">{t.hero.ctaNote}</p>
+            <a
+              href={DEMO_URL}
+              className="text-slate-300 hover:text-white border border-white/20 hover:border-white/40 bg-white/5 hover:bg-white/10 font-bold px-8 py-4 rounded-2xl transition-all hover:scale-105 active:scale-95"
+              style={{ fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}
+            >
+              {t.hero.ctaDemo} →
+            </a>
           </div>
+          <p className="text-slate-500 text-sm -mt-14 mb-14">{t.hero.ctaNote}</p>
 
           {/* Stats */}
           <div className="fade-in-4 grid grid-cols-2 sm:grid-cols-4 gap-8">
@@ -509,6 +744,84 @@ export default function LandingPage() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════
+          ABOUT US — 3-Act Brand Story
+      ═══════════════════════════════════════════════════════════════════ */}
+      <section id="about" className="py-24 sm:py-32 bg-slate-900">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+          {/* Header */}
+          <div className="text-center mb-16">
+            <span className="inline-block px-3 py-1 rounded-full bg-blue-500/15 text-blue-400 text-xs font-black uppercase tracking-[0.15em] mb-5 border border-blue-500/20">
+              {t.about.badge}
+            </span>
+            <h2 className="font-black text-white mb-4 leading-tight" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
+              {t.about.heading}
+            </h2>
+          </div>
+
+          {/* Timeline: 3 story cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+            {/* Connecting line (desktop) */}
+            <div className="hidden md:block absolute top-8 left-[16.67%] right-[16.67%] h-0.5 bg-gradient-to-r from-red-500 via-blue-500 to-emerald-500 opacity-30 pointer-events-none" style={{ top: '2rem' }} />
+
+            {/* Act 1 — The Problem */}
+            <div className="story-card relative bg-slate-800/60 border border-red-500/20 rounded-3xl p-8 hover:border-red-500/40 backdrop-blur-sm">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center text-red-400 font-black text-sm">1</div>
+                <span className="text-red-400 text-xs font-bold uppercase tracking-wider">{t.about.act1Label}</span>
+              </div>
+              <div className="text-3xl mb-4">😰</div>
+              <h3 className="text-white font-black text-lg mb-4 leading-snug">{t.about.act1Title}</h3>
+              <ul className="space-y-3">
+                {t.about.act1Points.map((p, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-slate-400 text-sm">
+                    <span className="flex-shrink-0 mt-0.5 w-4 h-4 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center text-[10px] font-bold">✗</span>
+                    {p}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Act 2 — The Solution */}
+            <div className="story-card relative bg-slate-800/60 border border-blue-500/20 rounded-3xl p-8 hover:border-blue-500/40 backdrop-blur-sm md:mt-8">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-black text-sm">2</div>
+                <span className="text-blue-400 text-xs font-bold uppercase tracking-wider">{t.about.act2Label}</span>
+              </div>
+              <div className="text-3xl mb-4">🚀</div>
+              <h3 className="text-white font-black text-lg mb-4 leading-snug">{t.about.act2Title}</h3>
+              <ul className="space-y-3">
+                {t.about.act2Points.map((p, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-slate-400 text-sm">
+                    <span className="flex-shrink-0 mt-0.5 w-4 h-4 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-[10px] font-bold">✓</span>
+                    {p}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Act 3 — The Vision */}
+            <div className="story-card relative rounded-3xl p-8 md:mt-16" style={{ background: 'linear-gradient(145deg,#064e3b,#065f46)', border: '1px solid rgba(16,185,129,0.25)' }}>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-black text-sm">3</div>
+                <span className="text-emerald-400 text-xs font-bold uppercase tracking-wider">{t.about.act3Label}</span>
+              </div>
+              <div className="text-3xl mb-4">🌟</div>
+              <h3 className="text-white font-black text-lg mb-4 leading-snug">{t.about.act3Title}</h3>
+              <ul className="space-y-3">
+                {t.about.act3Points.map((p, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-emerald-200/70 text-sm">
+                    <span className="flex-shrink-0 mt-0.5 w-4 h-4 rounded-full bg-emerald-500/30 text-emerald-400 flex items-center justify-center text-[10px] font-bold">✦</span>
+                    {p}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════════
           PRICING
       ═══════════════════════════════════════════════════════════════════ */}
       <section className="py-24 sm:py-32 bg-white">
@@ -568,7 +881,7 @@ export default function LandingPage() {
 
                     {/* CTA */}
                     <a
-                      href={PROD_URL}
+                      href={STAGING_URL}
                       className={`block text-center font-bold py-3.5 rounded-xl transition-all hover:scale-[1.02] active:scale-95 ${
                         isPop
                           ? 'bg-white text-blue-700 hover:bg-blue-50 shadow-lg shadow-blue-900/20'
@@ -648,6 +961,26 @@ export default function LandingPage() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════
+          CONTACT US
+      ═══════════════════════════════════════════════════════════════════ */}
+      <section id="contact" className="py-24 sm:py-32 bg-slate-900">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <span className="inline-block px-3 py-1 rounded-full bg-indigo-500/15 text-indigo-400 text-xs font-black uppercase tracking-[0.15em] mb-5 border border-indigo-500/20">
+              {t.contact.badge}
+            </span>
+            <h2 className="font-black text-white mb-4 leading-tight" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
+              {t.contact.heading}
+            </h2>
+            <p className="text-slate-400 text-lg max-w-xl mx-auto">{t.contact.sub}</p>
+          </div>
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-3xl p-8 sm:p-12 max-w-3xl mx-auto backdrop-blur-sm">
+            <ContactSection t={t} isAr={isAr} />
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════════
           FOOTER CTA BANNER
       ═══════════════════════════════════════════════════════════════════ */}
       <section className="cta-bg relative overflow-hidden py-24 sm:py-32">
@@ -661,7 +994,7 @@ export default function LandingPage() {
             {t.footer.ctaBanner}
           </h2>
           <a
-            href={PROD_URL}
+            href={STAGING_URL}
             className="inline-block bg-white text-blue-800 font-bold px-12 py-4 rounded-2xl hover:bg-blue-50 transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-blue-900/30 text-lg"
           >
             {t.footer.ctaBtn}
