@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 const PROD_URL    = 'https://abdualhumud.github.io/REMS/';
 const STAGING_URL = 'https://abdualhumud.github.io/REMS/staging/';
 const DEMO_URL    = 'https://abdualhumud.github.io/REMS/demo/';
+const TERMS_URL   = 'https://abdualhumud.github.io/REMS/terms/';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONTENT — Bilingual EN / AR
@@ -123,7 +124,7 @@ const T = {
       links: [
         { label: 'About', href: '#about' },
         { label: 'Contact', href: '#contact' },
-        { label: 'Terms of Service', href: '/terms/' },
+        { label: 'Terms of Service', href: TERMS_URL },
         { label: 'Privacy Policy', href: '#' },
       ],
       copy: '© 2026 REMS Real Estate Management System. All rights reserved.',
@@ -242,7 +243,7 @@ const T = {
       links: [
         { label: 'من نحن', href: '#about' },
         { label: 'تواصل معنا', href: '#contact' },
-        { label: 'شروط الخدمة', href: '/terms/' },
+        { label: 'شروط الخدمة', href: TERMS_URL },
         { label: 'سياسة الخصوصية', href: '#' },
       ],
       copy: '© 2026 REMS نظام إدارة العقارات. جميع الحقوق محفوظة.',
@@ -566,7 +567,7 @@ export default function LandingPage() {
           <div className="hidden md:flex items-center gap-6">
             <a href="#about"   className="text-slate-400 hover:text-white text-sm font-medium transition-colors">{t.nav.about}</a>
             <a href="#contact" className="text-slate-400 hover:text-white text-sm font-medium transition-colors">{t.nav.contact}</a>
-            <a href="/terms/"  className="text-slate-400 hover:text-white text-sm font-medium transition-colors">{t.nav.terms}</a>
+            <a href={TERMS_URL} className="text-slate-400 hover:text-white text-sm font-medium transition-colors">{t.nav.terms}</a>
           </div>
 
           {/* Controls */}
