@@ -315,7 +315,7 @@ interface ContactFormState {
   name: string; email: string; phone: string; subject: string; message: string;
 }
 
-function ContactSection({ t, isAr }: { t: typeof T['en']; isAr: boolean }) {
+function ContactSection({ t, isAr }: { t: typeof T['en'] | typeof T['ar']; isAr: boolean }) {
   const [form, setForm] = useState<ContactFormState>({ name: '', email: '', phone: '', subject: '', message: '' });
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
