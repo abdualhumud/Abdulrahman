@@ -11,17 +11,19 @@ A bilingual (Arabic/English) SaaS property management dashboard for Saudi proper
 **Live URLs:**
 | Environment | URL | Purpose |
 |---|---|---|
-| Production | `https://abdualhumud.github.io/Abdulrahman/` | Live SaaS core — strict onboarding |
-| Demo/Sandbox | `https://abdualhumud.github.io/Abdulrahman/demo/` | Sales demo — pre-loaded mock data |
-| Staging/Trial | `https://abdualhumud.github.io/Abdulrahman/staging/` | 14-day free trial — multi-tenant, login-gated |
-| Super-Admin | `https://abdualhumud.github.io/Abdulrahman/super-admin/` | Owner control panel — PIN-gated |
+| Landing | `https://abdualhumud.github.io/REMS/landing/` | Public marketing page — bilingual, no auth |
+| Terms | `https://abdualhumud.github.io/REMS/terms/` | Terms of Service — bilingual, linked from landing |
+| Production | `https://abdualhumud.github.io/REMS/` | Live SaaS core — strict onboarding |
+| Demo/Sandbox | `https://abdualhumud.github.io/REMS/demo/` | Sales demo — pre-loaded mock data |
+| Staging/Trial | `https://abdualhumud.github.io/REMS/staging/` | 14-day free trial — multi-tenant, login-gated |
+| Super-Admin | `https://abdualhumud.github.io/REMS/super-admin/` | Owner control panel — PIN-gated |
 
 ---
 
 ## Monorepo Structure
 
 ```
-/home/user/Abdulrahman/
+/home/user/REMS/
 ├── CLAUDE.md                          # This file
 ├── package-lock.json                  # ROOT-level lockfile (shared)
 ├── package.json                       # Root workspace config
@@ -36,6 +38,10 @@ A bilingual (Arabic/English) SaaS property management dashboard for Saudi proper
         ├── src/
         │   ├── app/
         │   │   ├── page.tsx           # Production entry (envMode='production')
+        │   │   ├── landing/
+        │   │   │   └── page.tsx       # Public marketing page (self-contained, no contexts)
+        │   │   ├── terms/
+        │   │   │   └── page.tsx       # Terms of Service (bilingual, self-contained)
         │   │   ├── demo/
         │   │   │   └── page.tsx       # Demo entry (envMode='demo')
         │   │   ├── staging/
@@ -84,6 +90,74 @@ A bilingual (Arabic/English) SaaS property management dashboard for Saudi proper
         │   └── test-integration.mjs      # 69-test plain Node.js suite (no framework)
         └── out/                           # Static export output (gitignored)
 ```
+
+---
+
+## Landing Page (`src/app/landing/page.tsx`)
+
+Self-contained marketing page served at `/REMS/landing/`. Does **not** use any React context (`ModeProvider`, `LanguageProvider`, etc.) — it manages its own `lang` and `dark` state internally.
+
+### Architecture
+
+- **Bilingual EN/AR**: all copy lives in a local `T` object at the top of the file (same pattern as the dashboard's `i18n.ts` but scoped to this page only)
+- **Dark mode**: toggled via `document.documentElement.classList.add('dark')` — reverted on unmount
+- **RTL**: set via `document.documentElement.dir` — reverted on unmount
+- **No external icon library**: inline SVG paths via a local `FeatureIcon` helper
+- **No routing**: single-page scroll; anchor links (`#about`, `#contact`) for in-page navigation
+
+### Sections (in order)
+
+| Section | Notes |
+|---|---|
+| Sticky nav | Logo, About/Contact/Terms links, dark mode toggle, lang toggle, Demo/Login/Get Started CTAs |
+| Hero | Animated orbs, grid background, shimmer CTA button, 4-stat grid |
+| Partners ticker | CSS `animation: ticker` infinite scroll, pauses on hover, masked edges |
+| Features | 6-card grid with `feature-card` hover lift animation |
+| About | 3-act brand story (The Problem / The Solution / The Vision) |
+| Pricing | 3 plans; popular plan uses `price-popular` gradient + `md:scale-105` |
+| FAQ | Accordion with `max-height` CSS transition (no JS animation library) |
+| Contact | `ContactSection` component — form fields, tel/email links, social links |
+| Footer CTA banner | Full-width `cta-bg` gradient + large CTA button |
+| Footer | Logo, nav links, copyright, back-to-top button |
+
+### Key Constants
+
+```tsx
+const PROD_URL    = 'https://abdualhumud.github.io/REMS/';
+const STAGING_URL = 'https://abdualhumud.github.io/REMS/staging/';
+const DEMO_URL    = 'https://abdualhumud.github.io/REMS/demo/';
+```
+
+### CSS Animation Classes (defined in inline `<style>`)
+
+| Class | Effect |
+|---|---|
+| `.shimmer-btn` | Gradient background sweep — used on primary CTAs |
+| `.grad-text` | Animated gradient text fill — hero headline accent |
+| `.hero-orb` / `.hero-orb-2` | Pulsing blurred orb decorations |
+| `.float-card` | Slow floating bob animation |
+| `.fade-in-0` … `.fade-in-4` | Staggered `fadeInUp` entrance animations |
+| `.ticker-inner` | Infinite horizontal scroll for partner chips |
+| `.feature-card` | Cubic-bezier hover lift + shadow |
+| `.story-card` | Hover lift for About section cards |
+| `.price-popular` | Dark blue gradient + heavy drop shadow for highlighted plan |
+| `.faq-body` | `max-height` + `opacity` transition for accordion |
+
+### `PartnerChip` component
+
+Renders a colored pill with abbreviation + full name for the partners ticker. Defined inline in `landing/page.tsx` — does not use the global icon system.
+
+---
+
+## Terms of Service Page (`src/app/terms/page.tsx`)
+
+Self-contained legal page at `/REMS/terms/`. Linked from the landing page nav and footer.
+
+- **14 sections** covering: acceptance, service description, accounts, payment, promo codes, data/privacy, OTA integrations, SPL, acceptable use, availability, liability, modifications, governing law, contact
+- **Bilingual**: local `T` object with `en`/`ar` variants — same self-contained pattern as the landing page
+- **RTL**: set/reverted via `useEffect` on lang change
+- **Sticky nav**: back-to-home link, REMS logo, language toggle
+- **No contexts, no external dependencies**
 
 ---
 
