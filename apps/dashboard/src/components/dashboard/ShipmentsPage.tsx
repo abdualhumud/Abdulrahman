@@ -664,9 +664,9 @@ export default function ShipmentsPage() {
               {/* API info box */}
               <div className="bg-slate-900 rounded-xl p-3 text-xs font-mono space-y-1">
                 <p className="text-emerald-400 font-bold text-[10px] mb-2">POST /ShipmentsCommands/AddShipment</p>
-                <p className="text-slate-400"><span className="text-blue-300">shipmentNumber:</span> <span className="text-amber-300">"{form.shipmentNumber || 'SHP-2026-XXXXXX'}"</span></p>
-                <p className="text-slate-400"><span className="text-blue-300">consigneePhone:</span> <span className="text-amber-300">"{form.consigneeCountryCode} {form.consigneePhone}"</span></p>
-                <p className="text-slate-400"><span className="text-blue-300">status:</span> <span className="text-amber-300">"{form.status}"</span></p>
+                <p className="text-slate-400"><span className="text-blue-300">shipmentNumber:</span> <span className="text-amber-300">&quot;{form.shipmentNumber || 'SHP-2026-XXXXXX'}&quot;</span></p>
+                <p className="text-slate-400"><span className="text-blue-300">consigneePhone:</span> <span className="text-amber-300">&quot;{form.consigneeCountryCode} {form.consigneePhone}&quot;</span></p>
+                <p className="text-slate-400"><span className="text-blue-300">status:</span> <span className="text-amber-300">&quot;{form.status}&quot;</span></p>
               </div>
             </div>
 
