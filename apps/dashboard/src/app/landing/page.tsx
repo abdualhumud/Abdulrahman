@@ -252,16 +252,44 @@ const T = {
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PARTNER LIST — with proper brand chips
+// PARTNER LIST — brand logos
 // ═══════════════════════════════════════════════════════════════════════════
 const PARTNER_LIST = [
-  { name: 'Booking.com',   bg: '#003580', fg: '#ffffff', abbr: 'B.',    sub: 'BOOKING.COM' },
-  { name: 'Airbnb',        bg: '#FF385C', fg: '#ffffff', abbr: 'airbnb', sub: '' },
-  { name: 'Gathern',       bg: '#00A651', fg: '#ffffff', abbr: 'G',     sub: 'GATHERN' },
-  { name: 'Agoda',         bg: '#E2183A', fg: '#ffffff', abbr: 'A',     sub: 'agoda' },
-  { name: 'Expedia',       bg: '#FDB927', fg: '#003580', abbr: 'E',     sub: 'expedia' },
-  { name: 'SPL',           bg: '#006B3F', fg: '#ffffff', abbr: 'بريد',  sub: 'SPL' },
-  { name: 'Moyasar',       bg: '#1B1F3B', fg: '#FFD700', abbr: 'م',     sub: 'moyasar' },
+  {
+    name: 'Booking.com',
+    logoUrl: 'https://logo.clearbit.com/booking.com',
+    fallbackBg: '#003580', fallbackFg: '#ffffff', fallbackText: 'B.',
+  },
+  {
+    name: 'Airbnb',
+    logoUrl: 'https://logo.clearbit.com/airbnb.com',
+    fallbackBg: '#FF385C', fallbackFg: '#ffffff', fallbackText: 'A',
+  },
+  {
+    name: 'Gathern',
+    logoUrl: 'https://logo.clearbit.com/gathern.co',
+    fallbackBg: '#00A651', fallbackFg: '#ffffff', fallbackText: 'G',
+  },
+  {
+    name: 'Moyasar',
+    logoUrl: 'https://logo.clearbit.com/moyasar.com',
+    fallbackBg: '#1B1F3B', fallbackFg: '#FFD700', fallbackText: 'م',
+  },
+  {
+    name: 'Agoda',
+    logoUrl: 'https://logo.clearbit.com/agoda.com',
+    fallbackBg: '#E2183A', fallbackFg: '#ffffff', fallbackText: 'A',
+  },
+  {
+    name: 'Expedia',
+    logoUrl: 'https://logo.clearbit.com/expedia.com',
+    fallbackBg: '#FDB927', fallbackFg: '#003580', fallbackText: 'E',
+  },
+  {
+    name: 'SPL',
+    logoUrl: 'https://logo.clearbit.com/splonline.com.sa',
+    fallbackBg: '#006B3F', fallbackFg: '#ffffff', fallbackText: 'SPL',
+  },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -279,19 +307,42 @@ function FeatureIcon({ icon }: { icon: string }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PARTNER CHIP
+// PARTNER CHIP — real brand logo with graceful fallback
 // ═══════════════════════════════════════════════════════════════════════════
-function PartnerChip({ name, bg, fg, abbr, sub }: typeof PARTNER_LIST[0]) {
+function PartnerChip({ name, logoUrl, fallbackBg, fallbackFg, fallbackText }: typeof PARTNER_LIST[0]) {
+  const [imgFailed, setImgFailed] = useState(false);
   return (
     <div
-      className="flex items-center gap-2.5 px-5 py-3 rounded-2xl shadow-md select-none"
-      style={{ background: bg, direction: 'ltr' }}
+      className="flex items-center gap-3 px-5 py-3 rounded-2xl shadow-md select-none border"
+      style={{
+        background: imgFailed ? fallbackBg : 'white',
+        borderColor: imgFailed ? 'transparent' : '#e2e8f0',
+        direction: 'ltr',
+      }}
     >
-      <div className="flex flex-col items-start" style={{ color: fg }}>
-        <span className="font-black text-lg leading-none" style={{ fontFamily: 'Arial Black, sans-serif' }}>{abbr}</span>
-        {sub && <span className="text-[9px] font-bold tracking-wider opacity-75 leading-none mt-0.5">{sub}</span>}
-      </div>
-      <span className="text-sm font-bold opacity-90" style={{ color: fg }}>{name}</span>
+      {!imgFailed ? (
+        <img
+          src={logoUrl}
+          alt={name}
+          width={28}
+          height={28}
+          className="object-contain rounded"
+          onError={() => setImgFailed(true)}
+        />
+      ) : (
+        <span
+          className="font-black text-base leading-none w-7 text-center"
+          style={{ fontFamily: 'Arial Black, sans-serif', color: fallbackFg }}
+        >
+          {fallbackText}
+        </span>
+      )}
+      <span
+        className="text-sm font-bold"
+        style={{ color: imgFailed ? fallbackFg : '#1e293b' }}
+      >
+        {name}
+      </span>
     </div>
   );
 }
@@ -407,6 +458,45 @@ function ContactSection({ t, isAr }: { t: typeof T['en'] | typeof T['ar']; isAr:
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CONTACT MODAL
+// ═══════════════════════════════════════════════════════════════════════════
+function ContactModal({ t, isAr, onClose }: { t: typeof T['en'] | typeof T['ar']; isAr: boolean; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', handler); document.body.style.overflow = ''; };
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-slate-900/85 backdrop-blur-sm" />
+      <div
+        className="relative bg-slate-800 border border-slate-700/60 rounded-3xl p-8 sm:p-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl"
+        onClick={e => e.stopPropagation()}
+        style={{ animation: 'fadeInUp 0.25s ease-out both' }}
+      >
+        <div className="flex items-start justify-between mb-8 gap-4">
+          <div>
+            <span className="inline-block px-3 py-1 rounded-full bg-indigo-500/15 text-indigo-400 text-xs font-black uppercase tracking-[0.15em] mb-3 border border-indigo-500/20">
+              {t.contact.badge}
+            </span>
+            <h2 className="font-black text-white text-2xl leading-tight">{t.contact.heading}</h2>
+            <p className="text-slate-400 text-sm mt-1">{t.contact.sub}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex-shrink-0 w-9 h-9 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white flex items-center justify-center transition-all font-bold text-base"
+            aria-label="Close"
+          >✕</button>
+        </div>
+        <ContactSection t={t} isAr={isAr} />
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // LANDING PAGE — MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 export default function LandingPage() {
@@ -414,6 +504,7 @@ export default function LandingPage() {
   const [dark, setDark] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [scrolled, setScrolled] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
 
   const t = T[lang];
   const isAr = lang === 'ar';
@@ -446,6 +537,11 @@ export default function LandingPage() {
 
   return (
     <div style={{ fontFamily: isAr ? "'Cairo', 'Segoe UI', sans-serif" : "'Inter', 'Segoe UI', sans-serif" }}>
+
+      {/* Contact Modal */}
+      {showContactModal && (
+        <ContactModal t={t} isAr={isAr} onClose={() => setShowContactModal(false)} />
+      )}
 
       {/* ── Keyframe Animations ─────────────────────────────────────────── */}
       <style>{`
@@ -565,8 +661,8 @@ export default function LandingPage() {
 
           {/* Nav links — desktop */}
           <div className="hidden md:flex items-center gap-6">
-            <a href="#about"   className="text-slate-400 hover:text-white text-sm font-medium transition-colors">{t.nav.about}</a>
-            <a href="#contact" className="text-slate-400 hover:text-white text-sm font-medium transition-colors">{t.nav.contact}</a>
+            <a href="#about" className="text-slate-400 hover:text-white text-sm font-medium transition-colors">{t.nav.about}</a>
+            <button onClick={() => setShowContactModal(true)} className="text-slate-400 hover:text-white text-sm font-medium transition-colors">{t.nav.contact}</button>
             <a href={TERMS_URL} className="text-slate-400 hover:text-white text-sm font-medium transition-colors">{t.nav.terms}</a>
           </div>
 
@@ -584,19 +680,19 @@ export default function LandingPage() {
             {/* Language */}
             <button
               onClick={() => setLang(l => l === 'en' ? 'ar' : 'en')}
-              className="h-9 px-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/15 text-slate-300 hover:text-white text-sm font-semibold flex items-center gap-1.5 transition-all"
+              className="h-9 px-3.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/15 text-slate-300 hover:text-white text-sm font-semibold flex items-center gap-1.5 transition-all"
             >
-              <span className="text-[13px]">{lang === 'en' ? '🇸🇦' : '🇬🇧'}</span>
-              <span className="hidden sm:inline">{lang === 'en' ? 'العربية' : 'English'}</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-60"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              <span>{lang === 'en' ? 'العربية' : 'English'}</span>
             </button>
 
-            {/* Demo link */}
-            <a
-              href={DEMO_URL}
-              className="h-9 px-4 rounded-xl border border-white/15 bg-white/5 hover:bg-white/12 text-slate-300 hover:text-white text-sm font-medium transition-all hidden sm:flex items-center"
+            {/* Demo → contact popup */}
+            <button
+              onClick={() => setShowContactModal(true)}
+              className="h-9 px-4 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-white text-sm font-medium transition-all hidden sm:flex items-center gap-1.5"
             >
               {t.nav.demo}
-            </a>
+            </button>
 
             {/* Login */}
             <a
@@ -659,13 +755,13 @@ export default function LandingPage() {
             >
               {t.hero.cta}
             </a>
-            <a
-              href={DEMO_URL}
-              className="text-slate-300 hover:text-white border border-white/20 hover:border-white/40 bg-white/5 hover:bg-white/10 font-bold px-8 py-4 rounded-2xl transition-all hover:scale-105 active:scale-95"
+            <button
+              onClick={() => setShowContactModal(true)}
+              className="text-slate-300 hover:text-white border border-white/20 hover:border-indigo-400/50 bg-white/5 hover:bg-indigo-500/10 font-bold px-8 py-4 rounded-2xl transition-all hover:scale-105 active:scale-95"
               style={{ fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}
             >
               {t.hero.ctaDemo} →
-            </a>
+            </button>
           </div>
           <p className="text-slate-500 text-sm -mt-14 mb-14">{t.hero.ctaNote}</p>
 
@@ -1025,15 +1121,25 @@ export default function LandingPage() {
 
             {/* Links */}
             <nav className="flex flex-wrap justify-center gap-x-6 gap-y-2">
-              {t.footer.links.map((link, i) => (
-                <a
-                  key={i}
-                  href={link.href}
-                  className="text-slate-400 hover:text-white text-sm transition-colors"
-                >
-                  {link.label}
-                </a>
-              ))}
+              {t.footer.links.map((link, i) =>
+                link.href === '#contact' ? (
+                  <button
+                    key={i}
+                    onClick={() => setShowContactModal(true)}
+                    className="text-slate-400 hover:text-white text-sm transition-colors"
+                  >
+                    {link.label}
+                  </button>
+                ) : (
+                  <a
+                    key={i}
+                    href={link.href}
+                    className="text-slate-400 hover:text-white text-sm transition-colors"
+                  >
+                    {link.label}
+                  </a>
+                )
+              )}
             </nav>
           </div>
 
