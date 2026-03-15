@@ -68,13 +68,13 @@ const NAV_GLOW: Partial<Record<NavId, string>> = {
   properties: '#10B981',
   calendar:   '#8B5CF6',
   bookings:   '#F59E0B',
-  channels:   '#06B6D4',
+  channels:   '#6366F1',
   cleaning:   '#EC4899',
   inbox:      '#F97316',
   analytics:  '#6366F1',
   financials: '#14B8A6',
-  shipments:  '#84CC16',
-  settings:   '#94A3B8',
+  shipments:  '#F59E0B',
+  settings:   '#8B5CF6',
 };
 
 interface Props {
@@ -173,7 +173,7 @@ export default function Sidebar({ activePage, onNavigate, mobileOpen = false, on
               <p className="font-extrabold text-sm text-white leading-none tracking-tight">REMS</p>
               <p
                 className="text-[11px] mt-0.5 truncate"
-                style={{ color: 'rgba(148,163,184,0.7)' }}
+                style={{ color: 'rgba(255,255,255,0.5)' }}
               >
                 {lang === 'ar' ? 'إدارة العقارات' : 'Property Manager'}
               </p>
@@ -185,7 +185,7 @@ export default function Sidebar({ activePage, onNavigate, mobileOpen = false, on
             onClick={() => setCollapsed(v => !v)}
             className="collapse-btn hidden lg:flex w-7 h-7 rounded-lg items-center justify-center flex-shrink-0"
             style={{
-              color: 'rgba(148,163,184,0.6)',
+              color: 'rgba(255,255,255,0.55)',
               background: 'rgba(255,255,255,0.05)',
               border: '1px solid rgba(255,255,255,0.07)',
             }}
@@ -194,7 +194,7 @@ export default function Sidebar({ activePage, onNavigate, mobileOpen = false, on
               (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.1)';
             }}
             onMouseLeave={e => {
-              (e.currentTarget as HTMLButtonElement).style.color = 'rgba(148,163,184,0.6)';
+              (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.55)';
               (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.05)';
             }}
           >
@@ -205,7 +205,7 @@ export default function Sidebar({ activePage, onNavigate, mobileOpen = false, on
           <button
             onClick={onMobileClose}
             className="lg:hidden w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ms-auto"
-            style={{ color: 'rgba(148,163,184,0.6)', background: 'rgba(255,255,255,0.05)' }}
+            style={{ color: 'rgba(255,255,255,0.55)', background: 'rgba(255,255,255,0.05)' }}
           >
             <Icons.x size={15} />
           </button>
@@ -221,7 +221,7 @@ export default function Sidebar({ activePage, onNavigate, mobileOpen = false, on
                 <div className="flex items-center gap-2 px-2 mb-1.5">
                   <span
                     className="text-[10px] font-bold uppercase tracking-[0.13em] leading-none whitespace-nowrap"
-                    style={{ color: 'rgba(100,116,139,0.8)' }}
+                    style={{ color: 'rgba(255,255,255,0.6)' }}
                   >
                     {lang === 'ar' ? section.labelAr : section.labelEn}
                   </span>
@@ -254,7 +254,7 @@ export default function Sidebar({ activePage, onNavigate, mobileOpen = false, on
                         padding: collapsed ? '0' : '0 10px',
                         justifyContent: collapsed ? 'center' : 'flex-start',
                         minHeight: 40,
-                        color: active ? '#fff' : hovered ? '#e2e8f0' : 'rgba(148,163,184,0.75)',
+                        color: active ? '#fff' : hovered ? '#e2e8f0' : 'rgba(255,255,255,0.55)',
                         background: active
                           ? `linear-gradient(135deg, ${glowColor}22 0%, ${glowColor}15 100%)`
                           : hovered
@@ -355,7 +355,7 @@ export default function Sidebar({ activePage, onNavigate, mobileOpen = false, on
                           className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                           style={{ background: p.color, boxShadow: `0 0 4px ${p.color}` }}
                         />
-                        <span className="text-[11px] truncate" style={{ color: 'rgba(148,163,184,0.8)' }}>
+                        <span className="text-[11px] truncate" style={{ color: 'rgba(255,255,255,0.65)' }}>
                           {p.name[lang as 'en' | 'ar']}
                         </span>
                       </div>
@@ -422,7 +422,7 @@ export default function Sidebar({ activePage, onNavigate, mobileOpen = false, on
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span
                     className="text-[10px]"
-                    style={{ color: 'rgba(148,163,184,0.6)' }}
+                    style={{ color: 'rgba(255,255,255,0.55)' }}
                   >
                     {lang === 'ar' ? 'مالك العقار' : 'Property Owner'}
                   </span>
