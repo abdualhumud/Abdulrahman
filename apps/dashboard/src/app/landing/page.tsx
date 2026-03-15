@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const PROD_URL    = 'https://abdualhumud.github.io/REMS/';
 const STAGING_URL = 'https://abdualhumud.github.io/REMS/staging/';
@@ -293,6 +293,48 @@ const PARTNER_LIST = [
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
+// TESTIMONIALS
+// ═══════════════════════════════════════════════════════════════════════════
+const TESTIMONIALS = [
+  {
+    en: {
+      quote: "REMS brought our double-booking rate to absolute zero. The OTA sync is genuinely under 500ms — I timed it myself.",
+      name: "Ahmad Al-Rashidi", role: "Portfolio Owner · 15 units · Riyadh",
+      initials: "AR", bg: '#1d4ed8',
+    },
+    ar: {
+      quote: "قضى REMS على الحجوزات المزدوجة تماماً. مزامنة OTA أسرع من 500 مللي ثانية — قِستها بنفسي.",
+      name: "أحمد الراشدي", role: "مالك محفظة · 15 وحدة · الرياض",
+      initials: "أح", bg: '#1d4ed8',
+    },
+  },
+  {
+    en: {
+      quote: "SPL address verification solved every guest location complaint we ever had. Worth the subscription for that alone.",
+      name: "Noura Al-Qahtani", role: "Real Estate Agent · Jeddah",
+      initials: "NQ", bg: '#059669',
+    },
+    ar: {
+      quote: "التحقق من العنوان الوطني SPL حلّ كل شكاوى مواقع الضيوف لدينا. يستحق الاشتراك لهذا وحده.",
+      name: "نورة القحطاني", role: "وكيلة عقارية · جدة",
+      initials: "نق", bg: '#059669',
+    },
+  },
+  {
+    en: {
+      quote: "Managing 32 properties across Mecca is now a one-person job. The auto-cleaning trigger saves 4 hours on every checkout day.",
+      name: "Khaled Al-Ghamdi", role: "Property Manager · 32 units · Mecca",
+      initials: "KG", bg: '#7c3aed',
+    },
+    ar: {
+      quote: "إدارة 32 وحدة في مكة صارت عمل شخص واحد الآن. تشغيل التنظيف التلقائي يوفّر 4 ساعات في كل يوم مغادرة.",
+      name: "خالد الغامدي", role: "مدير عقارات · 32 وحدة · مكة المكرمة",
+      initials: "خغ", bg: '#7c3aed',
+    },
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════════════════
 // FEATURE ICON
 // ═══════════════════════════════════════════════════════════════════════════
 function FeatureIcon({ icon }: { icon: string }) {
@@ -306,6 +348,124 @@ function FeatureIcon({ icon }: { icon: string }) {
   return null;
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DASHBOARD MOCKUP — code-rendered product preview for hero
+// ═══════════════════════════════════════════════════════════════════════════
+function DashboardMockup() {
+  const bars = [38, 55, 42, 68, 52, 78, 85, 63, 75, 58, 91, 71];
+  return (
+    <div className="relative select-none" style={{ direction: 'ltr' }}>
+      {/* Main window */}
+      <div style={{
+        background: 'linear-gradient(160deg,#0d1526 0%,#111827 100%)',
+        border: '1px solid rgba(255,255,255,0.07)',
+        borderRadius: 20,
+        overflow: 'hidden',
+        boxShadow: '0 48px 96px -24px rgba(0,0,0,0.8),0 0 0 1px rgba(255,255,255,0.04)',
+      }}>
+        {/* Chrome bar */}
+        <div style={{ background:'rgba(255,255,255,0.025)', borderBottom:'1px solid rgba(255,255,255,0.05)', padding:'10px 14px', display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{ display:'flex', gap:5 }}>
+            {['#ef4444','#f59e0b','#22c55e'].map((c,i)=>(
+              <div key={i} style={{ width:9, height:9, borderRadius:'50%', background:c, opacity:0.7 }}/>
+            ))}
+          </div>
+          <div style={{ flex:1, display:'flex', justifyContent:'center' }}>
+            <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:6, padding:'2px 10px' }}>
+              <div style={{ width:5, height:5, borderRadius:'50%', background:'#22c55e' }}/>
+              <span style={{ color:'#475569', fontSize:10, fontFamily:'monospace' }}>rems.app/dashboard</span>
+            </div>
+          </div>
+        </div>
+        {/* Dashboard content */}
+        <div style={{ padding:16 }}>
+          {/* KPI row */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:14 }}>
+            {[
+              { l:'Revenue', v:'48,200', u:'SAR', d:'+12.4%' },
+              { l:'Bookings', v:'124',   u:'',    d:'+8 / week' },
+              { l:'Occupancy',v:'87%',  u:'',    d:'+3% MoM' },
+            ].map((k,i)=>(
+              <div key={i} style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.06)', borderRadius:10, padding:'10px 11px' }}>
+                <div style={{ color:'#475569', fontSize:9, fontWeight:700, marginBottom:5, textTransform:'uppercase', letterSpacing:'0.1em' }}>{k.l}</div>
+                <div style={{ color:'#f1f5f9', fontSize:14, fontWeight:800, lineHeight:1, marginBottom:5 }}>
+                  {k.u && <span style={{ fontSize:9, color:'#64748b', marginRight:2 }}>{k.u}</span>}
+                  {k.v}
+                </div>
+                <div style={{ color:'#4ade80', fontSize:9, fontWeight:600 }}>&#8593; {k.d}</div>
+              </div>
+            ))}
+          </div>
+          {/* Chart */}
+          <div style={{ background:'rgba(255,255,255,0.015)', border:'1px solid rgba(255,255,255,0.05)', borderRadius:12, padding:'12px 12px 8px', marginBottom:12 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+              <span style={{ color:'#94a3b8', fontSize:11, fontWeight:600 }}>Revenue Trend</span>
+              <span style={{ background:'rgba(59,130,246,0.12)', color:'#60a5fa', fontSize:9, fontWeight:700, padding:'2px 7px', borderRadius:4 }}>2026</span>
+            </div>
+            <div style={{ display:'flex', alignItems:'flex-end', gap:3, height:56 }}>
+              {bars.map((h,i)=>(
+                <div key={i} style={{ flex:1, height:`${h}%`, background: i===10 ? 'linear-gradient(to top,#3b82f6,#818cf8)' : 'rgba(99,102,241,0.2)', borderRadius:'3px 3px 0 0' }}/>
+              ))}
+            </div>
+            <div style={{ display:'flex', justifyContent:'space-between', marginTop:5 }}>
+              {['J','F','M','A','M','J','J','A','S','O','N','D'].map((m,i)=>(
+                <span key={i} style={{ color:'#334155', fontSize:8 }}>{m}</span>
+              ))}
+            </div>
+          </div>
+          {/* Channel status */}
+          <div style={{ display:'flex', gap:7 }}>
+            {[
+              { color:'#22c55e', label:'Booking.com' },
+              { color:'#f87171', label:'Airbnb' },
+              { color:'#34d399', label:'Gathern' },
+            ].map((ch,i)=>(
+              <div key={i} style={{ display:'flex', alignItems:'center', gap:5, background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.05)', borderRadius:6, padding:'4px 9px', flex:1 }}>
+                <div style={{ width:5, height:5, borderRadius:'50%', background:ch.color, boxShadow:`0 0 6px ${ch.color}` }}/>
+                <span style={{ color:'#64748b', fontSize:8.5, fontWeight:600, whiteSpace:'nowrap' }}>{ch.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      {/* Floating — overlap blocked */}
+      <div style={{
+        position:'absolute', bottom:-22, right:-14,
+        background:'linear-gradient(135deg,#065f46,#047857)',
+        borderRadius:12, padding:'10px 14px',
+        boxShadow:'0 16px 40px -8px rgba(5,150,105,0.5)',
+        border:'1px solid rgba(255,255,255,0.12)',
+        animation:'floatY 6s ease-in-out infinite',
+        minWidth:168, zIndex:10,
+      }}>
+        <div style={{ color:'rgba(255,255,255,0.55)', fontSize:9.5, marginBottom:3 }}>&#128274; Double-booking blocked</div>
+        <div style={{ color:'white', fontWeight:800, fontSize:12 }}>Saved SAR 2,400</div>
+        <div style={{ color:'rgba(255,255,255,0.45)', fontSize:9, marginTop:2 }}>423ms · Booking.com</div>
+      </div>
+      {/* Floating — sync */}
+      <div style={{
+        position:'absolute', top:36, left:-18,
+        background:'rgba(10,16,30,0.96)',
+        backdropFilter:'blur(12px)',
+        borderRadius:10, padding:'9px 12px',
+        border:'1px solid rgba(99,102,241,0.3)',
+        boxShadow:'0 8px 28px rgba(0,0,0,0.5)',
+        animation:'floatY 7s ease-in-out 1.2s infinite',
+        minWidth:132, zIndex:10,
+      }}>
+        <div style={{ color:'#818cf8', fontSize:10, fontWeight:700, marginBottom:4 }}>&#9889; Live Sync</div>
+        <div style={{ display:'flex', gap:4, marginBottom:4 }}>
+          {['#003580','#ff385c','#00a651'].map((c,i)=>(
+            <div key={i} style={{ width:14, height:14, borderRadius:3, background:c }}/>
+          ))}
+        </div>
+        <div style={{ color:'#475569', fontSize:9 }}>3 channels updated</div>
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PARTNER CHIP — real brand logo with graceful fallback
 // ═══════════════════════════════════════════════════════════════════════════
@@ -313,10 +473,10 @@ function PartnerChip({ name, logoUrl, fallbackBg, fallbackFg, fallbackText }: ty
   const [imgFailed, setImgFailed] = useState(false);
   return (
     <div
-      className="flex items-center gap-3 px-5 py-3 rounded-2xl shadow-md select-none border"
+      className="partner-logo-card flex items-center gap-2.5 px-4 py-3 rounded-xl select-none"
       style={{
-        background: imgFailed ? fallbackBg : 'white',
-        borderColor: imgFailed ? 'transparent' : '#e2e8f0',
+        background: imgFailed ? fallbackBg : 'rgba(255,255,255,0.05)',
+        border: imgFailed ? '1px solid transparent' : '1px solid rgba(255,255,255,0.1)',
         direction: 'ltr',
       }}
     >
@@ -324,22 +484,23 @@ function PartnerChip({ name, logoUrl, fallbackBg, fallbackFg, fallbackText }: ty
         <img
           src={logoUrl}
           alt={name}
-          width={28}
-          height={28}
-          className="object-contain rounded"
+          width={24}
+          height={24}
+          className="object-contain rounded-sm"
           onError={() => setImgFailed(true)}
+          style={{ filter:'brightness(0) invert(1) opacity(0.8)' }}
         />
       ) : (
         <span
-          className="font-black text-base leading-none w-7 text-center"
-          style={{ fontFamily: 'Arial Black, sans-serif', color: fallbackFg }}
+          className="font-black text-sm leading-none w-6 text-center"
+          style={{ fontFamily:'Arial Black,sans-serif', color:fallbackFg }}
         >
           {fallbackText}
         </span>
       )}
       <span
-        className="text-sm font-bold"
-        style={{ color: imgFailed ? fallbackFg : '#1e293b' }}
+        className="text-sm font-semibold"
+        style={{ color: imgFailed ? fallbackFg : 'rgba(255,255,255,0.65)' }}
       >
         {name}
       </span>
@@ -543,101 +704,147 @@ export default function LandingPage() {
         <ContactModal t={t} isAr={isAr} onClose={() => setShowContactModal(false)} />
       )}
 
-      {/* ── Keyframe Animations ─────────────────────────────────────────── */}
+      {/* ── Premium Design System ───────────────────────────────────────── */}
       <style>{`
-        @keyframes ticker {
-          0%   { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        @keyframes heroPulse {
-          0%, 100% { opacity: 0.25; transform: scale(1); }
-          50%       { opacity: 0.55; transform: scale(1.15); }
-        }
-        @keyframes heroFloat {
-          0%, 100% { transform: translateY(0px) rotate(0deg); }
-          50%       { transform: translateY(-14px) rotate(3deg); }
+        /* ── Keyframes ── */
+        @keyframes floatY {
+          0%,100% { transform: translateY(0px); }
+          50%      { transform: translateY(-12px); }
         }
         @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(28px); }
-          to   { opacity: 1; transform: translateY(0); }
+          from { opacity:0; transform:translateY(24px); }
+          to   { opacity:1; transform:translateY(0); }
         }
-        @keyframes shimmer {
-          0%   { background-position: -200% center; }
-          100% { background-position:  200% center; }
+        @keyframes gradientShift {
+          0%,100% { background-position:0% 50%; }
+          50%      { background-position:100% 50%; }
         }
-        @keyframes gradientFlow {
-          0%, 100% { background-position: 0% 50%; }
-          50%       { background-position: 100% 50%; }
+        @keyframes pulse-glow {
+          0%,100% { box-shadow:0 0 0 0 rgba(59,130,246,0.4); }
+          50%      { box-shadow:0 0 0 8px rgba(59,130,246,0); }
+        }
+        @keyframes slideRight {
+          from { opacity:0; transform:translateX(-16px); }
+          to   { opacity:1; transform:translateX(0); }
+        }
+        @keyframes ticker {
+          0%   { transform:translateX(0); }
+          100% { transform:translateX(-50%); }
         }
 
-        .ticker-wrap  { overflow: hidden; mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent); }
-        .ticker-inner { display: flex; animation: ticker 32s linear infinite; width: max-content; }
-        .ticker-inner:hover { animation-play-state: paused; }
+        /* ── Entrance animations ── */
+        .fade-in-0 { animation:fadeInUp 0.65s cubic-bezier(0.16,1,0.3,1) 0.0s both; }
+        .fade-in-1 { animation:fadeInUp 0.65s cubic-bezier(0.16,1,0.3,1) 0.1s both; }
+        .fade-in-2 { animation:fadeInUp 0.65s cubic-bezier(0.16,1,0.3,1) 0.2s both; }
+        .fade-in-3 { animation:fadeInUp 0.65s cubic-bezier(0.16,1,0.3,1) 0.3s both; }
+        .fade-in-4 { animation:fadeInUp 0.65s cubic-bezier(0.16,1,0.3,1) 0.5s both; }
+        .slide-right { animation:slideRight 0.6s cubic-bezier(0.16,1,0.3,1) 0.1s both; }
 
-        .hero-orb     { animation: heroPulse 5s ease-in-out infinite; }
-        .hero-orb-2   { animation: heroPulse 5s ease-in-out 2.5s infinite; }
-        .float-card   { animation: heroFloat 7s ease-in-out infinite; }
-
-        .fade-in-0    { animation: fadeInUp 0.7s ease-out 0.0s both; }
-        .fade-in-1    { animation: fadeInUp 0.7s ease-out 0.15s both; }
-        .fade-in-2    { animation: fadeInUp 0.7s ease-out 0.30s both; }
-        .fade-in-3    { animation: fadeInUp 0.7s ease-out 0.45s both; }
-        .fade-in-4    { animation: fadeInUp 0.7s ease-out 0.60s both; }
-
-        .shimmer-btn  {
-          background: linear-gradient(90deg, #2563EB 0%, #6366F1 40%, #7C3AED 60%, #2563EB 100%);
-          background-size: 200% auto;
-          animation: shimmer 3s linear infinite;
-        }
+        /* ── Background patterns ── */
         .hero-grid {
           background-image:
-            linear-gradient(rgba(148,163,184,0.05) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(148,163,184,0.05) 1px, transparent 1px);
-          background-size: 56px 56px;
+            radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,130,246,0.12), transparent),
+            linear-gradient(rgba(148,163,184,0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(148,163,184,0.04) 1px, transparent 1px);
+          background-size: auto, 48px 48px, 48px 48px;
         }
+
+        /* ── Primary CTA button — clean, no shimmer ── */
+        .primary-btn {
+          background: linear-gradient(135deg,#2563eb,#4f46e5);
+          transition: all 0.2s cubic-bezier(0.16,1,0.3,1);
+          box-shadow: 0 4px 24px -4px rgba(37,99,235,0.5), inset 0 1px 0 rgba(255,255,255,0.15);
+        }
+        .primary-btn:hover {
+          background: linear-gradient(135deg,#1d4ed8,#4338ca);
+          box-shadow: 0 8px 32px -4px rgba(37,99,235,0.65), inset 0 1px 0 rgba(255,255,255,0.15);
+          transform: translateY(-1px);
+        }
+        .primary-btn:active { transform:translateY(0); }
+
+        /* ── Ghost button ── */
+        .ghost-btn {
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.12);
+          transition: all 0.2s cubic-bezier(0.16,1,0.3,1);
+        }
+        .ghost-btn:hover {
+          background: rgba(255,255,255,0.08);
+          border-color: rgba(255,255,255,0.2);
+          transform: translateY(-1px);
+        }
+
+        /* ── Gradient text ── */
         .grad-text {
-          background: linear-gradient(135deg, #60A5FA 0%, #A78BFA 50%, #34D399 100%);
-          background-size: 200% 200%;
-          animation: gradientFlow 4s ease infinite;
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
+          background: linear-gradient(135deg,#93c5fd 0%,#a5b4fc 50%,#6ee7b7 100%);
+          background-size:200% 200%;
+          animation:gradientShift 5s ease infinite;
+          -webkit-background-clip:text;
+          -webkit-text-fill-color:transparent;
+          background-clip:text;
         }
+        .gold-text {
+          background: linear-gradient(135deg,#fbbf24 0%,#f59e0b 50%,#d97706 100%);
+          -webkit-background-clip:text;
+          -webkit-text-fill-color:transparent;
+          background-clip:text;
+        }
+
+        /* ── Feature cards ── */
         .feature-card {
-          transition: transform 0.3s cubic-bezier(0.4,0,0.2,1), box-shadow 0.3s cubic-bezier(0.4,0,0.2,1);
+          transition: transform 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.25s cubic-bezier(0.16,1,0.3,1), border-color 0.25s;
+          position: relative;
+          overflow: hidden;
+        }
+        .feature-card::before {
+          content:'';
+          position:absolute;
+          inset:0;
+          background:linear-gradient(135deg,rgba(255,255,255,0.03),transparent);
+          pointer-events:none;
         }
         .feature-card:hover {
-          transform: translateY(-8px);
-          box-shadow: 0 24px 48px -12px rgba(0,0,0,0.15);
+          transform:translateY(-6px);
+          box-shadow:0 20px 48px -12px rgba(0,0,0,0.18);
+          border-color:rgba(148,163,184,0.25) !important;
         }
-        /* Story card hover */
-        .story-card {
-          transition: transform 0.4s cubic-bezier(0.4,0,0.2,1), box-shadow 0.4s;
+
+        /* ── Testimonial card ── */
+        .testi-card {
+          transition: transform 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.25s;
         }
-        .story-card:hover { transform: translateY(-6px); box-shadow: 0 20px 40px rgba(0,0,0,0.15); }
+        .testi-card:hover { transform:translateY(-4px); box-shadow:0 16px 40px -8px rgba(0,0,0,0.18); }
 
-        /* Contact form field focus glow */
-        .contact-input:focus { box-shadow: 0 0 0 3px rgba(99,102,241,0.25); }
+        /* ── Story card ── */
+        .story-card { transition:transform 0.3s cubic-bezier(0.16,1,0.3,1), box-shadow 0.3s; }
+        .story-card:hover { transform:translateY(-5px); box-shadow:0 16px 36px rgba(0,0,0,0.18); }
 
+        /* ── Pricing popular ── */
         .price-popular {
-          background: linear-gradient(145deg, #1D4ED8 0%, #3730A3 55%, #1E3A8A 100%);
-          box-shadow: 0 32px 64px -16px rgba(37,99,235,0.45);
+          background:linear-gradient(145deg,#1d4ed8 0%,#3730a3 60%,#1e3a8a 100%);
+          box-shadow:0 32px 64px -16px rgba(37,99,235,0.5);
         }
-        .faq-body {
-          overflow: hidden;
-          transition: max-height 0.35s ease, opacity 0.35s ease, padding 0.35s ease;
+
+        /* ── Partner logo card ── */
+        .partner-logo-card {
+          transition:transform 0.2s, box-shadow 0.2s;
         }
-        .cta-bg {
-          background: linear-gradient(135deg, #1E3A8A 0%, #1D4ED8 40%, #4338CA 100%);
-        }
-        .nav-scrolled {
-          background: rgba(15,23,42,0.92);
-          box-shadow: 0 1px 32px rgba(0,0,0,0.3);
-        }
-        html.dark .feature-card { background: #1e293b; border-color: #334155; }
-        html.dark .faq-item      { background: #1e293b; border-color: #334155; }
-        html.dark .faq-btn       { background: #1e293b; }
-        html.dark .faq-btn:hover { background: #273344; }
+        .partner-logo-card:hover { transform:translateY(-3px); box-shadow:0 8px 24px rgba(0,0,0,0.12); }
+
+        /* ── Misc ── */
+        .faq-body { overflow:hidden; transition:max-height 0.35s ease,opacity 0.35s ease; }
+        .contact-input:focus { box-shadow:0 0 0 3px rgba(99,102,241,0.25); }
+        .cta-bg { background:linear-gradient(135deg,#1e3a8a 0%,#1d4ed8 45%,#4338ca 100%); }
+        .nav-scrolled { background:rgba(10,15,28,0.95); backdrop-filter:blur(20px); box-shadow:0 1px 0 rgba(255,255,255,0.05); }
+        html.dark .feature-card { background:#1e293b; border-color:#334155; }
+        html.dark .faq-item { background:#1e293b; border-color:#334155; }
+        html.dark .faq-btn { background:#1e293b; }
+        html.dark .faq-btn:hover { background:#273344; }
+
+        /* ── Ticker (kept for potential use) ── */
+        .ticker-wrap { overflow:hidden; mask-image:linear-gradient(to right,transparent,black 10%,black 90%,transparent); }
+        .ticker-inner { display:flex; animation:ticker 36s linear infinite; width:max-content; }
+        .ticker-inner:hover { animation-play-state:paused; }
       `}</style>
 
       {/* ═══════════════════════════════════════════════════════════════════
@@ -705,7 +912,7 @@ export default function LandingPage() {
             {/* Get Started */}
             <a
               href={STAGING_URL}
-              className="shimmer-btn h-9 px-5 rounded-xl text-white text-sm font-bold flex items-center shadow-lg shadow-blue-500/25 hover:shadow-blue-500/45 transition-shadow hover:scale-105 active:scale-95"
+              className="primary-btn h-9 px-5 rounded-xl text-white text-sm font-bold flex items-center"
             >
               {t.nav.start}
             </a>
@@ -714,104 +921,142 @@ export default function LandingPage() {
       </nav>
 
       {/* ═══════════════════════════════════════════════════════════════════
-          HERO
+          HERO — Split layout with dashboard preview
       ═══════════════════════════════════════════════════════════════════ */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-slate-900 hero-grid pt-16">
+      <section className="relative min-h-screen flex items-center overflow-hidden bg-slate-950 hero-grid pt-16">
 
-        {/* Decorative orbs */}
-        <div className="hero-orb   pointer-events-none absolute top-1/4 left-[10%]  w-[500px] h-[500px] bg-blue-600/15    rounded-full blur-3xl" />
-        <div className="hero-orb-2 pointer-events-none absolute bottom-1/4 right-[8%]  w-[400px] h-[400px] bg-indigo-500/15  rounded-full blur-3xl" />
-        <div className="hero-orb   pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-violet-500/10 rounded-full blur-3xl" style={{ animationDelay: '1.5s' }} />
+        {/* Subtle radial spotlight */}
+        <div className="pointer-events-none absolute inset-0" style={{ background:'radial-gradient(ellipse 60% 50% at 60% 40%,rgba(37,99,235,0.07),transparent 70%)' }} />
 
-        {/* Content */}
-        <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center py-24 sm:py-32">
+        <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28">
+          <div className="flex flex-col lg:flex-row items-center gap-16 lg:gap-12">
 
-          {/* Badge */}
-          <div className="fade-in-0 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-medium mb-8">
-            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
-            🇸🇦 &nbsp;{t.hero.badge}
-          </div>
+            {/* ── LEFT: Text column ── */}
+            <div className={`flex-1 ${isAr ? 'lg:order-2 text-end' : 'lg:order-1 text-start'} text-center lg:text-start`}
+              style={{ textAlign: isAr ? 'right' : 'left' }}>
 
-          {/* Headline */}
-          <h1 className="fade-in-1 font-black text-white leading-tight mb-6" style={{ fontSize: 'clamp(2.5rem, 6vw, 5rem)' }}>
-            <span className="block">{t.hero.h1a}</span>
-            <span className="grad-text block pb-1">{t.hero.h1b}</span>
-            <span className="block text-slate-300 font-semibold mt-2" style={{ fontSize: 'clamp(1.25rem, 3vw, 2rem)' }}>
-              {t.hero.h1c}
-            </span>
-          </h1>
-
-          {/* Sub-headline */}
-          <p className="fade-in-2 text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed" style={{ fontSize: 'clamp(1rem, 2vw, 1.2rem)' }}>
-            {t.hero.sub}
-          </p>
-
-          {/* CTAs */}
-          <div className="fade-in-3 flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
-            <a
-              href={STAGING_URL}
-              className="shimmer-btn text-white font-bold px-10 py-4 rounded-2xl shadow-2xl shadow-blue-500/35 hover:shadow-blue-500/55 hover:scale-105 active:scale-95 transition-all"
-              style={{ fontSize: 'clamp(1rem, 2vw, 1.2rem)' }}
-            >
-              {t.hero.cta}
-            </a>
-            <button
-              onClick={() => setShowContactModal(true)}
-              className="text-slate-300 hover:text-white border border-white/20 hover:border-indigo-400/50 bg-white/5 hover:bg-indigo-500/10 font-bold px-8 py-4 rounded-2xl transition-all hover:scale-105 active:scale-95"
-              style={{ fontSize: 'clamp(0.9rem, 2vw, 1.1rem)' }}
-            >
-              {t.hero.ctaDemo} →
-            </button>
-          </div>
-          <p className="text-slate-500 text-sm -mt-14 mb-14">{t.hero.ctaNote}</p>
-
-          {/* Stats */}
-          <div className="fade-in-4 grid grid-cols-2 sm:grid-cols-4 gap-8">
-            {t.hero.stats.map((s, i) => (
-              <div key={i} className="text-center">
-                <div className="font-black text-white mb-1" style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)', direction: 'ltr' }}>{s.n}</div>
-                <div className="text-slate-400 text-sm">{s.l}</div>
+              {/* Eyebrow badge */}
+              <div className="fade-in-0 inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full mb-8"
+                style={{ background:'rgba(37,99,235,0.08)', border:'1px solid rgba(37,99,235,0.2)' }}>
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
+                <span className="text-blue-400 text-xs font-semibold tracking-wide">🇸🇦 &nbsp;{t.hero.badge}</span>
               </div>
-            ))}
+
+              {/* Headline */}
+              <h1 className="fade-in-1 font-black text-white leading-[1.08] mb-6 tracking-tight"
+                style={{ fontSize:'clamp(2.6rem,5.5vw,4.5rem)' }}>
+                {t.hero.h1a}
+                <span className="block grad-text">{t.hero.h1b}</span>
+                <span className="block text-slate-400 font-semibold mt-2" style={{ fontSize:'clamp(1.1rem,2.5vw,1.6rem)', letterSpacing:'0.02em' }}>
+                  {t.hero.h1c}
+                </span>
+              </h1>
+
+              {/* Sub */}
+              <p className="fade-in-2 text-slate-400 max-w-xl mb-10 leading-relaxed"
+                style={{ fontSize:'clamp(1rem,1.8vw,1.15rem)' }}>
+                {t.hero.sub}
+              </p>
+
+              {/* CTAs */}
+              <div className="fade-in-3 flex flex-col sm:flex-row items-center lg:items-start gap-3 mb-10"
+                style={{ justifyContent: isAr ? 'flex-end' : 'flex-start' }}>
+                <a href={STAGING_URL}
+                  className="primary-btn text-white font-bold px-8 py-3.5 rounded-xl text-base"
+                  style={{ display:'inline-block' }}>
+                  {t.hero.cta}
+                </a>
+                <button onClick={() => setShowContactModal(true)}
+                  className="ghost-btn text-slate-300 hover:text-white font-semibold px-7 py-3.5 rounded-xl text-base"
+                  style={{ cursor:'pointer' }}>
+                  {t.hero.ctaDemo}
+                </button>
+              </div>
+              <p className="fade-in-3 text-slate-600 text-xs mb-12 tracking-wide">{t.hero.ctaNote}</p>
+
+              {/* Stats row */}
+              <div className="fade-in-4 grid grid-cols-2 sm:grid-cols-4 gap-6 pt-8"
+                style={{ borderTop:'1px solid rgba(255,255,255,0.05)' }}>
+                {t.hero.stats.map((s, i) => (
+                  <div key={i} className={isAr ? 'text-end' : ''}>
+                    <div className="font-black text-white leading-none mb-1.5"
+                      style={{ fontSize:'clamp(1.4rem,2.5vw,1.9rem)', direction:'ltr', display:'inline-block' }}>
+                      {s.n}
+                    </div>
+                    <div className="text-slate-500 text-xs font-medium">{s.l}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* ── RIGHT: Dashboard mockup ── */}
+            <div className={`flex-1 w-full max-w-lg mx-auto lg:mx-0 slide-right ${isAr ? 'lg:order-1' : 'lg:order-2'}`}
+              style={{ paddingBottom:32, paddingTop:8 }}>
+              <DashboardMockup />
+            </div>
+
           </div>
         </div>
 
-        {/* Bottom gradient fade to next section */}
-        <div className="absolute bottom-0 inset-x-0 h-32 bg-gradient-to-t from-slate-900 to-transparent pointer-events-none" />
+        {/* Bottom fade */}
+        <div className="absolute bottom-0 inset-x-0 h-24 bg-gradient-to-t from-slate-950 to-transparent pointer-events-none" />
       </section>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          PARTNERS TICKER
+            {/* ═══════════════════════════════════════════════════════════════════
+          PARTNERS — Static premium logo grid
       ═══════════════════════════════════════════════════════════════════ */}
-      <section className="py-16 bg-slate-900 border-t border-white/5">
-        <div className="max-w-7xl mx-auto px-4 mb-10">
-          <p className="text-center text-slate-500 text-xs font-bold uppercase tracking-[0.2em]">
+      <section className="py-16 bg-slate-950" style={{ borderTop:'1px solid rgba(255,255,255,0.04)' }}>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <p className="text-center text-slate-600 text-xs font-bold uppercase tracking-[0.22em] mb-10">
             {t.partners.heading}
           </p>
+          <div className="flex flex-wrap items-center justify-center gap-3" style={{ direction:'ltr' }}>
+            {PARTNER_LIST.map((p, i) => (
+              <PartnerChip key={i} {...p} />
+            ))}
+          </div>
         </div>
-        <div className="ticker-wrap">
-          <div className="ticker-inner" style={{ direction: 'ltr' }}>
-            {[...PARTNER_LIST, ...PARTNER_LIST, ...PARTNER_LIST].map((p, i) => (
-              <div key={i} className="flex-shrink-0 mx-5">
-                <PartnerChip {...p} />
+      </section>
+
+            {/* ═══════════════════════════════════════════════════════════════════
+          STATS SHOWCASE — standalone impact strip
+      ═══════════════════════════════════════════════════════════════════ */}
+      <section className="py-20 bg-slate-900" style={{ borderTop:'1px solid rgba(255,255,255,0.04)' }}>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-1">
+            {[
+              { n:'10,000+', label: isAr ? 'عقار تحت الإدارة' : 'Properties Managed', accent:'#3b82f6' },
+              { n:'<500ms',  label: isAr ? 'سرعة مزامنة الحجوزات' : 'Booking Sync Speed', accent:'#a78bfa' },
+              { n:'99.9%',   label: isAr ? 'وقت تشغيل المنصة' : 'Platform Uptime', accent:'#34d399' },
+              { n:'0',       label: isAr ? 'حجوزات مزدوجة منذ الإطلاق' : 'Double-Bookings Since Launch', accent:'#fbbf24' },
+            ].map((s, i) => (
+              <div key={i} className="text-center py-10 px-4 relative"
+                style={{ borderRight: i < 3 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                <div className="font-black text-white leading-none mb-3"
+                  style={{ fontSize:'clamp(2rem,4vw,3rem)', direction:'ltr', color: s.accent }}>
+                  {s.n}
+                </div>
+                <div className="text-slate-500 text-sm font-medium leading-snug max-w-[120px] mx-auto">{s.label}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════════════════════════
+            {/* ═══════════════════════════════════════════════════════════════════
           FEATURES
       ═══════════════════════════════════════════════════════════════════ */}
-      <section className="py-24 sm:py-32 bg-slate-50">
+      <section className="py-24 sm:py-32 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
           {/* Section header */}
           <div className="text-center mb-16 sm:mb-20">
-            <span className="inline-block px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-black uppercase tracking-[0.15em] mb-5">
+            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-[0.15em] mb-5"
+              style={{ background:'rgba(37,99,235,0.07)', color:'#2563eb', border:'1px solid rgba(37,99,235,0.15)' }}>
               {t.features.badge}
             </span>
-            <h2 className="font-black text-slate-900 mb-5 leading-tight" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
+            <h2 className="font-black text-slate-900 mb-5 leading-[1.1] tracking-tight"
+              style={{ fontSize:'clamp(2rem,4vw,3rem)' }}>
               {t.features.heading}
             </h2>
             <p className="text-slate-500 max-w-2xl mx-auto text-lg leading-relaxed">
@@ -820,18 +1065,32 @@ export default function LandingPage() {
           </div>
 
           {/* Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {t.features.cards.map((card, i) => {
               const c = colorMap[card.color];
+              const accentColors: Record<string, string> = {
+                blue:'#2563eb', violet:'#7c3aed', emerald:'#059669',
+                amber:'#d97706', red:'#dc2626', indigo:'#4f46e5',
+              };
+              const accent = accentColors[card.color] || '#2563eb';
               return (
-                <div
-                  key={i}
-                  className="feature-card p-7 rounded-2xl bg-white border border-slate-100 shadow-sm cursor-default"
-                >
-                  <div className={`w-12 h-12 rounded-xl ${c.bg} ${c.icon} flex items-center justify-center mb-5 ring-4 ${c.ring}`}>
-                    <FeatureIcon icon={card.icon} />
+                <div key={i} className="feature-card p-7 rounded-2xl cursor-default"
+                  style={{
+                    background:'#fafafa',
+                    border:'1px solid rgba(0,0,0,0.06)',
+                    borderTop:`3px solid ${accent}`,
+                  }}>
+                  {/* Icon + number */}
+                  <div className="flex items-start justify-between mb-5">
+                    <div className={`w-11 h-11 rounded-xl ${c.bg} ${c.icon} flex items-center justify-center`}>
+                      <FeatureIcon icon={card.icon} />
+                    </div>
+                    <span className="text-3xl font-black leading-none"
+                      style={{ color:'rgba(0,0,0,0.06)', fontVariantNumeric:'tabular-nums' }}>
+                      {String(i+1).padStart(2,'0')}
+                    </span>
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900 mb-2.5">{card.title}</h3>
+                  <h3 className="text-base font-bold text-slate-900 mb-2 leading-snug">{card.title}</h3>
                   <p className="text-slate-500 text-sm leading-relaxed">{card.body}</p>
                 </div>
               );
@@ -841,6 +1100,56 @@ export default function LandingPage() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════
+          TESTIMONIALS — Social proof
+      ═══════════════════════════════════════════════════════════════════ */}
+      <section className="py-24 sm:py-32 bg-slate-950" style={{ borderTop:'1px solid rgba(255,255,255,0.04)' }}>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-14">
+            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-[0.15em] mb-5"
+              style={{ background:'rgba(255,255,255,0.04)', color:'#94a3b8', border:'1px solid rgba(255,255,255,0.08)' }}>
+              {isAr ? 'آراء العملاء' : 'What Clients Say'}
+            </span>
+            <h2 className="font-black text-white leading-[1.1] tracking-tight"
+              style={{ fontSize:'clamp(1.8rem,3.5vw,2.6rem)' }}>
+              {isAr ? 'يثق بنا ملاك العقارات في كل مكان' : 'Trusted by Property Owners Across Saudi Arabia'}
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {TESTIMONIALS.map((testi, i) => {
+              const d = isAr ? testi.ar : testi.en;
+              return (
+                <div key={i} className="testi-card rounded-2xl p-7"
+                  style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)' }}>
+                  {/* Stars */}
+                  <div className="flex gap-0.5 mb-5" style={{ direction:'ltr' }}>
+                    {[...Array(5)].map((_, j) => (
+                      <svg key={j} width="14" height="14" viewBox="0 0 24 24" fill="#fbbf24">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                      </svg>
+                    ))}
+                  </div>
+                  {/* Quote */}
+                  <p className="text-slate-300 text-sm leading-relaxed mb-6">&ldquo;{d.quote}&rdquo;</p>
+                  {/* Author */}
+                  <div className="flex items-center gap-3" style={{ direction:'ltr' }}>
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-black flex-shrink-0"
+                      style={{ background: d.bg }}>
+                      {d.initials}
+                    </div>
+                    <div>
+                      <div className="text-white font-semibold text-sm">{d.name}</div>
+                      <div className="text-slate-500 text-xs">{d.role}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+            {/* ═══════════════════════════════════════════════════════════════════
           ABOUT US — 3-Act Brand Story
       ═══════════════════════════════════════════════════════════════════ */}
       <section id="about" className="py-24 sm:py-32 bg-slate-900">
@@ -979,7 +1288,7 @@ export default function LandingPage() {
                     {/* CTA */}
                     <a
                       href={STAGING_URL}
-                      className={`block text-center font-bold py-3.5 rounded-xl transition-all hover:scale-[1.02] active:scale-95 ${
+                      className={`block text-center font-bold py-3 rounded-xl transition-all hover:opacity-90 active:scale-95 ${
                         isPop
                           ? 'bg-white text-blue-700 hover:bg-blue-50 shadow-lg shadow-blue-900/20'
                           : 'bg-slate-900 text-white hover:bg-slate-800'
@@ -1080,20 +1389,25 @@ export default function LandingPage() {
       {/* ═══════════════════════════════════════════════════════════════════
           FOOTER CTA BANNER
       ═══════════════════════════════════════════════════════════════════ */}
-      <section className="cta-bg relative overflow-hidden py-24 sm:py-32">
-        {/* Decorative grid */}
-        <div className="absolute inset-0 hero-grid opacity-20 pointer-events-none" />
-        <div className="hero-orb pointer-events-none absolute -top-24 right-1/4 w-80 h-80 bg-white/8 rounded-full blur-3xl" />
-        <div className="hero-orb-2 pointer-events-none absolute -bottom-16 left-1/3 w-64 h-64 bg-indigo-300/10 rounded-full blur-3xl" />
-
+      <section className="relative overflow-hidden py-24 sm:py-28"
+        style={{ background:'linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)' }}>
+        <div className="absolute inset-0 pointer-events-none"
+          style={{ backgroundImage:'radial-gradient(ellipse 70% 60% at 50% 50%,rgba(79,70,229,0.15),transparent)' }}/>
         <div className="relative z-10 max-w-3xl mx-auto px-4 text-center">
-          <h2 className="font-black text-white mb-8 leading-tight" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-8 text-xs font-bold uppercase tracking-wider"
+            style={{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', color:'#a5b4fc' }}>
+            {isAr ? 'ابدأ مجاناً اليوم' : 'Start free today'}
+          </div>
+          <h2 className="font-black text-white mb-4 leading-[1.1] tracking-tight"
+            style={{ fontSize:'clamp(2rem,4vw,3rem)' }}>
             {t.footer.ctaBanner}
           </h2>
-          <a
-            href={STAGING_URL}
-            className="inline-block bg-white text-blue-800 font-bold px-12 py-4 rounded-2xl hover:bg-blue-50 transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-blue-900/30 text-lg"
-          >
+          <p className="text-slate-400 mb-10 text-lg">
+            {isAr ? 'تجربة مجانية 14 يوماً · بدون بطاقة ائتمانية · إلغاء في أي وقت' : '14-day free trial · No credit card · Cancel anytime'}
+          </p>
+          <a href={STAGING_URL}
+            className="primary-btn inline-flex items-center gap-2 text-white font-bold px-10 py-4 rounded-xl text-lg"
+            style={{ textDecoration:'none' }}>
             {t.footer.ctaBtn}
           </a>
         </div>
