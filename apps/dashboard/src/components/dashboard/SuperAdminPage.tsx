@@ -26,11 +26,38 @@ import {
 } from '@/lib/transaction-log';
 
 /* ── Storage keys ── */
-const PIN_KEY     = 'rems-superadmin-pin';
-const MAINT_KEY   = 'rems-superadmin-maint';
-const LOGS_KEY    = 'rems-superadmin-logs';
-const SUSPEND_KEY = 'rems-superadmin-suspended';
+const PIN_KEY      = 'rems-superadmin-pin';
+const MAINT_KEY    = 'rems-superadmin-maint';
+const LOGS_KEY     = 'rems-superadmin-logs';
+const SUSPEND_KEY  = 'rems-superadmin-suspended';
+const PIN_RATE_KEY = 'rems-superadmin-pin-rate';
+
+/** Default PIN. Should be changed immediately after first login via Global Settings. */
 const DEFAULT_PIN = '1234';
+
+/* ── PIN rate-limiting ───────────────────────────────────────── */
+const PIN_MAX_TRIES  = 3;
+const PIN_LOCKOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+interface PinRate { count: number; lockedUntil: number; }
+
+function getPinRate(): PinRate {
+  try {
+    const raw = localStorage.getItem(PIN_RATE_KEY);
+    return raw ? JSON.parse(raw) : { count: 0, lockedUntil: 0 };
+  } catch { return { count: 0, lockedUntil: 0 }; }
+}
+function bumpPinRate(): PinRate {
+  const cur   = getPinRate();
+  const count = cur.count + 1;
+  const lockedUntil = count >= PIN_MAX_TRIES ? Date.now() + PIN_LOCKOUT_MS : 0;
+  const next  = { count, lockedUntil };
+  try { localStorage.setItem(PIN_RATE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+  return next;
+}
+function resetPinRate(): void {
+  try { localStorage.removeItem(PIN_RATE_KEY); } catch { /* ignore */ }
+}
 
 /* ── Helpers ── */
 function getPin(): string {
@@ -82,8 +109,30 @@ function PinGate({ onUnlock }: { onUnlock: () => void }) {
   const [err, setErr] = useState('');
 
   const unlock = () => {
-    if (pin === getPin()) onUnlock();
-    else { setErr(sa.pinError); setPin(''); }
+    // Check lockout before verifying PIN
+    const rl = getPinRate();
+    if (rl.lockedUntil && Date.now() < rl.lockedUntil) {
+      const mins = Math.ceil((rl.lockedUntil - Date.now()) / 60_000);
+      setErr(lang === 'ar'
+        ? `تم تجاوز عدد المحاولات. أعد المحاولة بعد ${mins} دقيقة.`
+        : `Too many attempts. Locked for ${mins} more minute${mins !== 1 ? 's' : ''}.`);
+      setPin('');
+      return;
+    }
+
+    if (pin === getPin()) {
+      resetPinRate();
+      onUnlock();
+    } else {
+      const next      = bumpPinRate();
+      const remaining = PIN_MAX_TRIES - next.count;
+      if (next.lockedUntil) {
+        setErr(lang === 'ar' ? 'تم قفل الوصول لمدة 5 دقائق.' : 'Access locked for 5 minutes.');
+      } else {
+        setErr(`${sa.pinError} (${remaining} attempt${remaining !== 1 ? 's' : ''} left)`);
+      }
+      setPin('');
+    }
   };
 
   return (

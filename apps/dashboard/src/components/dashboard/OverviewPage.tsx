@@ -12,13 +12,9 @@ import {
   KPI_DATA, MONTHLY_REVENUE, CHANNEL_BREAKDOWN,
   RECENT_BOOKINGS, CHANNEL_SYNC_STATUS, OWNER,
 } from '@/lib/mock-data';
+import { STATUS_STYLES, OVERVIEW_RECENT_BOOKINGS_LIMIT } from '@/lib/ui-styles';
 
-const STATUS_STYLE: Record<string, string> = {
-  CONFIRMED:   'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800',
-  CHECKED_IN:  'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800',
-  CHECKED_OUT: 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-600',
-  PENDING:     'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800',
-};
+const STATUS_STYLE = STATUS_STYLES;
 
 function KpiCard({ label, value, sub, trendVal, trendLabel, icon, accent, onClick }: {
   label: string; value: string; sub?: string; trendVal?: number; trendLabel?: string;
@@ -268,7 +264,7 @@ export default function OverviewPage({ onNavigate }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                {RECENT_BOOKINGS.slice(0, 5).map(b => (
+                {RECENT_BOOKINGS.slice(0, OVERVIEW_RECENT_BOOKINGS_LIMIT).map(b => (
                   <tr key={b.id} onClick={() => nav('bookings')}
                     className="hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors cursor-pointer">
                     <td>

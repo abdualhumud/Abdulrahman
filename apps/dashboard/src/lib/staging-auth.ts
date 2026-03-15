@@ -7,14 +7,15 @@
  *  • All property/booking data is scoped to the user's ID:
  *      'rems-staging-{userId}-units', 'rems-staging-{userId}-journey', etc.
  *
- * Security note: passwords are Base64-encoded (NOT cryptographically hashed).
- * This is intentional for a static demo app — never use this pattern in production.
+ * Security: passwords are hashed with SHA-256 (Web Crypto API) + a static app salt.
+ * This is still client-side only — not production-grade — but meaningfully stronger
+ * than Base64 encoding: credentials are not trivially readable from localStorage.
  */
 
 export interface StagingUser {
-  id: string;           // generated UUID-like string
+  id: string;           // generated with crypto.getRandomValues()
   email: string;
-  passwordB64: string;  // base64(password) — demo-only, not production-safe
+  passwordHash: string; // SHA-256(password + APP_SALT) — hex string
   name: string;
   companyName: string;
   createdAt: string;
@@ -25,12 +26,22 @@ export interface StagingUser {
 const USERS_KEY   = 'rems-staging-users';
 const SESSION_KEY = 'rems-staging-session'; // sessionStorage — resets on tab close
 
+/** Static app-level salt mixed into every password hash. */
+const APP_SALT = 'rems-staging-2026';
+
+/** Generates a cryptographically random user ID. */
 function genId(): string {
-  return `user_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+  const bytes = new Uint8Array(8);
+  globalThis.crypto.getRandomValues(bytes);
+  const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  return `user_${Date.now().toString(36)}_${hex}`;
 }
 
-function b64(str: string): string {
-  try { return btoa(unescape(encodeURIComponent(str))); } catch { return btoa(str); }
+/** Returns SHA-256(password + APP_SALT) as a lowercase hex string. */
+async function hashPassword(password: string): Promise<string> {
+  const data = new TextEncoder().encode(password + APP_SALT);
+  const buf  = await globalThis.crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 export function getStagingUsers(): StagingUser[] {
@@ -63,14 +74,14 @@ export type RegisterResult =
   | { ok: true;  user: StagingUser }
   | { ok: false; error: string };
 
-export function registerStagingUser(
+export async function registerStagingUser(
   email: string,
   password: string,
   name: string,
   companyName: string,
   plan: string,
   promoCode: string,
-): RegisterResult {
+): Promise<RegisterResult> {
   const users = getStagingUsers();
   const exists = users.find(u => u.email.toLowerCase() === email.trim().toLowerCase());
   if (exists) return { ok: false, error: 'An account with this email already exists' };
@@ -78,7 +89,7 @@ export function registerStagingUser(
   const user: StagingUser = {
     id: genId(),
     email: email.trim().toLowerCase(),
-    passwordB64: b64(password),
+    passwordHash: await hashPassword(password),
     name: name.trim(),
     companyName: companyName.trim(),
     createdAt: new Date().toISOString(),
@@ -91,10 +102,11 @@ export function registerStagingUser(
   return { ok: true, user };
 }
 
-export function loginStagingUser(email: string, password: string): StagingUser | null {
+export async function loginStagingUser(email: string, password: string): Promise<StagingUser | null> {
   const users = getStagingUsers();
-  const user = users.find(
-    u => u.email === email.trim().toLowerCase() && u.passwordB64 === b64(password),
+  const hash  = await hashPassword(password);
+  const user  = users.find(
+    u => u.email === email.trim().toLowerCase() && u.passwordHash === hash,
   );
   if (!user) return null;
   setSession(user);

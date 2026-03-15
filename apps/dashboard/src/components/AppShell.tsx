@@ -47,6 +47,31 @@ type Page =
 const ONBOARDING_KEY_PROD = 'rems-onboarding-done';
 const ONBOARDING_KEY_DEMO = 'rems-onboarding-done-demo';
 
+/* ── Login rate-limiting (staging auth gate) ─────────────────────────── */
+const LOGIN_RATE_KEY   = 'rems-staging-login-rate';
+const LOGIN_MAX_TRIES  = 5;
+const LOGIN_LOCKOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+interface LoginRate { count: number; lockedUntil: number; }
+
+function getLoginRate(email: string): LoginRate {
+  try {
+    const raw = localStorage.getItem(`${LOGIN_RATE_KEY}-${email}`);
+    return raw ? JSON.parse(raw) : { count: 0, lockedUntil: 0 };
+  } catch { return { count: 0, lockedUntil: 0 }; }
+}
+function bumpLoginRate(email: string): LoginRate {
+  const cur   = getLoginRate(email);
+  const count = cur.count + 1;
+  const lockedUntil = count >= LOGIN_MAX_TRIES ? Date.now() + LOGIN_LOCKOUT_MS : 0;
+  const next  = { count, lockedUntil };
+  try { localStorage.setItem(`${LOGIN_RATE_KEY}-${email}`, JSON.stringify(next)); } catch { /* ignore */ }
+  return next;
+}
+function resetLoginRate(email: string): void {
+  try { localStorage.removeItem(`${LOGIN_RATE_KEY}-${email}`); } catch { /* ignore */ }
+}
+
 const INPUT =
   'w-full border border-slate-200 dark:border-slate-600 rounded-xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-slate-300 dark:placeholder-slate-500';
 
@@ -55,7 +80,8 @@ const INPUT =
    ────────────────────────────────────────────────────────────── */
 function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingUser) => void }) {
   const { t, lang, toggle } = useLang();
-  const s = t.staging;
+  const s    = t.staging;
+  const isAr = lang === 'ar';
 
   const [mode,          setMode]         = useState<'login' | 'register'>('login');
   const [email,         setEmail]        = useState('');
@@ -83,11 +109,31 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
   };
 
   const handleLogin = async () => {
-    setError(''); setLoading(true);
+    setError('');
+    // Check rate limit before attempting auth
+    const rl = getLoginRate(email.trim().toLowerCase());
+    if (rl.lockedUntil && Date.now() < rl.lockedUntil) {
+      const mins = Math.ceil((rl.lockedUntil - Date.now()) / 60_000);
+      setError(isAr
+        ? `عدد محاولات تجاوز الحد. أعد المحاولة بعد ${mins} دقيقة.`
+        : `Too many attempts. Try again in ${mins} minute${mins !== 1 ? 's' : ''}.`);
+      return;
+    }
+    setLoading(true);
     await new Promise(r => setTimeout(r, 600));
-    const user = loginStagingUser(email, password);
+    const user = await loginStagingUser(email, password);
     setLoading(false);
-    if (!user) { setError(s.errorInvalid); return; }
+    if (!user) {
+      const next = bumpLoginRate(email.trim().toLowerCase());
+      const remaining = LOGIN_MAX_TRIES - next.count;
+      if (next.lockedUntil) {
+        setError(isAr ? 'تم تجاوز الحد. الحساب مقفل لمدة 5 دقائق.' : 'Account locked for 5 minutes after too many failed attempts.');
+      } else {
+        setError(`${s.errorInvalid}${remaining > 0 ? ` (${remaining} attempt${remaining !== 1 ? 's' : ''} left)` : ''}`);
+      }
+      return;
+    }
+    resetLoginRate(email.trim().toLowerCase());
     onAuthenticated(user);
   };
 
@@ -99,7 +145,7 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
     if (!company.trim())         { setError(s.errorCompany);  return; }
     setLoading(true);
     await new Promise(r => setTimeout(r, 600));
-    const result = registerStagingUser(email, password, name, company, 'Pro', '');
+    const result = await registerStagingUser(email, password, name, company, 'Pro', '');
     setLoading(false);
     if (!result.ok) { setError(result.error); return; }
     // New staging user gets onboarding

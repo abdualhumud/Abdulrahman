@@ -5,6 +5,7 @@ import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
 import { useMode } from '@/lib/mode-context';
 import { RECENT_BOOKINGS, INSURANCE_RECORDS } from '@/lib/mock-data';
+import { STATUS_STYLES, INSURANCE_STYLES, ONE_DAY_MS } from '@/lib/ui-styles';
 import PaymentLinkModal from './PaymentLinkModal';
 
 /* ── Manual bookings localStorage helpers ─────────────────────────── */
@@ -59,7 +60,7 @@ function ManualBookingModal({
   const [submitting, setSubmitting] = useState(false);
 
   const nights = checkIn && checkOut
-    ? Math.max(0, Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000))
+    ? Math.max(0, Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / ONE_DAY_MS))
     : 0;
 
   const amount = parseFloat(amountStr) || 0;
@@ -72,8 +73,8 @@ function ManualBookingModal({
     const booking: typeof RECENT_BOOKINGS[number] = {
       id: `BK-${String(Date.now()).slice(-4)}`,
       guest: guestName.trim(),
-      property: property.trim() || unit.trim() || isAr ? 'وحدة' : 'Unit',
-      unit: unit.trim() || property.trim() || isAr ? 'وحدة' : 'Unit',
+      property: property.trim() || unit.trim() || (isAr ? 'وحدة' : 'Unit'),
+      unit: unit.trim() || property.trim() || (isAr ? 'وحدة' : 'Unit'),
       channel,
       channelColor: CHANNEL_COLORS[channel] ?? '#64748B',
       checkIn,
@@ -285,12 +286,7 @@ function ManualBookingModal({
   );
 }
 
-const STATUS_STYLE: Record<string, string> = {
-  CONFIRMED:   'bg-emerald-50 text-emerald-700 border border-emerald-200',
-  CHECKED_IN:  'bg-blue-50 text-blue-700 border border-blue-200',
-  CHECKED_OUT: 'bg-slate-100 text-slate-500 border border-slate-200',
-  PENDING:     'bg-amber-50 text-amber-700 border border-amber-200',
-};
+const STATUS_STYLE = STATUS_STYLES;
 
 /* ── Booking Detail Slide-over ─────────────────────────────────────── */
 function BookingDetailModal({
@@ -303,11 +299,7 @@ function BookingDetailModal({
   const { t, lang } = useLang();
   const ins = INSURANCE_RECORDS.find(r => r.bookingId === booking.id);
 
-  const INS_STYLE: Record<string, string> = {
-    HELD:               'bg-blue-50 text-blue-700 border border-blue-200',
-    PENDING_INSPECTION: 'bg-amber-50 text-amber-700 border border-amber-200',
-    RELEASED:           'bg-emerald-50 text-emerald-700 border border-emerald-200',
-  };
+  const INS_STYLE = INSURANCE_STYLES;
 
   return (
     <div
