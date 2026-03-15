@@ -3,26 +3,11 @@
 import { useState } from 'react';
 import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
-import { useMode } from '@/lib/mode-context';
 import { RECENT_BOOKINGS, INSURANCE_RECORDS } from '@/lib/mock-data';
 import { STATUS_STYLES, INSURANCE_STYLES, ONE_DAY_MS } from '@/lib/ui-styles';
+import { useBookings, type Booking } from '@/lib/hooks/useBookings';
+import { useBookingFilters } from '@/lib/hooks/useBookingFilters';
 import PaymentLinkModal from './PaymentLinkModal';
-
-/* ── Manual bookings localStorage helpers ─────────────────────────── */
-const MANUAL_BOOKINGS_KEY = 'rems-manual-bookings';
-
-function loadManualBookings(): typeof RECENT_BOOKINGS {
-  if (typeof localStorage === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(MANUAL_BOOKINGS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function saveManualBookings(bookings: typeof RECENT_BOOKINGS): void {
-  try { localStorage.setItem(MANUAL_BOOKINGS_KEY, JSON.stringify(bookings)); }
-  catch { /* storage quota */ }
-}
 
 const CHANNEL_COLORS: Record<string, string> = {
   'Booking.com': '#003580',
@@ -44,7 +29,7 @@ function ManualBookingModal({
   onCreated,
 }: {
   onClose: () => void;
-  onCreated: (b: typeof RECENT_BOOKINGS[number]) => void;
+  onCreated: (b: Booking) => void;
 }) {
   const { t, lang } = useLang();
   const isAr = lang === 'ar';
@@ -70,7 +55,7 @@ function ManualBookingModal({
     if (!canSubmit) return;
     setSubmitting(true);
     await new Promise(r => setTimeout(r, 400));
-    const booking: typeof RECENT_BOOKINGS[number] = {
+    const booking: Booking = {
       id: `BK-${String(Date.now()).slice(-4)}`,
       guest: guestName.trim(),
       property: property.trim() || unit.trim() || (isAr ? 'وحدة' : 'Unit'),
@@ -293,7 +278,7 @@ function BookingDetailModal({
   booking,
   onClose,
 }: {
-  booking: typeof RECENT_BOOKINGS[number];
+  booking: Booking;
   onClose: () => void;
 }) {
   const { t, lang } = useLang();
@@ -458,59 +443,24 @@ interface Props {
 
 export default function BookingsPage({ onCheckoutCleaning }: Props) {
   const { t } = useLang();
-  const { isDemo } = useMode();
 
-  /* Manual bookings — persisted in localStorage for production/staging */
-  const [manualBookings, setManualBookings] = useState<typeof RECENT_BOOKINGS>(() =>
-    isDemo ? [] : loadManualBookings()
-  );
-  const allBookings = [
-    ...(isDemo ? RECENT_BOOKINGS : []),
-    ...manualBookings,
-  ];
+  const { allBookings, addBooking }                    = useBookings();
+  const { STATUSES, filter, setFilter, search,
+          setSearch, rows, stats, getStatus,
+          setLocalStatus }                             = useBookingFilters(allBookings);
 
-  const handleManualBookingCreated = (booking: typeof RECENT_BOOKINGS[number]) => {
-    const next = [booking, ...manualBookings];
-    setManualBookings(next);
-    if (!isDemo) saveManualBookings(next);
-  };
-
-  const STATUSES = ['ALL', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'PENDING'];
-  const [filter, setFilter] = useState('ALL');
-  const [search, setSearch] = useState('');
-  const [localStatuses, setLocalStatuses] = useState<Record<string, string>>({});
   const [justCheckedOut, setJustCheckedOut] = useState<string | null>(null);
-  const [viewBooking, setViewBooking] = useState<typeof RECENT_BOOKINGS[number] | null>(null);
-  const [payLinkBooking, setPayLinkBooking] = useState<typeof RECENT_BOOKINGS[number] | null>(null);
+  const [viewBooking, setViewBooking]       = useState<Booking | null>(null);
+  const [payLinkBooking, setPayLinkBooking] = useState<Booking | null>(null);
   const [manualBookingOpen, setManualBookingOpen] = useState(false);
-
-  const getStatus = (b: typeof RECENT_BOOKINGS[number]) =>
-    localStatuses[b.id] ?? b.status;
-
-  const rows = allBookings.filter(b => {
-    const st = getStatus(b);
-    const s = filter === 'ALL' || st === filter;
-    const q = !search ||
-      b.guest.toLowerCase().includes(search.toLowerCase()) ||
-      b.id.toLowerCase().includes(search.toLowerCase()) ||
-      b.property.toLowerCase().includes(search.toLowerCase());
-    return s && q;
-  });
-
-  const stats = {
-    confirmed: allBookings.filter(b => getStatus(b) === 'CONFIRMED').length,
-    checkedIn: allBookings.filter(b => getStatus(b) === 'CHECKED_IN').length,
-    pending:   allBookings.filter(b => getStatus(b) === 'PENDING').length,
-    revenue:   allBookings.reduce((s, b) => s + b.amount, 0),
-  };
 
   const filterLabel = (s: string) => {
     if (s === 'ALL') return t.common.all;
     return t.status[s as keyof typeof t.status] ?? s.replace('_', ' ');
   };
 
-  function handleCheckOut(b: typeof RECENT_BOOKINGS[number]) {
-    setLocalStatuses(prev => ({ ...prev, [b.id]: 'CHECKED_OUT' }));
+  function handleCheckOut(b: Booking) {
+    setLocalStatus(b.id, 'CHECKED_OUT');
     setJustCheckedOut(b.id);
     // Auto-trigger cleaning request notification
     if (onCheckoutCleaning) {
@@ -662,7 +612,15 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
         {rows.length === 0 && (
           <div className="card py-14 text-center">
             <p className="text-slate-300 text-3xl mb-2">📭</p>
-            <p className="text-slate-400 text-sm font-medium">{t.bookings.noResults}</p>
+            <p className="text-slate-400 text-sm font-medium mb-4">{t.bookings.noResults}</p>
+            {filter === 'ALL' && !search && (
+              <button
+                onClick={() => setManualBookingOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors"
+              >
+                <Icons.plus size={14} /> {t.bookings.newBooking}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -772,7 +730,15 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
               <tr>
                 <td colSpan={11} className="py-16 text-center">
                   <p className="text-slate-300 text-3xl mb-2">📭</p>
-                  <p className="text-slate-400 text-sm font-medium">{t.bookings.noResults}</p>
+                  <p className="text-slate-400 text-sm font-medium mb-4">{t.bookings.noResults}</p>
+                  {filter === 'ALL' && !search && (
+                    <button
+                      onClick={() => setManualBookingOpen(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors"
+                    >
+                      <Icons.plus size={14} /> {t.bookings.newBooking}
+                    </button>
+                  )}
                 </td>
               </tr>
             )}
@@ -806,7 +772,7 @@ export default function BookingsPage({ onCheckoutCleaning }: Props) {
       {manualBookingOpen && (
         <ManualBookingModal
           onClose={() => setManualBookingOpen(false)}
-          onCreated={handleManualBookingCreated}
+          onCreated={b => { addBooking(b); setManualBookingOpen(false); }}
         />
       )}
     </div>

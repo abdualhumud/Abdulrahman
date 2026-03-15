@@ -1744,6 +1744,200 @@ suite('12. 5-Channel Concurrent Overlap Race', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// ── Suite 10 — localStorage Persistence Helpers ──────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * These tests exercise the localStorage read/write helpers for manual bookings,
+ * promo codes, and staging auth — using a lightweight in-memory mock of the
+ * Web Storage API so they run in plain Node.js with no browser.
+ */
+
+// ── Minimal localStorage mock ─────────────────────────────────────────────
+function makeStorage() {
+  const _store = {};
+  return {
+    getItem:    k      => (_store[k] ?? null),
+    setItem:    (k, v) => { _store[k] = String(v); },
+    removeItem: k      => { delete _store[k]; },
+    clear:      ()     => { for (const k of Object.keys(_store)) delete _store[k]; },
+    get length()       { return Object.keys(_store).length; },
+    key:        i      => Object.keys(_store)[i] ?? null,
+    _raw:       ()     => ({ ..._store }),
+  };
+}
+
+// ── Helpers under test (reimplemented in pure JS, same logic as .ts files) ─
+
+const MANUAL_BOOKINGS_KEY = 'rems-manual-bookings';
+
+function lsLoadManual(storage) {
+  try {
+    const raw = storage.getItem(MANUAL_BOOKINGS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function lsSaveManual(storage, bookings) {
+  try { storage.setItem(MANUAL_BOOKINGS_KEY, JSON.stringify(bookings)); }
+  catch { /* quota */ }
+}
+
+const PROMO_KEY = 'rems-promo-codes';
+
+function lsGetPromos(storage) {
+  try {
+    const raw = storage.getItem(PROMO_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function lsSavePromos(storage, codes) {
+  storage.setItem(PROMO_KEY, JSON.stringify(codes));
+}
+
+const STAGING_USERS_KEY = 'rems-staging-users';
+
+function lsGetStagingUsers(storage) {
+  try {
+    const raw = storage.getItem(STAGING_USERS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function lsSaveStagingUsers(storage, users) {
+  storage.setItem(STAGING_USERS_KEY, JSON.stringify(users));
+}
+
+function stagingUnitsKey(userId)  { return `rems-staging-${userId}-units`; }
+function stagingJourneyKey(userId){ return `rems-staging-${userId}-journey`; }
+
+suite('10. localStorage Persistence', () => {
+  test('save and reload manual bookings round-trips without data loss', () => {
+    const storage = makeStorage();
+    const booking1 = { id: 'BK-0001', guest: 'Ahmed', property: 'Apt', unit: 'A', channel: 'Direct',
+                       channelColor: '#F59E0B', checkIn: '2026-04-01', checkOut: '2026-04-04',
+                       nights: 3, amount: 1200, status: 'CONFIRMED', statusColor: '' };
+    const booking2 = { ...booking1, id: 'BK-0002', guest: 'Sara', amount: 800 };
+
+    lsSaveManual(storage, [booking1, booking2]);
+    const loaded = lsLoadManual(storage);
+
+    assert.equal(loaded.length, 2);
+    assert.equal(loaded[0].id, 'BK-0001');
+    assert.equal(loaded[1].guest, 'Sara');
+  });
+
+  test('loadManualBookings returns [] when key is absent', () => {
+    const storage = makeStorage();
+    const loaded = lsLoadManual(storage);
+    assert.deepEqual(loaded, []);
+  });
+
+  test('loadManualBookings returns [] on corrupt JSON', () => {
+    const storage = makeStorage();
+    storage.setItem(MANUAL_BOOKINGS_KEY, 'not-valid-json{{{');
+    const loaded = lsLoadManual(storage);
+    assert.deepEqual(loaded, []);
+  });
+
+  test('new manual booking is prepended (most-recent first)', () => {
+    const storage = makeStorage();
+    const existing = [{ id: 'BK-0001', guest: 'Ahmed' }];
+    lsSaveManual(storage, existing);
+
+    const newBooking = { id: 'BK-0002', guest: 'Sara' };
+    const next = [newBooking, ...lsLoadManual(storage)];
+    lsSaveManual(storage, next);
+
+    const reloaded = lsLoadManual(storage);
+    assert.equal(reloaded[0].id, 'BK-0002', 'newest booking comes first');
+    assert.equal(reloaded[1].id, 'BK-0001');
+  });
+
+  test('promo codes persist and reload with all fields intact', () => {
+    const storage = makeStorage();
+    const codes = [
+      { code: 'REMS2026', discount: 20, maxUses: 100, usedCount: 5, active: true,
+        expiresAt: '2026-12-31', createdAt: '2026-01-01' },
+      { code: 'LAUNCH50', discount: 50, maxUses: 50,  usedCount: 0, active: true,
+        expiresAt: '2026-06-30', createdAt: '2026-01-01' },
+    ];
+    lsSavePromos(storage, codes);
+
+    const loaded = lsGetPromos(storage);
+    assert.equal(loaded.length, 2);
+    assert.equal(loaded[0].code, 'REMS2026');
+    assert.equal(loaded[0].discount, 20);
+    assert.equal(loaded[1].usedCount, 0);
+  });
+
+  test('promo code usedCount increments correctly after redeem', () => {
+    const storage = makeStorage();
+    const codes = [
+      { code: 'TEST10', discount: 10, maxUses: 5, usedCount: 2, active: true,
+        expiresAt: null, createdAt: '2026-01-01' },
+    ];
+    lsSavePromos(storage, codes);
+
+    // simulate redeem
+    const loaded = lsGetPromos(storage);
+    loaded[0].usedCount += 1;
+    lsSavePromos(storage, loaded);
+
+    const reloaded = lsGetPromos(storage);
+    assert.equal(reloaded[0].usedCount, 3, 'usedCount should be incremented to 3');
+  });
+
+  test('staging users are isolated per user-scoped storage keys', () => {
+    const storage = makeStorage();
+    const user1 = { id: 'user_001', email: 'a@test.com', name: 'Alice', companyName: 'A Co',
+                    passwordHash: 'aaa', plan: 'pro', promoCode: '', createdAt: '2026-01-01' };
+    const user2 = { id: 'user_002', email: 'b@test.com', name: 'Bob', companyName: 'B Co',
+                    passwordHash: 'bbb', plan: 'basic', promoCode: '', createdAt: '2026-01-01' };
+
+    lsSaveStagingUsers(storage, [user1, user2]);
+
+    // each user stores their own units under a unique key
+    storage.setItem(stagingUnitsKey('user_001'), JSON.stringify([{ id: 'u1', name: 'Alice Unit' }]));
+    storage.setItem(stagingUnitsKey('user_002'), JSON.stringify([{ id: 'u2', name: 'Bob Unit' }]));
+
+    const alice = JSON.parse(storage.getItem(stagingUnitsKey('user_001')));
+    const bob   = JSON.parse(storage.getItem(stagingUnitsKey('user_002')));
+
+    assert.equal(alice[0].name, 'Alice Unit', 'Alice sees only her unit');
+    assert.equal(bob[0].name,   'Bob Unit',   'Bob sees only his unit');
+    assert.notEqual(stagingUnitsKey('user_001'), stagingUnitsKey('user_002'), 'keys are distinct');
+  });
+
+  test('staging journey state is scoped per user — no cross-contamination', () => {
+    const storage = makeStorage();
+    storage.setItem(stagingJourneyKey('user_001'), JSON.stringify([1, 2]));
+    storage.setItem(stagingJourneyKey('user_002'), JSON.stringify([1]));
+
+    const j1 = JSON.parse(storage.getItem(stagingJourneyKey('user_001')));
+    const j2 = JSON.parse(storage.getItem(stagingJourneyKey('user_002')));
+
+    assert.deepEqual(j1, [1, 2]);
+    assert.deepEqual(j2, [1]);
+    assert.equal(j1.length, 2);
+    assert.equal(j2.length, 1);
+  });
+
+  test('clearing one user key does not affect other users', () => {
+    const storage = makeStorage();
+    storage.setItem(stagingUnitsKey('user_001'), '[]');
+    storage.setItem(stagingUnitsKey('user_002'), '[{"id":"u2"}]');
+
+    storage.removeItem(stagingUnitsKey('user_001'));
+
+    assert.equal(storage.getItem(stagingUnitsKey('user_001')), null, 'user_001 key removed');
+    const bob = JSON.parse(storage.getItem(stagingUnitsKey('user_002')));
+    assert.equal(bob.length, 1, 'user_002 data is unaffected');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // ──  Run  ────────────────────────────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════════════════════
 
