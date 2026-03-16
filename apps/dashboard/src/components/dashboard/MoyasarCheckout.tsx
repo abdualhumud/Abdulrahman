@@ -376,7 +376,7 @@ function RealMoyasarForm({
     })
       .then(() => setLoading(false))
       .catch(e => { setError((e as Error).message); setLoading(false); });
-  }, [amountSAR, description, metadata, onSuccess, onFail, callbackUrl]);
+  }, [amountSAR, description, metadata, onSuccess, onFail, callbackUrl, overrideKey]);
 
   if (error) return (
     <div className="rounded-2xl bg-red-50 border border-red-200 p-5 text-center">
