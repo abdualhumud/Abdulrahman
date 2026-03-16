@@ -242,7 +242,7 @@ export default function FinancialsPage() {
         <div className="card overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
             <p className="font-bold text-slate-900">{t.financials.invoices}</p>
-            <button className="text-xs font-semibold text-blue-600 hover:text-blue-700">{t.financials.viewAll}</button>
+            <span className="text-xs font-semibold text-slate-400">{t.financials.viewAll}</span>
           </div>
           <div className="divide-y divide-slate-50">
             {INVOICES.map(inv => (
@@ -289,7 +289,7 @@ export default function FinancialsPage() {
                   <div>
                     <div className="mb-0.5">
                       <span className={`badge text-[10px] ${CAT_COLOR[exp.category] ?? 'bg-slate-100 text-slate-500'}`}>
-                        {exp.category}
+                        {categories.find(c => c.key === exp.category)?.label ?? exp.category}
                       </span>
                     </div>
                     <p className="font-semibold text-slate-800 text-sm leading-none">{exp.desc}</p>
@@ -308,7 +308,7 @@ export default function FinancialsPage() {
         {[
           { label: t.financials.issued,   value: INVOICES.length,                                                  sub: `${INVOICES.filter(i => i.status === 'PAID').length} ${t.financials.paid}`, icon: <Icons.bookings size={16} />,   accent: '#3B82F6' },
           { label: t.financials.invoiced, value: `SAR ${INVOICES.reduce((s,i) => s+i.total,0).toLocaleString()}`, sub: t.financials.inclVAT,                                                       icon: <Icons.financials size={16} />, accent: '#10B981' },
-          { label: t.financials.expenses, value: `SAR ${totalExpenses.toLocaleString()}`,                         sub: `${expenses.length} ${t.common.filter}`,                                    icon: <Icons.trendDown size={16} />,  accent: '#EF4444' },
+          { label: t.financials.expenses, value: `SAR ${totalExpenses.toLocaleString()}`,                         sub: `${expenses.length} ${t.financials.expenses.toLowerCase()}`,               icon: <Icons.trendDown size={16} />,  accent: '#EF4444' },
           { label: t.financials.vatColl,  value: `SAR ${INVOICES.reduce((s,i) => s+i.vat,0).toLocaleString()}`,  sub: t.financials.vatRate,                                                       icon: <Icons.analytics size={16} />,  accent: '#F59E0B' },
         ].map(s => (
           <div key={s.label} className="card p-5">

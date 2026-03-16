@@ -179,7 +179,7 @@ export default function InboxPage({ onNavigate }: InboxPageProps) {
                 aria-label={lang === 'ar' ? 'رجوع' : 'Back'}
                 className="lg:hidden w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition-all flex-shrink-0"
               >
-                <Icons.chevronLeft size={18} />
+                {lang === 'ar' ? <Icons.chevronRight size={18} /> : <Icons.chevronLeft size={18} />}
               </button>
               <div className="w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm flex-shrink-0"
                 style={{ background: selected.channelColor + '18', color: selected.channelColor }}>

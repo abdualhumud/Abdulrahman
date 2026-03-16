@@ -1,6 +1,12 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { Icons } from '@/lib/icons';
+import { useLang } from '@/lib/language-context';
+import {
+  CLEANING_REQUESTS, CLEANING_PROVIDERS,
+  type CleaningStatus,
+} from '@/lib/mock-data';
 
 async function translateText(text: string, targetLang: 'en' | 'ar'): Promise<string> {
   const srcLang  = targetLang === 'en' ? 'ar' : 'en';
@@ -14,12 +20,6 @@ async function translateText(text: string, targetLang: 'en' | 'ar'): Promise<str
     return text;
   }
 }
-import { Icons } from '@/lib/icons';
-import { useLang } from '@/lib/language-context';
-import {
-  CLEANING_REQUESTS, CLEANING_PROVIDERS,
-  type CleaningStatus,
-} from '@/lib/mock-data';
 
 type ProviderFilter = 'ALL' | 'INTERNAL' | 'EXTERNAL';
 
@@ -351,7 +351,7 @@ export default function CleaningPage({ onTriggerBooking }: { onTriggerBooking?: 
                   <h2 className="font-extrabold text-slate-900 text-base truncate">
                     {lang === 'ar' && (selected as any).unitNameAr ? (selected as any).unitNameAr : selected.unitName}
                   </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">{selected.property} · Checkout {selected.checkoutDate} at {selected.checkoutTime}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{selected.property} · {t.table.checkOut}: {selected.checkoutDate} — {selected.checkoutTime}</p>
                 </div>
 
                 {/* Actions */}
