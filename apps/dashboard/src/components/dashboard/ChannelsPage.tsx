@@ -19,6 +19,7 @@ import { CHANNEL_SYNC_STATUS, CHANNEL_BREAKDOWN } from '@/lib/mock-data';
 import ChannelLogo        from '@/components/channels/ChannelLogo';
 import IntegrationMonitor from '@/components/channels/IntegrationMonitor';
 import AirbnbPanel        from '@/components/channels/AirbnbPanel';
+import GathernPanel       from '@/components/channels/GathernPanel';
 import AgodaPanel         from '@/components/channels/AgodaPanel';
 import ExpediaPanel       from '@/components/channels/ExpediaPanel';
 import UltimateOverlapPanel from '@/components/channels/UltimateOverlapPanel';
@@ -262,6 +263,7 @@ export default function ChannelsPage() {
 
       {/* Integration panels */}
       <AirbnbPanel />
+      <GathernPanel />
       <AgodaPanel />
       <ExpediaPanel />
       <WafiPanel />

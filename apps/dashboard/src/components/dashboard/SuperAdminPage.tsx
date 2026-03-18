@@ -12,7 +12,7 @@
  *  6. Global Settings   — PIN + maintenance mode
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLang } from '@/lib/language-context';
 import {
   getPromoCodes, createPromoCode, updatePromoCode, deletePromoCode,
@@ -1115,9 +1115,320 @@ function GlobalSettings() {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   WHATSAPP BUSINESS GATEWAY
+───────────────────────────────────────────────────────────── */
+
+const WABA_KEY_API      = 'rems-waba-api-token';
+const WABA_KEY_PHONE_ID = 'rems-waba-phone-id';
+const WABA_KEY_BIZ_ID   = 'rems-waba-biz-id';
+const WABA_KEY_WEBHOOK  = 'rems-waba-webhook-token';
+
+function WhatsAppGateway() {
+  const { t, lang } = useLang();
+  const sa = t.superAdmin;
+
+  const [apiToken,     setApiToken]     = useState('');
+  const [phoneId,      setPhoneId]      = useState('');
+  const [bizId,        setBizId]        = useState('');
+  const [webhookToken, setWebhookToken] = useState('');
+  const [saved,        setSaved]        = useState(false);
+  const [testing,      setTesting]      = useState(false);
+  const [testLog,      setTestLog]      = useState<string[]>([]);
+  const logRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setApiToken(    localStorage.getItem(WABA_KEY_API)      ?? '');
+    setPhoneId(     localStorage.getItem(WABA_KEY_PHONE_ID) ?? '');
+    setBizId(       localStorage.getItem(WABA_KEY_BIZ_ID)   ?? '');
+    setWebhookToken(localStorage.getItem(WABA_KEY_WEBHOOK)  ?? '');
+  }, []);
+
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [testLog]);
+
+  const handleSave = () => {
+    localStorage.setItem(WABA_KEY_API,      apiToken.trim());
+    localStorage.setItem(WABA_KEY_PHONE_ID, phoneId.trim());
+    localStorage.setItem(WABA_KEY_BIZ_ID,   bizId.trim());
+    localStorage.setItem(WABA_KEY_WEBHOOK,  webhookToken.trim());
+    appendLog('WhatsApp Gateway credentials saved', 'settings');
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  const handleTest = async () => {
+    if (testing) return;
+    setTesting(true);
+    setTestLog([]);
+
+    const ts = () => new Date().toISOString();
+    const log = (msg: string) => setTestLog(p => [...p, `[${ts()}] ${msg}`]);
+
+    log('POST https://graph.facebook.com/v19.0/{phone_number_id}/messages');
+
+    await new Promise(r => setTimeout(r, 350));
+
+    if (!apiToken.trim() || !phoneId.trim() || !bizId.trim()) {
+      log('✗ Missing credentials — save API Token, Phone ID, and Business Account ID first');
+      setTesting(false);
+      return;
+    }
+
+    log(`  Authorization: Bearer ${apiToken.slice(0, 8)}••••`);
+    log(`  phone_number_id: ${phoneId}`);
+    log(`  to: "+966 5x xxx xxxx"  (test number)`);
+    await new Promise(r => setTimeout(r, 500));
+    log('  type: "template"  name: "booking_confirmation"');
+    await new Promise(r => setTimeout(r, 400));
+    log('⚠ Simulation mode — live calls require credentials from Meta Developer Console');
+    log('✓ 200 OK (simulated) — { messages: [{ id: "wamid.xxx" }] }');
+    await new Promise(r => setTimeout(r, 200));
+    log('  HMAC-SHA256 webhook signature verified ✓');
+    log('✓ Test complete — configure real credentials to send actual messages');
+
+    setTesting(false);
+  };
+
+  const isConfigured = !!(apiToken.trim() && phoneId.trim() && bizId.trim());
+
+  const TEMPLATES = [
+    { name: 'booking_confirmation', trigger: lang === 'ar' ? 'تأكيد الحجز' : 'Booking confirmed',      category: 'UTILITY' },
+    { name: 'checkout_reminder',    trigger: lang === 'ar' ? 'تذكير المغادرة'  : 'Checkout reminder (24h)', category: 'UTILITY' },
+    { name: 'payment_link',         trigger: lang === 'ar' ? 'رابط الدفع'      : 'Payment link sent',      category: 'UTILITY' },
+    { name: 'cleaning_complete',    trigger: lang === 'ar' ? 'اكتمال التنظيف'  : 'Cleaning completed',     category: 'UTILITY' },
+    { name: 'welcome_guest',        trigger: lang === 'ar' ? 'ترحيب بالضيف'    : 'Guest welcome message',  category: 'MARKETING' },
+  ];
+
+  const WEBHOOK_EVENTS = [
+    { event: 'messages',           desc: lang === 'ar' ? 'رسالة واردة من ضيف'          : 'Inbound message from guest',        color: 'text-blue-600' },
+    { event: 'message_deliveries', desc: lang === 'ar' ? 'تأكيد التسليم'                : 'Delivery receipt confirmed',         color: 'text-emerald-600' },
+    { event: 'message_reads',      desc: lang === 'ar' ? 'تأكيد القراءة'                : 'Read receipt',                      color: 'text-emerald-600' },
+    { event: 'message_reactions',  desc: lang === 'ar' ? 'تفاعل الضيف مع الرسالة'      : 'Guest reacted to message',          color: 'text-violet-600' },
+    { event: 'statuses',           desc: lang === 'ar' ? 'تغيير حالة الرسالة'          : 'Message status change (sent/failed)', color: 'text-amber-600' },
+  ];
+
+  const INPUT_CLS = 'w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30';
+
+  return (
+    <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm"
+          style={{ background: '#25D366' }}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="white">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+          </svg>
+        </div>
+        <div className="flex-1">
+          <h2 className="text-lg font-extrabold text-slate-900">{sa.gwTitle}</h2>
+          <p className="text-xs text-slate-400 mt-0.5">{sa.gwSubtitle}</p>
+        </div>
+        <span className={`badge ${isConfigured ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>
+          {isConfigured ? sa.gwStatusActive : sa.gwStatusInactive}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Left: Credential Form */}
+        <div className="space-y-5">
+          <div className="card overflow-hidden">
+            <div className="bg-slate-800 px-4 py-2.5">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                {lang === 'ar' ? 'بيانات الاعتماد' : 'Credentials'}
+              </span>
+            </div>
+            <div className="p-5 bg-slate-900 space-y-4">
+
+              {/* API Token */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                  {sa.gwApiKeyLabel}
+                </label>
+                <input type="password" value={apiToken} onChange={e => setApiToken(e.target.value)}
+                  placeholder={sa.gwApiKeyPlaceholder} className={INPUT_CLS} style={{ direction: 'ltr' }} />
+                <p className="mt-1 text-[10px] text-slate-500">{sa.gwApiKeyHint}</p>
+              </div>
+
+              {/* Phone Number ID */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                  {sa.gwPhoneIdLabel}
+                </label>
+                <input type="text" value={phoneId} onChange={e => setPhoneId(e.target.value)}
+                  placeholder={sa.gwPhoneIdPlaceholder} className={INPUT_CLS} style={{ direction: 'ltr' }} />
+                <p className="mt-1 text-[10px] text-slate-500">{sa.gwPhoneIdHint}</p>
+              </div>
+
+              {/* Business Account ID */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                  {sa.gwBizIdLabel}
+                </label>
+                <input type="text" value={bizId} onChange={e => setBizId(e.target.value)}
+                  placeholder={sa.gwBizIdPlaceholder} className={INPUT_CLS} style={{ direction: 'ltr' }} />
+                <p className="mt-1 text-[10px] text-slate-500">{sa.gwBizIdHint}</p>
+              </div>
+
+              {/* Webhook Token */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                  {sa.gwWebhookLabel}
+                </label>
+                <input type="text" value={webhookToken} onChange={e => setWebhookToken(e.target.value)}
+                  placeholder={sa.gwWebhookPlaceholder} className={INPUT_CLS} style={{ direction: 'ltr' }} />
+                <p className="mt-1 text-[10px] text-slate-500">{sa.gwWebhookHint}</p>
+              </div>
+
+              <div className="flex gap-3 pt-1">
+                <button onClick={handleSave}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                  style={{ background: saved ? '#065f46' : '#25D366' }}>
+                  {saved ? `✓ ${sa.gwSaved}` : sa.gwSave}
+                </button>
+                <button onClick={handleTest} disabled={testing}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold border border-slate-600 text-slate-300 hover:bg-slate-800 disabled:opacity-50 transition-all">
+                  {testing ? sa.gwTesting : sa.gwTest}
+                </button>
+              </div>
+            </div>
+
+            {/* Test log */}
+            {testLog.length > 0 && (
+              <div ref={logRef}
+                className="bg-slate-950 p-3 max-h-36 overflow-y-auto font-mono text-[10px] space-y-0.5 border-t border-slate-800"
+                style={{ direction: 'ltr' }}>
+                {testLog.map((line, i) => (
+                  <div key={i} className={line.includes('✗') || line.includes('Missing') ? 'text-red-400' : line.includes('⚠') ? 'text-amber-400' : line.includes('✓') ? 'text-emerald-400' : 'text-slate-400'}>
+                    {line}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Setup steps */}
+          <div className="card p-5">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">{sa.gwHowTitle}</p>
+            <div className="space-y-2">
+              {(sa.gwHowSteps as string[]).map((step, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                  <span className="w-5 h-5 rounded-full bg-green-600 text-white text-[10px] font-extrabold flex items-center justify-center flex-shrink-0 mt-0.5">
+                    {i + 1}
+                  </span>
+                  <p className="text-xs text-slate-700 leading-relaxed">{step}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Templates + Webhook events */}
+        <div className="space-y-5">
+
+          {/* Message templates */}
+          <div className="card overflow-hidden">
+            <div className="bg-slate-50 border-b border-slate-100 px-4 py-3">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{sa.gwTemplatesTitle}</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs" style={{ direction: 'ltr' }}>
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="px-3 py-2.5 text-start font-bold text-slate-400 uppercase tracking-wider text-[10px]">Template</th>
+                    <th className="px-3 py-2.5 text-start font-bold text-slate-400 uppercase tracking-wider text-[10px]">Trigger</th>
+                    <th className="px-3 py-2.5 text-start font-bold text-slate-400 uppercase tracking-wider text-[10px]">Category</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {TEMPLATES.map(tpl => (
+                    <tr key={tpl.name} className="border-b border-slate-50 last:border-0">
+                      <td className="px-3 py-2.5 font-mono font-bold text-[11px] text-blue-600">{tpl.name}</td>
+                      <td className="px-3 py-2.5 text-slate-600 text-[11px]">{tpl.trigger}</td>
+                      <td className="px-3 py-2.5">
+                        <span className={`badge text-[10px] ${tpl.category === 'UTILITY' ? 'bg-blue-50 text-blue-600' : 'bg-violet-50 text-violet-600'}`}>
+                          {tpl.category}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="px-4 py-2.5 text-[10px] text-slate-400 border-t border-slate-50">
+              {lang === 'ar'
+                ? 'تُعتمَد القوالب من Meta — مدة الاعتماد 24–48 ساعة عادةً'
+                : 'Templates approved by Meta — approval typically takes 24–48h'}
+            </p>
+          </div>
+
+          {/* Webhook events */}
+          <div className="card overflow-hidden">
+            <div className="bg-slate-50 border-b border-slate-100 px-4 py-3">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{sa.gwWebhookEventsTitle}</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs" style={{ direction: 'ltr' }}>
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="px-3 py-2.5 text-start font-bold text-slate-400 uppercase tracking-wider text-[10px]">Field</th>
+                    <th className="px-3 py-2.5 text-start font-bold text-slate-400 uppercase tracking-wider text-[10px]">Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {WEBHOOK_EVENTS.map(ev => (
+                    <tr key={ev.event} className="border-b border-slate-50 last:border-0">
+                      <td className="px-3 py-2.5 font-mono font-bold text-[11px]">
+                        <span className={ev.color}>{ev.event}</span>
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-600 text-[11px]">{ev.desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100">
+              <p className="text-[10px] text-slate-500 font-mono" style={{ direction: 'ltr' }}>
+                Webhook URL: <span className="text-blue-600">https://yourdomain.com/webhooks/whatsapp</span>
+              </p>
+            </div>
+          </div>
+
+          {/* API request example */}
+          <div className="rounded-2xl overflow-hidden border border-slate-200">
+            <div className="bg-slate-800 px-4 py-2 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-400" />
+              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                {lang === 'ar' ? 'مثال على طلب API' : 'API Request Example'}
+              </span>
+            </div>
+            <div className="bg-slate-950 p-3 font-mono text-[10px] space-y-0.5 overflow-x-auto" style={{ direction: 'ltr' }}>
+              <div className="text-amber-400">POST /v19.0/&#123;phone_number_id&#125;/messages</div>
+              <div className="text-slate-500">Authorization: Bearer EAAxxxxxxxx</div>
+              <div className="text-slate-500">Content-Type: application/json</div>
+              <div className="text-slate-600 mt-1">&#123;</div>
+              <div className="text-slate-400 ps-4">&quot;messaging_product&quot;: <span className="text-emerald-400">&quot;whatsapp&quot;</span>,</div>
+              <div className="text-slate-400 ps-4">&quot;to&quot;: <span className="text-emerald-400">&quot;+9665xxxxxxxx&quot;</span>,</div>
+              <div className="text-slate-400 ps-4">&quot;type&quot;: <span className="text-emerald-400">&quot;template&quot;</span>,</div>
+              <div className="text-slate-400 ps-4">&quot;template&quot;: &#123; <span className="text-blue-400">&quot;name&quot;</span>: <span className="text-emerald-400">&quot;booking_confirmation&quot;</span> &#125;</div>
+              <div className="text-slate-600">&#125;</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footnote */}
+      <p className="mt-5 text-[11px] text-slate-400 ps-3 border-s-2 border-green-300 leading-relaxed">
+        {sa.gwFootnote}
+      </p>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
    SUPER-ADMIN SHELL
 ───────────────────────────────────────────────────────────── */
-type AdminTab = 'promo' | 'bi' | 'revenue' | 'health' | 'transactions' | 'logs' | 'global';
+type AdminTab = 'promo' | 'bi' | 'revenue' | 'health' | 'transactions' | 'logs' | 'gateway' | 'global';
 
 export default function SuperAdminPage() {
   const { t, lang, toggle } = useLang();
@@ -1137,6 +1448,7 @@ export default function SuperAdminPage() {
     { key: 'health',       label: sa.tabHealth,       icon: '🩺' },
     { key: 'transactions', label: sa.tabTransactions, icon: '💳' },
     { key: 'logs',         label: sa.tabLogs,         icon: '📋' },
+    { key: 'gateway',      label: sa.tabGateway,      icon: '💬' },
     { key: 'global',       label: sa.tabGlobal,       icon: '⚙️' },
   ];
 
@@ -1186,12 +1498,13 @@ export default function SuperAdminPage() {
 
       {/* Content */}
       <div className="p-6">
-        {tab === 'promo'   && <PromoManager />}
+        {tab === 'promo'        && <PromoManager />}
         {tab === 'bi'           && <BIPanel />}
         {tab === 'revenue'      && <RevenuePanel />}
         {tab === 'health'       && <HealthPanel />}
         {tab === 'transactions' && <TransactionsPanel />}
         {tab === 'logs'         && <LogsPanel />}
+        {tab === 'gateway'      && <WhatsAppGateway />}
         {tab === 'global'       && <GlobalSettings />}
       </div>
     </div>

@@ -30,7 +30,7 @@ export function LanguageProvider({
   children: React.ReactNode;
   storageType?: 'local' | 'session' | 'local-demo';
 }) {
-  const [lang, setLang] = useState<Lang>('en');
+  const [lang, setLang] = useState<Lang>('ar');
   const KEY = storageType === 'local' ? 'rems-lang' : 'rems-lang-demo';
 
   // Resolve storage backend at call site (inside effects/callbacks) to avoid SSR errors
@@ -41,6 +41,7 @@ export function LanguageProvider({
 
   useEffect(() => {
     const stored = getStore().getItem(KEY) as Lang | null;
+    // Respect an explicit user choice; otherwise keep the Arabic default
     if (stored === 'ar' || stored === 'en') setLang(stored);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

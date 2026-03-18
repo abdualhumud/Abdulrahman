@@ -1,21 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
 import { UNITS } from '@/lib/mock-data';
 import ChannelLogo from './ChannelLogo';
 
-const CHANNEL_COLORS: Record<string, { color: string; bg: string }> = {
-  'Booking.com': { color: '#003580', bg: '#EEF2FF' },
-  'Airbnb':      { color: '#FF385C', bg: '#FFF1F2' },
-  'Gathern':     { color: '#00A651', bg: '#F0FDF4' },
-  'Agoda':       { color: '#E31837', bg: '#FFF5F5' },
-  'Expedia':     { color: '#1C3D7D', bg: '#EEF2FF' },
+const CHANNEL_COLORS: Record<string, { color: string; bg: string; darkBg: string }> = {
+  'Booking.com': { color: '#003580', bg: '#EEF2FF', darkBg: 'rgba(30,58,138,0.20)'  },
+  'Airbnb':      { color: '#FF385C', bg: '#FFF1F2', darkBg: 'rgba(239,68,68,0.15)'  },
+  'Gathern':     { color: '#00A651', bg: '#F0FDF4', darkBg: 'rgba(0,166,81,0.15)'   },
+  'Agoda':       { color: '#E31837', bg: '#FFF5F5', darkBg: 'rgba(227,24,55,0.15)'  },
+  'Expedia':     { color: '#1C3D7D', bg: '#EEF2FF', darkBg: 'rgba(28,61,125,0.20)'  },
 };
 
 export default function RateParityManager() {
   const { t, lang } = useLang();
+
+  // Track dark mode so inline channel-row backgrounds stay readable
+  const [isDark, setIsDark] = useState(
+    () => typeof window !== 'undefined' && document.documentElement.classList.contains('dark'),
+  );
+  useEffect(() => {
+    const obs = new MutationObserver(() =>
+      setIsDark(document.documentElement.classList.contains('dark')),
+    );
+    obs.observe(document.documentElement, { attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
   const [selectedUnitId, setSelectedUnitId] = useState('');
   const [unitSearch,     setUnitSearch]     = useState('');
   const [showDropdown,   setShowDropdown]   = useState(false);
@@ -97,17 +109,27 @@ export default function RateParityManager() {
             <Icons.chevronDown size={14} className="absolute end-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           </div>
           {showDropdown && filteredUnits.length > 0 && (
-            <div className="absolute z-30 top-full mt-1 w-full bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden max-h-60 overflow-y-auto">
+            <div className="absolute z-30 top-full mt-1 w-full bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden max-h-60 overflow-y-auto"
+              style={isDark ? { backgroundColor: '#1e293b', borderColor: '#334155' } : undefined}>
               {filteredUnits.map(unit => (
                 <button key={unit.id} onClick={() => handleUnitSelect(unit)}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-start border-b border-slate-50 last:border-0">
+                  className="w-full flex items-center gap-3 px-4 py-3 transition-colors text-start border-b border-slate-100 last:border-0"
+                  style={isDark
+                    ? { borderColor: '#334155' }
+                    : undefined}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = isDark ? '#0f172a' : '#f8fafc')}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
                   <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
                     style={{ background: unit.color + '20', color: unit.color }}>
                     <Icons.building size={14} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-900 truncate">{lang === 'ar' ? (unit.nameAr ?? unit.name) : unit.name}</p>
-                    <p className="text-xs text-slate-400">{unit.city} · SAR {unit.basePrice.toLocaleString()}/night</p>
+                    <p className="text-sm font-bold truncate" style={{ color: isDark ? '#f1f5f9' : '#0f172a' }}>
+                      {lang === 'ar' ? (unit.nameAr ?? unit.name) : unit.name}
+                    </p>
+                    <p className="text-xs" style={{ color: isDark ? '#94a3b8' : '#94a3b8' }}>
+                      {unit.city} · SAR {unit.basePrice.toLocaleString()}/night
+                    </p>
                   </div>
                   <span className={`badge text-[10px] flex-shrink-0 ${unit.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{unit.status}</span>
                 </button>
@@ -164,7 +186,7 @@ export default function RateParityManager() {
                 return (
                   <div key={ch}
                     className={`flex items-center gap-3 p-3 rounded-2xl border-2 transition-all ${enabled ? 'border-current' : 'border-slate-100 bg-slate-50 opacity-60'}`}
-                    style={{ borderColor: enabled ? cc.color + '40' : undefined, background: enabled ? cc.bg : undefined }}>
+                    style={{ borderColor: enabled ? cc.color + '40' : undefined, background: enabled ? (isDark ? cc.darkBg : cc.bg) : undefined }}>
                     <ChannelLogo channel={ch} isActive={enabled && isOnChannel} />
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-sm" style={{ color: cc.color }}>{ch}</p>
