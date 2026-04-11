@@ -133,7 +133,10 @@ html.dark .text-slate-900 { color: #f1f5f9 !important; }
 html.dark .text-slate-800 { color: #e2e8f0 !important; }
 html.dark .text-slate-700 { color: #cbd5e1 !important; }
 html.dark .text-slate-600 { color: #94a3b8 !important; }
-html.dark .text-slate-500 { color: #64748b !important; }
+/* Fix: #64748b = 2.93:1 ratio on #1e293b — fails WCAG AA 4.5:1.
+   #94a3b8 = 5.94:1 — passes AA for normal text.            */
+html.dark .text-slate-500 { color: #94a3b8 !important; }
+html.dark .text-slate-400 { color: #94a3b8 !important; }
 
 /* Borders */
 html.dark .border-slate-100 { border-color: #334155 !important; }
@@ -373,4 +376,20 @@ html.dark .viewport-mobile-panel { border-color: #334155; }
 }
 .viewport-phone-screen [class~="hidden"][class~="md:flex"] {
   display: none !important;
+}
+
+/* ── Partner / payment logo containers ───────────────────────────
+   Enforces consistent, dark-mode-safe logo sizing.
+   Apply on the outermost logo wrapper div.
+   ─────────────────────────────────────────────────────────────── */
+.partner-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  width: auto;
+  min-width: 48px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
 }

@@ -19,7 +19,7 @@ import { useLang }       from '@/lib/language-context';
 import { Icons }         from '@/lib/icons';
 import {
   getStagingSession, loginStagingUser, registerStagingUser, logoutStagingUser,
-  stagingOnboardingKey, type StagingUser,
+  stagingOnboardingKey, stagingUnitsKey, type StagingUser,
 } from '@/lib/staging-auth';
 import Sidebar        from '@/components/layout/Sidebar';
 import TopBar         from '@/components/layout/TopBar';
@@ -37,12 +37,12 @@ import AnalyticsPage  from '@/components/dashboard/AnalyticsPage';
 import FinancialsPage from '@/components/dashboard/FinancialsPage';
 import PropertiesPage from '@/components/dashboard/PropertiesPage';
 import SettingsPage   from '@/components/dashboard/SettingsPage';
-import ShipmentsPage  from '@/components/dashboard/ShipmentsPage';
+// import ShipmentsPage  from '@/components/dashboard/ShipmentsPage'; // DORMANT — scheduled for future release
 
 type Page =
   | 'overview' | 'properties' | 'bookings' | 'calendar'
   | 'channels'  | 'cleaning'   | 'inbox'    | 'analytics'
-  | 'financials' | 'settings'  | 'shipments';
+  | 'financials' | 'settings'; // | 'shipments'; // DORMANT — scheduled for future release
 
 const ONBOARDING_KEY_PROD = 'rems-onboarding-done';
 const ONBOARDING_KEY_DEMO = 'rems-onboarding-done-demo';
@@ -262,6 +262,43 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
 }
 
 /* ──────────────────────────────────────────────────────────────
+   StagingEmptyGate — shown to staging users who have no units yet.
+   Replaces data pages (overview, bookings, etc.) with a friendly
+   prompt to add their first property. Prevents mock "Chalet 1 /
+   Riyadh Apt" demo data from leaking into a real staging account.
+   ────────────────────────────────────────────────────────────── */
+function StagingEmptyGate({ onNavigate, lang }: { onNavigate: (p: string) => void; lang: string }) {
+  const isAr = lang === 'ar';
+  return (
+    <div className="flex flex-col items-center justify-center h-full min-h-[60vh] p-8 text-center">
+      <div className="w-16 h-16 rounded-3xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center mb-5">
+        <Icons.building size={28} className="text-violet-500" />
+      </div>
+      <h2 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-2">
+        {isAr ? 'لم تتم إضافة أي وحدة بعد' : 'No properties added yet'}
+      </h2>
+      <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm mb-6 leading-relaxed">
+        {isAr
+          ? 'أضف وحدتك الأولى لتبدأ في عرض الحجوزات والتقارير والقنوات.'
+          : 'Add your first property to start seeing bookings, reports, and channel data.'}
+      </p>
+      <button
+        onClick={() => onNavigate('properties')}
+        className="btn-primary"
+      >
+        <Icons.properties size={16} />
+        {isAr ? 'إضافة وحدة' : 'Add a Property'}
+      </button>
+    </div>
+  );
+}
+
+/** Pages that require at least one unit before showing real data. */
+const STAGING_DATA_PAGES: Page[] = [
+  'overview', 'bookings', 'calendar', 'analytics', 'financials', 'cleaning',
+];
+
+/* ──────────────────────────────────────────────────────────────
    AppShell — main application shell
    ────────────────────────────────────────────────────────────── */
 export default function AppShell() {
@@ -360,6 +397,19 @@ export default function AppShell() {
   };
 
   const renderPage = () => {
+    // Staging empty-state gate: block data pages when the user has no units yet.
+    // This prevents mock demo data ("Chalet 1", "Riyadh Apt") from appearing
+    // in a real staging account that was just registered.
+    if (isStaging && stagingUser && STAGING_DATA_PAGES.includes(activePage as Page)) {
+      try {
+        const raw   = localStorage.getItem(stagingUnitsKey(stagingUser.id));
+        const units = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(units) || units.length === 0) {
+          return <StagingEmptyGate onNavigate={navigate} lang={lang} />;
+        }
+      } catch { /* fall through to normal render on parse error */ }
+    }
+
     switch (activePage) {
       case 'overview':    return <OverviewPage onNavigate={navigate} />;
       case 'properties':  return <PropertiesPage onNavigate={navigate} />;
@@ -371,7 +421,7 @@ export default function AppShell() {
       case 'analytics':   return <AnalyticsPage />;
       case 'financials':  return <FinancialsPage />;
       case 'settings':    return <SettingsPage />;
-      case 'shipments':   return <ShipmentsPage />;
+      // case 'shipments':   return <ShipmentsPage />; // DORMANT — scheduled for future release
       default:            return <OverviewPage onNavigate={navigate} />;
     }
   };

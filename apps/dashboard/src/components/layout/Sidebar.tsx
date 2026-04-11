@@ -15,7 +15,7 @@ const NAV_ICONS = {
   inbox:      Icons.inbox,
   analytics:  Icons.analytics,
   financials: Icons.financials,
-  shipments:  Icons.truck,
+  // shipments:  Icons.truck,   // DORMANT — scheduled for future release
   settings:   Icons.settings,
 };
 
@@ -49,11 +49,13 @@ const NAV_SECTIONS = [
   {
     labelEn: 'Admin',
     labelAr: 'الإدارة',
-    items: ['shipments', 'settings'] as const,
+    // 'shipments' removed from nav — DORMANT, scheduled for future release
+    items: ['settings'] as const,
   },
 ] as const;
 
-type NavId = 'overview'|'properties'|'calendar'|'bookings'|'channels'|'cleaning'|'inbox'|'analytics'|'financials'|'shipments'|'settings';
+// 'shipments' kept in type for dormant page support — not shown in nav
+type NavId = 'overview'|'properties'|'calendar'|'bookings'|'channels'|'cleaning'|'inbox'|'analytics'|'financials'|/*'shipments'|*/'settings';
 
 const PROPS_QUICK = [
   { name: { en: 'Riyadh Apt.',    ar: 'شقة الرياض'    }, occ: 82, color: '#10B981', colorBg: 'rgba(16,185,129,0.15)' },
@@ -73,7 +75,7 @@ const NAV_GLOW: Partial<Record<NavId, string>> = {
   inbox:      '#F97316',
   analytics:  '#6366F1',
   financials: '#14B8A6',
-  shipments:  '#F59E0B',
+  // shipments:  '#F59E0B',   // DORMANT — scheduled for future release
   settings:   '#8B5CF6',
 };
 

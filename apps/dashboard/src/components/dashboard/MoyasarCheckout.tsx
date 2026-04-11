@@ -35,36 +35,69 @@ interface MoyasarCheckoutProps {
 
 /* ── Payment method logos (inline SVG / styled elements) ─────── */
 
+/**
+ * Payment method logos — HTML elements with inline styles.
+ *
+ * Why NOT SVG <text>: SVG text rendering depends on the system/SVG font context
+ * and can silently render invisible in some environments (print, dark-mode CSS
+ * class overrides, PDF export, certain WebViews). HTML spans with inline
+ * fontFamily are always resolved from the document font stack.
+ *
+ * Key rule for dark-mode safety: use `style={{ background: '#fff' }}` (inline,
+ * NOT Tailwind `bg-white`) so the background is never overridden by
+ * `html.dark .bg-white { background-color: #1e293b }` in globals.css.
+ */
+
 function MadaLogo() {
   return (
-    <div className="flex items-center justify-center w-12 h-8 rounded-lg border border-slate-200 bg-white overflow-hidden">
-      <svg viewBox="0 0 48 24" width="44" height="22" xmlns="http://www.w3.org/2000/svg">
-        <rect width="48" height="24" rx="4" fill="#ffffff"/>
-        <text x="4" y="17" fontFamily="Arial Black, sans-serif" fontWeight="900" fontSize="13" fill="#00703C">mada</text>
-      </svg>
+    <div style={{
+      width: 48, height: 30, borderRadius: 6,
+      background: '#fff',                          /* inline — survives dark mode CSS override */
+      border: '1px solid rgba(0,0,0,0.10)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      overflow: 'hidden', flexShrink: 0,
+    }}>
+      <span style={{
+        fontFamily: '"Arial Black", "Helvetica Neue", Arial, sans-serif',
+        fontWeight: 900, fontSize: 13, color: '#00703C',
+        letterSpacing: '-0.3px', lineHeight: 1,
+      }}>mada</span>
     </div>
   );
 }
 
 function VisaLogo() {
   return (
-    <div className="flex items-center justify-center w-12 h-8 rounded-lg border border-slate-200 bg-white overflow-hidden">
-      <svg viewBox="0 0 48 24" width="44" height="22" xmlns="http://www.w3.org/2000/svg">
-        <rect width="48" height="24" rx="4" fill="#ffffff"/>
-        <text x="4" y="18" fontFamily="Arial Black, sans-serif" fontWeight="900" fontSize="14" fill="#1A1F71" letterSpacing="-0.5">VISA</text>
-      </svg>
+    <div style={{
+      width: 48, height: 30, borderRadius: 6,
+      background: '#fff',
+      border: '1px solid rgba(0,0,0,0.10)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      overflow: 'hidden', flexShrink: 0,
+    }}>
+      <span style={{
+        fontFamily: '"Arial Black", "Helvetica Neue", Arial, sans-serif',
+        fontWeight: 900, fontSize: 14, color: '#1A1F71',
+        letterSpacing: '-0.5px', lineHeight: 1,
+      }}>VISA</span>
     </div>
   );
 }
 
 function MastercardLogo() {
+  /* Mastercard uses pure SVG circles — no text nodes, always renders correctly. */
   return (
-    <div className="flex items-center justify-center w-12 h-8 rounded-lg border border-slate-200 bg-white overflow-hidden">
-      <svg viewBox="0 0 48 24" width="44" height="22" xmlns="http://www.w3.org/2000/svg">
-        <rect width="48" height="24" rx="4" fill="#ffffff"/>
-        <circle cx="18" cy="12" r="8" fill="#EB001B" opacity="0.9"/>
-        <circle cx="30" cy="12" r="8" fill="#F79E1B" opacity="0.9"/>
-        <path d="M24 5.6a8 8 0 0 1 0 12.8A8 8 0 0 1 24 5.6z" fill="#FF5F00"/>
+    <div style={{
+      width: 48, height: 30, borderRadius: 6,
+      background: '#fff',
+      border: '1px solid rgba(0,0,0,0.10)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      overflow: 'hidden', flexShrink: 0,
+    }}>
+      <svg viewBox="0 0 48 28" width="44" height="26" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="18" cy="14" r="9" fill="#EB001B" opacity="0.9"/>
+        <circle cx="30" cy="14" r="9" fill="#F79E1B" opacity="0.9"/>
+        <path d="M24 6.4a9 9 0 0 1 0 15.2A9 9 0 0 1 24 6.4z" fill="#FF5F00"/>
       </svg>
     </div>
   );
@@ -72,21 +105,38 @@ function MastercardLogo() {
 
 function ApplePayLogo() {
   return (
-    <div className="flex items-center justify-center w-12 h-8 rounded-lg border border-slate-200 bg-black overflow-hidden">
-      <svg viewBox="0 0 48 24" width="44" height="22" xmlns="http://www.w3.org/2000/svg">
-        <rect width="48" height="24" rx="4" fill="#000000"/>
-        <text x="6" y="17" fontFamily="Arial, sans-serif" fontWeight="500" fontSize="9" fill="white" letterSpacing="0.3">Apple Pay</text>
-      </svg>
+    <div style={{
+      width: 48, height: 30, borderRadius: 6,
+      background: '#000',                          /* always black — Apple brand requirement */
+      border: '1px solid rgba(255,255,255,0.12)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      overflow: 'hidden', flexShrink: 0,
+    }}>
+      <span style={{
+        fontFamily: '"SF Pro Text", "Helvetica Neue", Arial, sans-serif',
+        fontWeight: 500, fontSize: 8.5, color: '#ffffff',
+        letterSpacing: '0.2px', lineHeight: 1,
+        whiteSpace: 'nowrap' as const,
+      }}>Apple Pay</span>
     </div>
   );
 }
 
 function STCPayLogo() {
   return (
-    <div className="flex items-center justify-center w-12 h-8 rounded-lg border border-[#6D1ED4] bg-[#6D1ED4] overflow-hidden">
-      <svg viewBox="0 0 48 24" width="44" height="22" xmlns="http://www.w3.org/2000/svg">
-        <text x="24" y="17" textAnchor="middle" fontFamily="Arial Black, sans-serif" fontWeight="900" fontSize="9" fill="white" letterSpacing="0.5">STC Pay</text>
-      </svg>
+    <div style={{
+      width: 48, height: 30, borderRadius: 6,
+      background: '#6D1ED4',                       /* STC Pay brand purple */
+      border: '1px solid #5b19b0',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      overflow: 'hidden', flexShrink: 0,
+    }}>
+      <span style={{
+        fontFamily: '"Arial Black", "Helvetica Neue", Arial, sans-serif',
+        fontWeight: 900, fontSize: 8.5, color: '#ffffff',
+        letterSpacing: '0.3px', lineHeight: 1,
+        whiteSpace: 'nowrap' as const,
+      }}>STC Pay</span>
     </div>
   );
 }
