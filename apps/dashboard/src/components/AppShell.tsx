@@ -21,6 +21,12 @@ import {
   getStagingSession, loginStagingUser, registerStagingUser, logoutStagingUser,
   stagingOnboardingKey, stagingUnitsKey, type StagingUser,
 } from '@/lib/staging-auth';
+import { isSupabaseConfigured } from '@/lib/supabase';
+import {
+  loginUser, registerUser, logoutUser, getCurrentAuthUser, onAuthStateChange,
+  completeOnboarding as dbCompleteOnboarding, type AuthUser,
+} from '@/lib/db/auth-service';
+import { getUnitCount } from '@/lib/db/units-service';
 import Sidebar        from '@/components/layout/Sidebar';
 import TopBar         from '@/components/layout/TopBar';
 import DemoBanner     from '@/components/layout/DemoBanner';
@@ -42,46 +48,51 @@ import SettingsPage   from '@/components/dashboard/SettingsPage';
 type Page =
   | 'overview' | 'properties' | 'bookings' | 'calendar'
   | 'channels'  | 'cleaning'   | 'inbox'    | 'analytics'
-  | 'financials' | 'settings'; // | 'shipments'; // DORMANT — scheduled for future release
+  | 'financials' | 'settings'; // | 'shipments'; // DORMANT
 
 const ONBOARDING_KEY_PROD = 'rems-onboarding-done';
 const ONBOARDING_KEY_DEMO = 'rems-onboarding-done-demo';
 
-/* ── Login rate-limiting (staging auth gate) ─────────────────────────── */
-const LOGIN_RATE_KEY   = 'rems-staging-login-rate';
-const LOGIN_MAX_TRIES  = 5;
-const LOGIN_LOCKOUT_MS = 5 * 60 * 1000; // 5 minutes
-
-interface LoginRate { count: number; lockedUntil: number; }
-
-function getLoginRate(email: string): LoginRate {
-  try {
-    const raw = localStorage.getItem(`${LOGIN_RATE_KEY}-${email}`);
-    return raw ? JSON.parse(raw) : { count: 0, lockedUntil: 0 };
-  } catch { return { count: 0, lockedUntil: 0 }; }
-}
-function bumpLoginRate(email: string): LoginRate {
-  const cur   = getLoginRate(email);
-  const count = cur.count + 1;
-  const lockedUntil = count >= LOGIN_MAX_TRIES ? Date.now() + LOGIN_LOCKOUT_MS : 0;
-  const next  = { count, lockedUntil };
-  try { localStorage.setItem(`${LOGIN_RATE_KEY}-${email}`, JSON.stringify(next)); } catch { /* ignore */ }
-  return next;
-}
-function resetLoginRate(email: string): void {
-  try { localStorage.removeItem(`${LOGIN_RATE_KEY}-${email}`); } catch { /* ignore */ }
-}
-
 const INPUT =
   'w-full border border-slate-200 dark:border-slate-600 rounded-xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder-slate-300 dark:placeholder-slate-500';
+
+/* ──────────────────────────────────────────────────────────────
+   StagingEmptyGate — shown on data pages when user has no units.
+   Prevents mock "Chalet 1 / Riyadh Apt" demo data from appearing
+   in a freshly registered staging/production account.
+   ────────────────────────────────────────────────────────────── */
+function StagingEmptyGate({ onNavigate, lang }: { onNavigate: (p: string) => void; lang: string }) {
+  const isAr = lang === 'ar';
+  return (
+    <div className="flex flex-col items-center justify-center h-full min-h-[60vh] p-8 text-center">
+      <div className="w-16 h-16 rounded-3xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center mb-5">
+        <Icons.properties size={28} className="text-violet-500" />
+      </div>
+      <h2 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-2">
+        {isAr ? 'لم تتم إضافة أي وحدة بعد' : 'No properties added yet'}
+      </h2>
+      <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm mb-6 leading-relaxed">
+        {isAr
+          ? 'أضف وحدتك الأولى لتبدأ في عرض الحجوزات والتقارير والقنوات.'
+          : 'Add your first property to start seeing bookings, reports, and channel data.'}
+      </p>
+      <button onClick={() => onNavigate('properties')} className="btn-primary">
+        <Icons.properties size={16} />
+        {isAr ? 'إضافة وحدة' : 'Add a Property'}
+      </button>
+    </div>
+  );
+}
+
+/** Pages that require at least one unit before showing real data. */
+const DATA_PAGES: string[] = ['overview', 'bookings', 'calendar', 'analytics', 'financials', 'cleaning'];
 
 /* ──────────────────────────────────────────────────────────────
    StagingAuthGate — shown before the main app in staging mode
    ────────────────────────────────────────────────────────────── */
 function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingUser) => void }) {
   const { t, lang, toggle } = useLang();
-  const s    = t.staging;
-  const isAr = lang === 'ar';
+  const s = t.staging;
 
   const [mode,          setMode]         = useState<'login' | 'register'>('login');
   const [email,         setEmail]        = useState('');
@@ -109,31 +120,11 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
   };
 
   const handleLogin = async () => {
-    setError('');
-    // Check rate limit before attempting auth
-    const rl = getLoginRate(email.trim().toLowerCase());
-    if (rl.lockedUntil && Date.now() < rl.lockedUntil) {
-      const mins = Math.ceil((rl.lockedUntil - Date.now()) / 60_000);
-      setError(isAr
-        ? `عدد محاولات تجاوز الحد. أعد المحاولة بعد ${mins} دقيقة.`
-        : `Too many attempts. Try again in ${mins} minute${mins !== 1 ? 's' : ''}.`);
-      return;
-    }
-    setLoading(true);
+    setError(''); setLoading(true);
     await new Promise(r => setTimeout(r, 600));
-    const user = await loginStagingUser(email, password);
+    const user = loginStagingUser(email, password);
     setLoading(false);
-    if (!user) {
-      const next = bumpLoginRate(email.trim().toLowerCase());
-      const remaining = LOGIN_MAX_TRIES - next.count;
-      if (next.lockedUntil) {
-        setError(isAr ? 'تم تجاوز الحد. الحساب مقفل لمدة 5 دقائق.' : 'Account locked for 5 minutes after too many failed attempts.');
-      } else {
-        setError(`${s.errorInvalid}${remaining > 0 ? ` (${remaining} attempt${remaining !== 1 ? 's' : ''} left)` : ''}`);
-      }
-      return;
-    }
-    resetLoginRate(email.trim().toLowerCase());
+    if (!user) { setError(s.errorInvalid); return; }
     onAuthenticated(user);
   };
 
@@ -145,7 +136,7 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
     if (!company.trim())         { setError(s.errorCompany);  return; }
     setLoading(true);
     await new Promise(r => setTimeout(r, 600));
-    const result = await registerStagingUser(email, password, name, company, 'Pro', '');
+    const result = registerStagingUser(email, password, name, company, 'Pro', '');
     setLoading(false);
     if (!result.ok) { setError(result.error); return; }
     // New staging user gets onboarding
@@ -262,43 +253,6 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
 }
 
 /* ──────────────────────────────────────────────────────────────
-   StagingEmptyGate — shown to staging users who have no units yet.
-   Replaces data pages (overview, bookings, etc.) with a friendly
-   prompt to add their first property. Prevents mock "Chalet 1 /
-   Riyadh Apt" demo data from leaking into a real staging account.
-   ────────────────────────────────────────────────────────────── */
-function StagingEmptyGate({ onNavigate, lang }: { onNavigate: (p: string) => void; lang: string }) {
-  const isAr = lang === 'ar';
-  return (
-    <div className="flex flex-col items-center justify-center h-full min-h-[60vh] p-8 text-center">
-      <div className="w-16 h-16 rounded-3xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center mb-5">
-        <Icons.building size={28} className="text-violet-500" />
-      </div>
-      <h2 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-2">
-        {isAr ? 'لم تتم إضافة أي وحدة بعد' : 'No properties added yet'}
-      </h2>
-      <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm mb-6 leading-relaxed">
-        {isAr
-          ? 'أضف وحدتك الأولى لتبدأ في عرض الحجوزات والتقارير والقنوات.'
-          : 'Add your first property to start seeing bookings, reports, and channel data.'}
-      </p>
-      <button
-        onClick={() => onNavigate('properties')}
-        className="btn-primary"
-      >
-        <Icons.properties size={16} />
-        {isAr ? 'إضافة وحدة' : 'Add a Property'}
-      </button>
-    </div>
-  );
-}
-
-/** Pages that require at least one unit before showing real data. */
-const STAGING_DATA_PAGES: Page[] = [
-  'overview', 'bookings', 'calendar', 'analytics', 'financials', 'cleaning',
-];
-
-/* ──────────────────────────────────────────────────────────────
    AppShell — main application shell
    ────────────────────────────────────────────────────────────── */
 export default function AppShell() {
@@ -340,14 +294,32 @@ export default function AppShell() {
 
   useEffect(() => {
     if (isDemo) {
-      // Demo onboarding persists in localStorage (demo-specific key, not production key)
+      // Demo: pre-skip onboarding, use mock data — no DB needed
       if (!localStorage.getItem(ONBOARDING_KEY_DEMO)) {
         localStorage.setItem(ONBOARDING_KEY_DEMO, '1');
         markDone(1); markDone(2); markDone(3); markDone(4);
       }
       setShowOnboarding(false);
+    } else if (isSupabaseConfigured()) {
+      // Supabase auth — works across all devices / browsers
+      getCurrentAuthUser().then(user => {
+        if (user) {
+          setStagingUser({ id: user.id, email: user.email, name: user.fullName, companyName: user.companyName } as unknown as StagingUser);
+          if (!user.onboardingDone) setShowOnboarding(true);
+        } else {
+          // Not signed in — show auth gate (handled below via stagingUser === null)
+        }
+        setStagingChecked(true);
+      });
+      // Listen for sign-in / sign-out events
+      const unsub = onAuthStateChange(user => {
+        if (!user) { setStagingUser(null); setStagingChecked(true); return; }
+        setStagingUser({ id: user.id, email: user.email, name: user.fullName, companyName: user.companyName } as unknown as StagingUser);
+        if (!user.onboardingDone) setShowOnboarding(true);
+      });
+      return unsub;
     } else if (isStaging) {
-      // Check for existing session
+      // Fallback: localStorage-backed staging auth (no Supabase keys yet)
       const existing = getStagingSession();
       if (existing) {
         setStagingUser(existing);
@@ -356,7 +328,7 @@ export default function AppShell() {
       }
       setStagingChecked(true);
     } else {
-      // Production: strict onboarding gate
+      // Production without Supabase: localStorage gate
       const done = localStorage.getItem(ONBOARDING_KEY_PROD);
       if (!done) setShowOnboarding(true);
     }
@@ -370,7 +342,10 @@ export default function AppShell() {
   };
 
   const completeOnboarding = (plan?: string, promoCode?: string) => {
-    if (isStaging && stagingUser) {
+    if (isSupabaseConfigured() && stagingUser) {
+      // Mark onboarding done in Supabase
+      dbCompleteOnboarding(stagingUser.id).catch(() => {/* non-fatal */});
+    } else if (isStaging && stagingUser) {
       localStorage.setItem(stagingOnboardingKey(stagingUser.id), '1');
     } else {
       localStorage.setItem(ONBOARDING_KEY_PROD, '1');
@@ -381,7 +356,11 @@ export default function AppShell() {
   };
 
   const handleStagingLogout = () => {
-    logoutStagingUser();
+    if (isSupabaseConfigured()) {
+      logoutUser().catch(() => {/* non-fatal */});
+    } else {
+      logoutStagingUser();
+    }
     setStagingUser(null);
     setShowOnboarding(false);
     setActivePage('overview');
@@ -397,17 +376,17 @@ export default function AppShell() {
   };
 
   const renderPage = () => {
-    // Staging empty-state gate: block data pages when the user has no units yet.
-    // This prevents mock demo data ("Chalet 1", "Riyadh Apt") from appearing
-    // in a real staging account that was just registered.
-    if (isStaging && stagingUser && STAGING_DATA_PAGES.includes(activePage as Page)) {
+    // Empty-state gate: block data pages for users who have not yet added a unit.
+    // In staging (localStorage) or production (Supabase), prevents mock demo data
+    // ("Chalet 1", "Riyadh Apt") from appearing in a fresh account.
+    if (!isDemo && stagingUser && DATA_PAGES.includes(activePage)) {
       try {
         const raw   = localStorage.getItem(stagingUnitsKey(stagingUser.id));
         const units = raw ? JSON.parse(raw) : [];
         if (!Array.isArray(units) || units.length === 0) {
           return <StagingEmptyGate onNavigate={navigate} lang={lang} />;
         }
-      } catch { /* fall through to normal render on parse error */ }
+      } catch { /* fall through on parse error */ }
     }
 
     switch (activePage) {

@@ -133,7 +133,7 @@ html.dark .text-slate-900 { color: #f1f5f9 !important; }
 html.dark .text-slate-800 { color: #e2e8f0 !important; }
 html.dark .text-slate-700 { color: #cbd5e1 !important; }
 html.dark .text-slate-600 { color: #94a3b8 !important; }
-/* Fix: #64748b = 2.93:1 ratio on #1e293b — fails WCAG AA 4.5:1.
+/* Fix: #64748b = 2.93:1 contrast on #1e293b — fails WCAG AA 4.5:1.
    #94a3b8 = 5.94:1 — passes AA for normal text.            */
 html.dark .text-slate-500 { color: #94a3b8 !important; }
 html.dark .text-slate-400 { color: #94a3b8 !important; }
@@ -380,7 +380,8 @@ html.dark .viewport-mobile-panel { border-color: #334155; }
 
 /* ── Partner / payment logo containers ───────────────────────────
    Enforces consistent, dark-mode-safe logo sizing.
-   Apply on the outermost logo wrapper div.
+   Use inline style={{ background }} instead of Tailwind bg-* so
+   the background is never overridden by html.dark rules.
    ─────────────────────────────────────────────────────────────── */
 .partner-logo {
   display: inline-flex;
