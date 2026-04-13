@@ -235,6 +235,18 @@ create policy "promo_codes: auth delete"
   on public.promo_codes for delete
   using (auth.uid() is not null);
 
+-- Atomic increment helper — called by promo-service-db.ts redeemPromoCode()
+-- Uses SQL UPDATE so the increment is safe under concurrent requests.
+create or replace function public.increment_promo_used_count(promo_code text)
+returns void language sql security definer as $$
+  update public.promo_codes
+  set    used_count = used_count + 1
+  where  code = promo_code;
+$$;
+
+-- Allow any authenticated user to call the RPC (super-admin or checkout flow)
+grant execute on function public.increment_promo_used_count(text) to authenticated, anon;
+
 -- Seed default promo codes
 insert into public.promo_codes (code, discount, max_uses, expires_at, active)
 values

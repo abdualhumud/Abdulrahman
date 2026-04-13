@@ -122,7 +122,7 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
   const handleLogin = async () => {
     setError(''); setLoading(true);
     await new Promise(r => setTimeout(r, 600));
-    const user = loginStagingUser(email, password);
+    const user = await loginStagingUser(email, password);
     setLoading(false);
     if (!user) { setError(s.errorInvalid); return; }
     onAuthenticated(user);
@@ -136,7 +136,7 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
     if (!company.trim())         { setError(s.errorCompany);  return; }
     setLoading(true);
     await new Promise(r => setTimeout(r, 600));
-    const result = registerStagingUser(email, password, name, company, 'Pro', '');
+    const result = await registerStagingUser(email, password, name, company, 'Pro', '');
     setLoading(false);
     if (!result.ok) { setError(result.error); return; }
     // New staging user gets onboarding
@@ -264,6 +264,14 @@ export default function AppShell() {
   const [stagingUser,     setStagingUser]     = useState<StagingUser | null>(null);
   const [stagingChecked,  setStagingChecked]  = useState(false);
   const [mobileMenuOpen,  setMobileMenuOpen]  = useState(false);
+  /**
+   * hasUnits — tracks whether the current user has at least one property.
+   *   null  = not yet checked (loading)
+   *   true  = user has ≥1 unit → show real pages
+   *   false = user has 0 units → show StagingEmptyGate on data pages
+   * Re-checked when activePage changes to a data page (picks up newly added units).
+   */
+  const [hasUnits, setHasUnits] = useState<boolean | null>(null);
   const { lang } = useLang();
 
   /* ── Dark mode (persisted in localStorage) ── */
@@ -306,16 +314,20 @@ export default function AppShell() {
         if (user) {
           setStagingUser({ id: user.id, email: user.email, name: user.fullName, companyName: user.companyName } as unknown as StagingUser);
           if (!user.onboardingDone) setShowOnboarding(true);
+          // Check unit count so StagingEmptyGate shows correctly
+          getUnitCount().then(n => setHasUnits(n > 0));
         } else {
           // Not signed in — show auth gate (handled below via stagingUser === null)
+          setHasUnits(null);
         }
         setStagingChecked(true);
       });
       // Listen for sign-in / sign-out events
       const unsub = onAuthStateChange(user => {
-        if (!user) { setStagingUser(null); setStagingChecked(true); return; }
+        if (!user) { setStagingUser(null); setHasUnits(null); setStagingChecked(true); return; }
         setStagingUser({ id: user.id, email: user.email, name: user.fullName, companyName: user.companyName } as unknown as StagingUser);
         if (!user.onboardingDone) setShowOnboarding(true);
+        getUnitCount().then(n => setHasUnits(n > 0));
       });
       return unsub;
     } else if (isStaging) {
@@ -334,6 +346,15 @@ export default function AppShell() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [envMode]);
+
+  // Re-check unit count when navigating to a data page after Supabase auth.
+  // `hasUnits === true` short-circuits to avoid redundant Supabase calls once confirmed.
+  useEffect(() => {
+    if (!isSupabaseConfigured() || !stagingUser || isDemo || hasUnits === true) return;
+    if (!DATA_PAGES.includes(activePage)) return;
+    getUnitCount().then(n => setHasUnits(n > 0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePage, stagingUser]);
 
   const handleStagingAuthenticated = (user: StagingUser) => {
     setStagingUser(user);
@@ -376,17 +397,31 @@ export default function AppShell() {
   };
 
   const renderPage = () => {
-    // Empty-state gate: block data pages for users who have not yet added a unit.
-    // In staging (localStorage) or production (Supabase), prevents mock demo data
-    // ("Chalet 1", "Riyadh Apt") from appearing in a fresh account.
+    // Empty-state gate: block data pages when user has not yet added any unit.
+    // Prevents mock demo data ("Chalet 1", "Riyadh Apt") from appearing in a
+    // fresh production/staging account.
     if (!isDemo && stagingUser && DATA_PAGES.includes(activePage)) {
-      try {
-        const raw   = localStorage.getItem(stagingUnitsKey(stagingUser.id));
-        const units = raw ? JSON.parse(raw) : [];
-        if (!Array.isArray(units) || units.length === 0) {
-          return <StagingEmptyGate onNavigate={navigate} lang={lang} />;
+      if (isSupabaseConfigured()) {
+        // Supabase path: use async-populated hasUnits state.
+        if (hasUnits === null) {
+          // Still checking — show a subtle spinner instead of stale mock data.
+          return (
+            <div className="flex items-center justify-center h-64">
+              <span className="w-6 h-6 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+            </div>
+          );
         }
-      } catch { /* fall through on parse error */ }
+        if (!hasUnits) return <StagingEmptyGate onNavigate={navigate} lang={lang} />;
+      } else {
+        // localStorage staging path: check per-user key synchronously.
+        try {
+          const raw   = localStorage.getItem(stagingUnitsKey(stagingUser.id));
+          const units = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(units) || units.length === 0) {
+            return <StagingEmptyGate onNavigate={navigate} lang={lang} />;
+          }
+        } catch { /* fall through on parse error */ }
+      }
     }
 
     switch (activePage) {
@@ -405,8 +440,11 @@ export default function AppShell() {
     }
   };
 
-  // Staging: show spinner while checking session
-  if (isStaging && !stagingChecked) {
+  // Show spinner while async session check is in flight.
+  // Applies to: staging (localStorage or Supabase) and production with Supabase.
+  // Pure production (no Supabase) uses a synchronous localStorage check — no spinner needed.
+  const needsSessionCheck = isStaging || isSupabaseConfigured();
+  if (needsSessionCheck && !stagingChecked) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <span className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
@@ -414,8 +452,9 @@ export default function AppShell() {
     );
   }
 
-  // Staging: show auth gate until user is authenticated
-  if (isStaging && stagingChecked && !stagingUser) {
+  // Show auth gate when session check is done but no user is signed in.
+  // Applies to staging and to any mode where Supabase is the auth layer.
+  if (needsSessionCheck && stagingChecked && !stagingUser) {
     return <StagingAuthGate onAuthenticated={handleStagingAuthenticated} />;
   }
 

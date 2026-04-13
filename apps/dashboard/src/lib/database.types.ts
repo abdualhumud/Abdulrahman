@@ -86,7 +86,7 @@ export interface Database {
         Row: {
           id:          string;    // UUID
           owner_id:    string;    // FK → profiles.id
-          unit_id:     string;    // FK → units.id
+          unit_id:     string | null;  // FK → units.id; NULL when unit deleted (ON DELETE SET NULL)
           guest_name:  string;
           guest_phone: string | null;
           guest_email: string | null;
@@ -110,7 +110,7 @@ export interface Database {
         Row: {
           id:            string;   // UUID
           owner_id:      string;   // FK → profiles.id
-          unit_id:       string;   // FK → units.id
+          unit_id:       string | null;  // FK → units.id; NULL when unit deleted (ON DELETE SET NULL)
           booking_id:    string | null;
           guest_name:    string;
           checkout_date: string;
