@@ -87,6 +87,23 @@ function StagingEmptyGate({ onNavigate, lang }: { onNavigate: (p: string) => voi
 /** Pages that require at least one unit before showing real data. */
 const DATA_PAGES: string[] = ['overview', 'bookings', 'calendar', 'analytics', 'financials', 'cleaning'];
 
+/**
+ * Maps a Supabase AuthUser to the StagingUser shape used by the local session system.
+ * The `passwordHash` field is left empty — it exists only in the localStorage auth path.
+ */
+function toStagingShape(user: AuthUser): StagingUser {
+  return {
+    id:           user.id,
+    email:        user.email,
+    passwordHash: '',          // N/A for Supabase — password lives in auth.users
+    name:         user.fullName,
+    companyName:  user.companyName,
+    createdAt:    new Date().toISOString(),
+    plan:         user.plan,
+    promoCode:    user.promoCode,
+  };
+}
+
 /* ──────────────────────────────────────────────────────────────
    StagingAuthGate — shown before the main app in staging mode
    ────────────────────────────────────────────────────────────── */
@@ -122,10 +139,19 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
   const handleLogin = async () => {
     setError(''); setLoading(true);
     await new Promise(r => setTimeout(r, 600));
-    const user = await loginStagingUser(email, password);
-    setLoading(false);
-    if (!user) { setError(s.errorInvalid); return; }
-    onAuthenticated(user);
+    if (isSupabaseConfigured()) {
+      // Supabase path — credentials verified server-side via Postgres auth.users
+      const result = await loginUser(email, password);
+      setLoading(false);
+      if (!result.ok) { setError(s.errorInvalid); return; }
+      onAuthenticated(toStagingShape(result.user));
+    } else {
+      // localStorage fallback — SHA-256 hashed comparison against stored users
+      const user = await loginStagingUser(email, password);
+      setLoading(false);
+      if (!user) { setError(s.errorInvalid); return; }
+      onAuthenticated(user);
+    }
   };
 
   const handleRegister = async () => {
@@ -136,11 +162,19 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
     if (!company.trim())         { setError(s.errorCompany);  return; }
     setLoading(true);
     await new Promise(r => setTimeout(r, 600));
-    const result = await registerStagingUser(email, password, name, company, 'Pro', '');
-    setLoading(false);
-    if (!result.ok) { setError(result.error); return; }
-    // New staging user gets onboarding
-    onAuthenticated(result.user);
+    if (isSupabaseConfigured()) {
+      // Supabase path — creates auth.users row + profiles row via DB trigger
+      const result = await registerUser(email, password, name, company, 'Pro', '');
+      setLoading(false);
+      if (!result.ok) { setError(result.error); return; }
+      onAuthenticated(toStagingShape(result.user));
+    } else {
+      // localStorage fallback — SHA-256 hashed password, per-user isolated keys
+      const result = await registerStagingUser(email, password, name, company, 'Pro', '');
+      setLoading(false);
+      if (!result.ok) { setError(result.error); return; }
+      onAuthenticated(result.user);
+    }
   };
 
   return (
@@ -358,8 +392,15 @@ export default function AppShell() {
 
   const handleStagingAuthenticated = (user: StagingUser) => {
     setStagingUser(user);
-    const done = localStorage.getItem(stagingOnboardingKey(user.id));
-    if (!done) setShowOnboarding(true);
+    if (isSupabaseConfigured()) {
+      // Supabase path: onboarding_done lives in profiles table.
+      // The onAuthStateChange listener fires shortly after login/register
+      // and already calls setShowOnboarding(true) when needed — no localStorage
+      // check here, because Supabase UUIDs have no corresponding local key.
+    } else {
+      const done = localStorage.getItem(stagingOnboardingKey(user.id));
+      if (!done) setShowOnboarding(true);
+    }
   };
 
   const completeOnboarding = (plan?: string, promoCode?: string) => {
