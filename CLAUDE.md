@@ -1901,3 +1901,514 @@ Color accent system: Blue (`#3B82F6`) for primary, Emerald (`#10B981`) for succe
 - **TypeScript:** 5
 - **Recharts:** 2
 - **Working directory:** `/home/user/Abdulrahman`
+
+---
+
+## Multi-Tenant SaaS Evolution — Product Roadmap
+
+### Overview
+
+The REMS dashboard is evolving into a **multi-tenant B2B SaaS platform** with three distinct permission tiers. The platform identity: **Jira Operations Intelligence Agent & Dashboard** — AI-powered project health insights for PMOs, Project Managers, and Tech Leads.
+
+Real clients being onboarded: **Rased**, **Dalil**, **Saleh Al-Qarni**, **Mohammed Al-Anzi**.
+
+---
+
+## 3-Tier Architecture
+
+### Tier 1 — Founder Portal (Super Admin)
+**Owner:** Abdulrahman Alhumud  
+**URL:** `/super-admin/`  
+**Gate:** PIN → evolving to Supabase `role = 'super_admin'`
+
+**Purpose:** Business management and client onboarding. The only tier that can see across all companies.
+
+**UI Features:**
+
+| Feature | Description |
+|---|---|
+| Client Management Dashboard | Master view: Register / Edit / Delete companies (name, slug, plan, status) |
+| Jira Instance Config | Per-client: Jira Domain, API Token, Email — stored encrypted in `companies` table |
+| Usage Analytics | Active users per company, last-login timestamps, feature usage counters |
+| Feature Flagging | Per-client toggles: enable/disable `audit_mode`, `ai_insights`, `scope_tracker`, etc. |
+| AI Integration Toggle | "Claude Developer Access" switch — grants real-time feature-update access to a workspace |
+| Subscription Management | Override plan, set trial expiry, view billing history |
+
+---
+
+### Tier 2 — Client Admin Portal
+**Role:** `admin`  
+**URL:** `/admin/`  
+**Gate:** Supabase auth, `role = 'admin'`, scoped to `company_id`
+
+**Purpose:** Project and team management for a single company.
+
+**UI Features:**
+
+| Feature | Description |
+|---|---|
+| Team Management | Invite / Remove users within the company; assign roles |
+| Project Assignment | Map Jira projects to users / groups |
+| Group Management | Create user groups (e.g., "Backend Team", "QA") for aggregate reporting |
+| Jira Sync Control | Trigger manual sync; view sync logs for their company's Jira instance |
+| Feature Visibility | See only the features enabled for their company by Super Admin |
+| Client-scoped Analytics | Usage stats and audit reports scoped to their company only |
+
+---
+
+### Tier 3 — User Portal (Standard User / Tech Lead)
+**Role:** `user`  
+**URL:** `/` (production entry)  
+**Gate:** Supabase auth, `role = 'user'`, scoped to assigned Jira projects only
+
+**Purpose:** Daily operations — the current production dashboard interface.
+
+**Restrictions:**
+- Cannot see Admin or Super Admin settings panels
+- Data is filtered to their assigned Jira project(s) only
+- Cannot view data from other users in the same company
+- No access to billing, team management, or Jira config
+
+---
+
+## Database Schema — Multi-Tenant
+
+### Supabase Tables (additions to existing schema)
+
+```sql
+-- ── companies ──────────────────────────────────────────────────
+-- One row per client organisation.
+create table if not exists public.companies (
+  id              uuid primary key default gen_random_uuid(),
+  name            text not null,                -- e.g. 'Rased'
+  slug            text not null unique,         -- e.g. 'rased' (URL-safe)
+  jira_domain     text,                         -- e.g. 'rased.atlassian.net'
+  jira_email      text,                         -- Atlassian account email
+  jira_api_token  text,                         -- encrypted at rest (pgcrypto)
+  plan            text not null default 'basic',-- 'basic' | 'pro' | 'enterprise'
+  trial_expires_at timestamptz,                 -- null = not on trial
+  status          text not null default 'active', -- 'active' | 'suspended' | 'churned'
+  feature_flags   jsonb not null default '{}',  -- {"audit_mode": true, "ai_insights": false}
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+-- ── roles extension on profiles ────────────────────────────────
+-- Add role + company_id to the existing profiles table.
+alter table public.profiles
+  add column if not exists role       text not null default 'user',
+  -- role: 'super_admin' | 'admin' | 'user'
+  add column if not exists company_id uuid references public.companies(id) on delete set null;
+-- super_admin has company_id = NULL (cross-company access)
+
+-- ── Indexes for fast company-scoped queries ─────────────────────
+create index if not exists profiles_company_id_idx on public.profiles(company_id);
+create index if not exists units_owner_id_idx      on public.units(owner_id);
+create index if not exists bookings_owner_id_idx   on public.bookings(owner_id);
+
+-- ── RLS: data isolation by company ─────────────────────────────
+-- All existing RLS policies use auth.uid() = owner_id.
+-- For multi-tenant isolation, add company-scoped read for admins:
+
+create policy "companies: super_admin full access"
+  on public.companies for all
+  using (
+    exists (
+      select 1 from public.profiles
+      where id = auth.uid() and role = 'super_admin'
+    )
+  );
+
+create policy "companies: admin read own company"
+  on public.companies for select
+  using (
+    exists (
+      select 1 from public.profiles
+      where id = auth.uid() and company_id = companies.id
+    )
+  );
+
+-- Admin can read all profiles in their company
+create policy "profiles: admin read company members"
+  on public.profiles for select
+  using (
+    company_id = (
+      select company_id from public.profiles where id = auth.uid()
+    )
+  );
+
+-- ── set_updated_at trigger for companies ───────────────────────
+create trigger companies_updated_at
+  before update on public.companies
+  for each row execute procedure public.set_updated_at();
+```
+
+### Role → Route Mapping
+
+```ts
+// auth-service.ts — post-login redirect
+export function getRoleRoute(role: string): string {
+  switch (role) {
+    case 'super_admin': return '/super-admin/';
+    case 'admin':       return '/admin/';
+    default:            return '/';           // 'user'
+  }
+}
+```
+
+### Data Isolation — Critical Rules
+
+1. **Every table** that contains user data has `owner_id` → `profiles.id` (existing).
+2. **RLS enforces** `auth.uid() = owner_id` — no row is ever returned for a different user.
+3. **Admin cross-user reads** are only allowed when `profiles.company_id` matches: an Admin from "Rased" can read all Rased user rows but never Dalil rows.
+4. **Super Admin** is the only role with no `company_id` constraint — identified by `role = 'super_admin'`.
+5. **`jira_api_token`** is stored using `pgcrypto`'s `pgp_sym_encrypt` — never returned in plaintext to the browser. A server-side Edge Function proxies Jira API calls, injecting the token server-side.
+
+```sql
+-- Encrypt on insert/update (server-side only, never from browser)
+update public.companies
+  set jira_api_token = pgp_sym_encrypt(token_plaintext, current_setting('app.encryption_key'))
+  where id = company_id;
+
+-- Read (Edge Function only — not exposed via RLS to browser)
+select pgp_sym_decrypt(jira_api_token::bytea, current_setting('app.encryption_key'))
+  from public.companies where id = $1;
+```
+
+---
+
+## Authentication Flow — Role-Based Routing
+
+```
+User submits login form
+        │
+        ▼
+supabase.auth.signInWithPassword()
+        │
+        ▼
+getProfile(user.id)  →  { role, company_id, onboarding_done }
+        │
+        ├─ role = 'super_admin'  →  redirect to /super-admin/
+        │
+        ├─ role = 'admin'
+        │      ├─ onboarding_done = false  →  /admin/onboarding/
+        │      └─ onboarding_done = true   →  /admin/
+        │
+        └─ role = 'user'
+               ├─ onboarding_done = false  →  show OnboardingPage
+               └─ onboarding_done = true   →  show Dashboard
+```
+
+**Implementation in `auth-service.ts`:**
+```ts
+export async function loginAndRoute(email: string, password: string): Promise<{
+  ok: true; route: string; user: AuthUser;
+} | { ok: false; error: string }> {
+  const result = await loginUser(email, password);
+  if (!result.ok) return result;
+  return {
+    ok:    true,
+    user:  result.user,
+    route: getRoleRoute(result.user.role ?? 'user'),
+  };
+}
+```
+
+---
+
+## Feature Flagging System
+
+Feature flags live in `companies.feature_flags` (JSONB). The Super Admin toggles them; clients read them on session load.
+
+### Defined Feature Keys
+
+| Key | Default | Description |
+|---|---|---|
+| `audit_mode` | `false` | Historical sprint audit, chronic delay tracking |
+| `ai_insights` | `false` | AI-generated risk summaries and nudges |
+| `scope_tracker` | `false` | Scope creep detection (added tickets after sprint start) |
+| `quality_leakage` | `false` | Re-opened ticket rate metrics |
+| `team_nudges` | `false` | Automated PM nudges to engineers |
+| `rate_parity` | `true` | Rate Parity Manager (REMS-specific) |
+| `claude_dev_access` | `false` | Grants Claude API write access to company workspace |
+
+### Reading Flags in Components
+
+```ts
+// feature-flags-context.tsx
+interface FeatureFlags {
+  audit_mode:       boolean;
+  ai_insights:      boolean;
+  scope_tracker:    boolean;
+  quality_leakage:  boolean;
+  team_nudges:      boolean;
+  claude_dev_access: boolean;
+}
+
+export function useFeatureFlag(key: keyof FeatureFlags): boolean {
+  const { flags } = useFeatureFlags();
+  return flags[key] ?? false;
+}
+
+// Usage in component:
+const aiEnabled = useFeatureFlag('ai_insights');
+if (!aiEnabled) return null; // feature hidden for this client
+```
+
+### Super Admin Toggle UI Pattern
+
+```tsx
+// In FounderPortal — per-client feature flag row
+<ToggleRow
+  label="Audit Mode"
+  description="Historical sprint auditing and chronic delay tracking"
+  value={company.feature_flags.audit_mode ?? false}
+  onChange={async (val) => {
+    await supabase
+      .from('companies')
+      .update({ feature_flags: { ...company.feature_flags, audit_mode: val } })
+      .eq('id', company.id);
+  }}
+/>
+```
+
+---
+
+## B2B SaaS Landing Page — Jira Operations Intelligence
+
+**File:** `src/app/jira-landing/page.tsx`  
+**URL:** `/jira-landing/`  
+**Pattern:** Self-contained (no React contexts), same pattern as `src/app/landing/page.tsx`
+
+### Value Proposition
+
+**Product name:** Jira Operations Intelligence Agent  
+**Tagline:** "Stop Chasing Delays. Start Anticipating Them."  
+**Target audience:** PMOs, Project Managers, Tech Leads using Jira
+
+### Page Sections (in order)
+
+| # | Section | Key Copy |
+|---|---|---|
+| 1 | **Hero** | Headline + sub-headline + "Request a Demo" CTA. Background: dark grid + animated orbs (same as REMS landing) |
+| 2 | **Pain — Agile Friction** | 4 cards: Hidden Bottlenecks, Lack of Accountability, Invisible Scope Creep, Quality Leakage |
+| 3 | **Solution — Feature Spotlights** | Risk Zone visualization, PMO Audit Mode, Quality & Scope Control, Team Accountability nudges |
+| 4 | **Multi-Tenancy** | "Enterprise-grade isolation" — Client Admin portal for team/group management |
+| 5 | **Social Proof** | Client logo strip (Rased, Dalil) + testimonial quote block |
+| 6 | **Pricing** | Basic vs Enterprise table (see below) |
+| 7 | **Final CTA** | "Start your free 14-day trial" |
+| 8 | **Footer** | Logo, links, bilingual toggle |
+
+### Pricing Table
+
+| Feature | Basic | Enterprise |
+|---|---|---|
+| Jira Projects | 1 | Unlimited |
+| Team Members | 5 | Unlimited |
+| Sprint History | 3 months | 24 months |
+| PMO Audit Mode | — | ✓ |
+| AI Risk Summaries | — | ✓ |
+| Scope Creep Tracker | — | ✓ |
+| Automated Nudges | — | ✓ |
+| Dedicated Support | — | ✓ |
+| Data Export (CSV/PDF) | — | ✓ |
+| **Price** | SAR 299/mo | Contact Sales |
+| **CTA** | Subscribe | Contact Sales |
+
+### Design Rules (Enterprise Dark Theme)
+
+```css
+/* Root palette — Jira landing page */
+--bg-primary:   #0A0E1A;   /* near-black navy */
+--bg-card:      #111827;   /* dark card surface */
+--bg-elevated:  #1E293B;   /* elevated element */
+--accent-blue:  #3B82F6;   /* primary CTA */
+--accent-violet:#7C3AED;   /* AI / premium badge */
+--accent-green: #10B981;   /* success / live */
+--accent-amber: #F59E0B;   /* warning / risk */
+--text-primary: #F1F5F9;   /* heading */
+--text-muted:   #94A3B8;   /* body copy */
+--border:       rgba(255,255,255,0.08);
+```
+
+**Animations (inline `<style>` block, same pattern as REMS landing):**
+- `.shimmer-btn` — gradient sweep on primary CTA
+- `.grad-text` — animated gradient hero headline accent
+- `.hero-orb` — pulsing blurred orb decorations
+- `.fade-in-0..4` — staggered `fadeInUp` entrance (0.1s increments)
+- `.feature-card` — cubic-bezier hover lift + `box-shadow` glow
+- `.risk-pulse` — red pulsing dot for "Risk Zone" live indicator
+
+### Responsive Breakpoints
+
+```css
+/* Mobile-first */
+.hero-grid      { grid-template-columns: 1fr; }          /* < 768px */
+@media (min-width: 768px)  { .hero-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1024px) { .hero-grid { grid-template-columns: 3fr 2fr; } }
+
+.pricing-grid   { grid-template-columns: 1fr; }
+@media (min-width: 768px)  { .pricing-grid { grid-template-columns: 1fr 1fr; } }
+```
+
+---
+
+## Founder Portal — UI Spec
+
+**File:** `src/components/dashboard/FounderPortalPage.tsx`  
+**Entry:** `src/app/super-admin/page.tsx` (extends current `SuperAdminPage`)
+
+### Tabs
+
+| Tab | Content |
+|---|---|
+| **Clients** | Company list table + Add/Edit/Delete + Jira config modal |
+| **Analytics** | Per-company: active users, DAU, feature usage heatmap |
+| **Feature Flags** | Grid of companies × feature keys with toggle switches |
+| **AI Access** | Claude Developer Access switch per company + audit log |
+| **Promo Manager** | (existing) Promo code CRUD |
+| **Activity Log** | (existing) Session-level audit trail |
+| **Settings** | (existing) PIN change + maintenance mode |
+
+### Client Registration Modal Fields
+
+```ts
+interface CompanyFormData {
+  name:          string;   // Display name: "Rased"
+  slug:          string;   // URL-safe: "rased" (auto-generated from name, editable)
+  plan:          'basic' | 'pro' | 'enterprise';
+  jiraDomain:    string;   // "rased.atlassian.net"
+  jiraEmail:     string;   // Atlassian account email
+  jiraApiToken:  string;   // Input type="password" — sent to server for encryption
+  trialDays:     number;   // 0 = not on trial
+  adminEmail:    string;   // Auto-creates an Admin user for this company
+  adminName:     string;
+}
+```
+
+**Slug auto-generation:**
+```ts
+const toSlug = (name: string) =>
+  name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+// "Saleh Al-Qarni" → "saleh-al-qarni"
+```
+
+### Usage Analytics Cards (per company)
+
+```ts
+interface CompanyAnalytics {
+  companyId:     string;
+  totalUsers:    number;
+  activeToday:   number;    // logged in within last 24h
+  activeLast7d:  number;
+  totalProjects: number;    // Jira projects synced
+  lastSyncAt:    string;    // ISO timestamp
+  storageUsedMB: number;
+}
+```
+
+---
+
+## Client Admin Portal — UI Spec
+
+**File:** `src/components/dashboard/ClientAdminPage.tsx`  
+**Entry:** `src/app/admin/page.tsx` (new route)
+
+### Tabs
+
+| Tab | Content |
+|---|---|
+| **Team** | User list (name, email, role, last active) + Invite / Remove |
+| **Projects** | Jira projects linked to this company; assign to users/groups |
+| **Groups** | Create named groups (e.g., "Backend", "QA"); drag users in |
+| **Reports** | Company-scoped analytics: sprint health, delay trends |
+| **Settings** | Company display name, notification preferences |
+
+**Data isolation enforced via RLS:** all queries include `company_id` filter automatically via Supabase `auth.uid()` → `profiles.company_id` join.
+
+---
+
+## Pitfalls — Multi-Tenant
+
+### 25. Jira API token never leaves the server
+
+Never return `jira_api_token` to the browser — strip it in RLS:
+
+```sql
+-- Exclude api token from browser-readable columns
+create policy "companies: admin read own (no token)"
+  on public.companies for select
+  using (...)
+  -- Use a view that excludes jira_api_token for browser reads
+```
+
+Better pattern: create a `companies_safe` view that excludes `jira_api_token`, and grant SELECT on the view (not the table) to `authenticated`.
+
+### 26. Slug uniqueness collision on company creation
+
+Generate slug from name, then check uniqueness before insert. If taken, append a numeric suffix:
+
+```ts
+async function uniqueSlug(base: string): Promise<string> {
+  let slug = toSlug(base);
+  let suffix = 0;
+  while (true) {
+    const candidate = suffix === 0 ? slug : `${slug}-${suffix}`;
+    const { count } = await supabase
+      .from('companies')
+      .select('*', { count: 'exact', head: true })
+      .eq('slug', candidate);
+    if (!count) return candidate;
+    suffix++;
+  }
+}
+```
+
+### 27. Feature flags JSONB partial update — use spread
+
+A JSONB column update replaces the entire object unless you spread:
+
+```ts
+// ✗ WRONG — wipes all other flags
+await supabase.from('companies').update({ feature_flags: { audit_mode: true } })
+
+// ✓ CORRECT — preserves existing flags
+const { data: company } = await supabase.from('companies').select('feature_flags').eq('id', id).single();
+await supabase.from('companies').update({
+  feature_flags: { ...company.feature_flags, audit_mode: true }
+}).eq('id', id);
+```
+
+### 28. Role not available in auth.users metadata — always read from profiles
+
+`supabase.auth.getUser()` does NOT return `role` or `company_id`. Always call `getProfile(user.id)` after auth to get the full role:
+
+```ts
+// ✗ WRONG — role is not in JWT metadata unless you set up custom claims
+const role = session.user.user_metadata.role;
+
+// ✓ CORRECT — always read from profiles table
+const profile = await getProfile(user.id);  // → { role, company_id, ... }
+const route   = getRoleRoute(profile.role);
+```
+
+### 29. Admin cross-company data leak via missing RLS policy
+
+If an Admin runs a direct Supabase query without a `company_id` filter, RLS must block them:
+
+```sql
+-- profiles RLS for admin read MUST filter by company_id
+create policy "profiles: admin read company members"
+  on public.profiles for select
+  using (
+    -- Super admin: sees all
+    (select role from public.profiles where id = auth.uid()) = 'super_admin'
+    OR
+    -- Admin: only same company
+    company_id = (select company_id from public.profiles where id = auth.uid())
+  );
+```
+
+Test this by creating two companies in Supabase Studio, logging in as each Admin, and asserting that `select * from profiles` returns only their company's users.
+
+---
