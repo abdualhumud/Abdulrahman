@@ -8,6 +8,7 @@ import { validatePromoCode, redeemPromoCode, type PromoValidationResult } from '
 import MoyasarCheckout from './MoyasarCheckout';
 import { createTransaction } from '@/lib/transaction-log';
 import { STAGING_MOYASAR_TEST_KEY, type MoyasarPayment } from '@/lib/moyasar-service';
+import { isSupabaseConfigured } from '@/lib/supabase';
 
 type Step = 1 | 2 | 3;
 type OnboardingMode = 'signup' | 'login';
@@ -165,8 +166,14 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
   const discounted  = Math.round(basePrice * (1 - discountPct / 100));
 
   /* ── Saudi-standard validation ── */
-  const crTenDigits    = /^\d{10}$/.test(form.cr);
-  const natIdTenDigits = /^\d{10}$/.test(form.nationalId);
+  // CR: exactly 10 digits, starts with 1-7
+  const crTenDigits    = /^[1-7]\d{9}$/.test(form.cr);
+  // National ID: 10 digits, starts with 1 (Saudi) or 2 (Iqama)
+  const natIdTenDigits = /^[12]\d{9}$/.test(form.nationalId);
+  // Email: must have local@domain.tld structure
+  const emailValid     = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim());
+  // Saudi mobile: 05xxxxxxxx (10 digits, starts with 05)
+  const phoneValid     = /^05\d{8}$/.test(form.phone.replace(/[\s-]/g, ''));
 
   const step1Valid = isStaging || !strictMode || (
     businessType === 'corporate'
@@ -175,8 +182,8 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
   );
   const step2Valid = isStaging || !strictMode || (
     form.ownerName.trim()  !== '' &&
-    form.email.trim().includes('@') &&
-    form.phone.trim().length >= 9 &&
+    emailValid &&
+    phoneValid &&
     natIdTenDigits &&
     form.username.trim().length >= 3 &&
     form.password.trim().length >= 8
@@ -206,8 +213,8 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
   const handleNext = () => {
     if (strictMode) setTouched(true);
     if (!canGoNext) return;
-    /* Save account credentials after profile step so login works on return */
-    if (step === 2 && (step2Valid || isStaging) && form.email && form.password) {
+    /* Save account credentials to localStorage ONLY when Supabase is not configured */
+    if (step === 2 && (step2Valid || isStaging) && form.email && form.password && !isSupabaseConfigured()) {
       try {
         localStorage.setItem('rems-prod-account', JSON.stringify({
           email:       form.email,

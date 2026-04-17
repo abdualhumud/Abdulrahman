@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { Icons } from '@/lib/icons';
 import { OWNER, RECENT_BOOKINGS, CLEANING_REQUESTS, INBOX_MESSAGES } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
+import { useMode } from '@/lib/mode-context';
 
 const NAV_ICONS = {
   overview:   Icons.overview,
@@ -73,7 +74,9 @@ interface Props {
 export default function Sidebar({ activePage, onNavigate, mobileOpen = false, onMobileClose }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const { t, lang } = useLang();
-  const NAV_BADGES = useMemo(() => getNavBadges(), []);
+  const { isDemo }  = useMode();
+  // Badges from mock data only in demo mode; production starts empty
+  const NAV_BADGES = useMemo(() => isDemo ? getNavBadges() : {}, [isDemo]);
 
   const handleNavigate = (id: string) => {
     onNavigate(id);
@@ -192,8 +195,8 @@ export default function Sidebar({ activePage, onNavigate, mobileOpen = false, on
           ))}
         </nav>
 
-        {/* Portfolio quick view */}
-        {!collapsed && (
+        {/* Portfolio quick view — demo only (production users manage their own units) */}
+        {!collapsed && isDemo && (
           <div className="px-2 pb-2">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.12em] px-2 pb-2">
               {t.nav.portfolio}

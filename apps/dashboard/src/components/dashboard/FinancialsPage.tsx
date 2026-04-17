@@ -4,6 +4,7 @@ import { useRef, useState, useEffect } from 'react';
 import { Icons } from '@/lib/icons';
 import { OWNER } from '@/lib/mock-data';
 import { useLang } from '@/lib/language-context';
+import { useMode } from '@/lib/mode-context';
 import {
   getTransactions, getTxStatusStyle, getTxMethodIcon,
   type TransactionRecord,
@@ -20,7 +21,7 @@ function downloadCSV(filename: string, rows: (string | number)[][]) {
 
 const PAYOUT = { gross: 284750, commissions: 24813, platformFee: 25994, expenses: 2190, net: 231753 };
 
-const INVOICES = [
+const DEMO_INVOICES = [
   { id: 'INV-2026-087', booking: 'BK-1091', guest: 'Mohammed Al-Otaibi', amount: 5248,  vat: 787,  total: 6035,  status: 'ISSUED', date: '2026-02-22' },
   { id: 'INV-2026-086', booking: 'BK-1090', guest: 'Sarah Thompson',     amount: 8750,  vat: 1312, total: 10062, status: 'PAID',   date: '2026-02-20' },
   { id: 'INV-2026-085', booking: 'BK-1089', guest: 'Khalid Al-Dosari',   amount: 3600,  vat: 540,  total: 4140,  status: 'PAID',   date: '2026-02-18' },
@@ -53,16 +54,23 @@ const CAT_COLOR: Record<string, string> = {
   Other:       'bg-slate-100 text-slate-600 border border-slate-200',
 };
 
+const TODAY = new Date().toISOString().slice(0, 10);
+
 const INITIAL_FORM = {
   category: 'Maintenance', desc: '', amount: '',
-  date: '2026-02-23', property: PROPERTIES[0],
+  date: TODAY, property: PROPERTIES[0],
 };
 
 export default function FinancialsPage() {
   const { t, lang } = useLang();
+  const { isDemo }  = useMode();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [expenses, setExpenses]         = useState<Expense[]>(INITIAL_EXPENSES);
+  // Fresh Start: production/staging users start with empty financials
+  const payout   = isDemo ? PAYOUT   : { gross: 0, commissions: 0, platformFee: 0, expenses: 0, net: 0 };
+  const invoices: typeof DEMO_INVOICES = isDemo ? DEMO_INVOICES : [];
+
+  const [expenses, setExpenses]         = useState<Expense[]>(() => isDemo ? INITIAL_EXPENSES : []);
   const [modalOpen, setModalOpen]       = useState(false);
   const [saving,    setSaving]          = useState(false);
   const [saved,     setSaved]           = useState(false);
@@ -75,7 +83,7 @@ export default function FinancialsPage() {
   useEffect(() => { setTxRecords(getTransactions()); }, []);
 
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
-  const netPct = ((PAYOUT.net / PAYOUT.gross) * 100).toFixed(1);
+  const netPct = ((payout.net / payout.gross) * 100).toFixed(1);
 
   const handleExport = () => {
     const rows: (string | number)[][] = [
@@ -85,11 +93,11 @@ export default function FinancialsPage() {
       [],
       ['Payout Summary'],
       ['Gross Revenue (SAR)', 'Commissions (SAR)', 'Platform Fee (SAR)', 'Expenses (SAR)', 'Net Payout (SAR)'],
-      [PAYOUT.gross, PAYOUT.commissions, PAYOUT.platformFee, PAYOUT.expenses, PAYOUT.net],
+      [payout.gross, payout.commissions, payout.platformFee, payout.expenses, payout.net],
       [],
       ['Invoices'],
       ['Invoice ID', 'Booking ID', 'Guest', 'Amount (SAR)', 'VAT (SAR)', 'Total (SAR)', 'Status', 'Date'],
-      ...INVOICES.map(i => [i.id, i.booking, i.guest, i.amount, i.vat, i.total, i.status, i.date]),
+      ...invoices.map(i => [i.id, i.booking, i.guest, i.amount, i.vat, i.total, i.status, i.date]),
       [],
       ['Expenses'],
       ['Expense ID', 'Property', 'Category', 'Description', 'Amount (SAR)', 'Date'],
@@ -103,7 +111,7 @@ export default function FinancialsPage() {
   const handleEmailReport = () => {
     const subject = encodeURIComponent('REMS Financial Report — February 2026');
     const body = encodeURIComponent(
-      `Dear ${OWNER.fullName},\n\nPlease find attached the REMS Financial Report for February 2026.\n\nSummary:\n• Gross Revenue: SAR ${PAYOUT.gross.toLocaleString()}\n• Net Payout: SAR ${PAYOUT.net.toLocaleString()}\n• Total Invoices: ${INVOICES.length}\n• Total Expenses: SAR ${totalExpenses.toLocaleString()}\n\nDownload the full CSV report from the REMS dashboard.\n\nREMS Platform`
+      `Dear ${OWNER.fullName},\n\nPlease find attached the REMS Financial Report for February 2026.\n\nSummary:\n• Gross Revenue: SAR ${payout.gross.toLocaleString()}\n• Net Payout: SAR ${payout.net.toLocaleString()}\n• Total Invoices: ${invoices.length}\n• Total Expenses: SAR ${totalExpenses.toLocaleString()}\n\nDownload the full CSV report from the REMS dashboard.\n\nREMS Platform`
     );
     window.location.href = `mailto:${OWNER.email}?subject=${subject}&body=${body}`;
   };
@@ -156,10 +164,10 @@ export default function FinancialsPage() {
   };
 
   const breakdowns = [
-    { label: t.financials.grossRev,    value: PAYOUT.gross,       sign: '+', color: 'text-white'   },
-    { label: t.financials.commissions, value: PAYOUT.commissions, sign: '−', color: 'text-red-300' },
-    { label: t.financials.platformFee, value: PAYOUT.platformFee, sign: '−', color: 'text-red-300' },
-    { label: t.financials.expenses,    value: PAYOUT.expenses,    sign: '−', color: 'text-red-300' },
+    { label: t.financials.grossRev,    value: payout.gross,       sign: '+', color: 'text-white'   },
+    { label: t.financials.commissions, value: payout.commissions, sign: '−', color: 'text-red-300' },
+    { label: t.financials.platformFee, value: payout.platformFee, sign: '−', color: 'text-red-300' },
+    { label: t.financials.expenses,    value: payout.expenses,    sign: '−', color: 'text-red-300' },
   ];
 
   return (
@@ -211,7 +219,7 @@ export default function FinancialsPage() {
             <div>
               <p className="text-slate-400 text-sm font-semibold">{t.financials.payoutTitle}</p>
               <p className="text-4xl font-extrabold mt-2 tracking-tight" style={{ direction: 'ltr' }}>
-                SAR {PAYOUT.net.toLocaleString()}
+                SAR {payout.net.toLocaleString()}
               </p>
               <p className="text-slate-400 text-sm mt-1">
                 {t.financials.netTo} {OWNER.fullName} · {netPct}% {t.financials.ofGross}
@@ -245,7 +253,7 @@ export default function FinancialsPage() {
             <span className="text-xs font-semibold text-slate-400">{t.financials.viewAll}</span>
           </div>
           <div className="divide-y divide-slate-50">
-            {INVOICES.map(inv => (
+            {invoices.map(inv => (
               <div key={inv.id} className="px-5 py-4 flex items-center justify-between hover:bg-slate-50/60 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center flex-shrink-0">
@@ -306,10 +314,10 @@ export default function FinancialsPage() {
       {/* Quick stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: t.financials.issued,   value: INVOICES.length,                                                  sub: `${INVOICES.filter(i => i.status === 'PAID').length} ${t.financials.paid}`, icon: <Icons.bookings size={16} />,   accent: '#3B82F6' },
-          { label: t.financials.invoiced, value: `SAR ${INVOICES.reduce((s,i) => s+i.total,0).toLocaleString()}`, sub: t.financials.inclVAT,                                                       icon: <Icons.financials size={16} />, accent: '#10B981' },
+          { label: t.financials.issued,   value: invoices.length,                                                  sub: `${invoices.filter(i => i.status === 'PAID').length} ${t.financials.paid}`, icon: <Icons.bookings size={16} />,   accent: '#3B82F6' },
+          { label: t.financials.invoiced, value: `SAR ${invoices.reduce((s,i) => s+i.total,0).toLocaleString()}`, sub: t.financials.inclVAT,                                                       icon: <Icons.financials size={16} />, accent: '#10B981' },
           { label: t.financials.expenses, value: `SAR ${totalExpenses.toLocaleString()}`,                         sub: `${expenses.length} ${t.financials.expenses.toLowerCase()}`,               icon: <Icons.trendDown size={16} />,  accent: '#EF4444' },
-          { label: t.financials.vatColl,  value: `SAR ${INVOICES.reduce((s,i) => s+i.vat,0).toLocaleString()}`,  sub: t.financials.vatRate,                                                       icon: <Icons.analytics size={16} />,  accent: '#F59E0B' },
+          { label: t.financials.vatColl,  value: `SAR ${invoices.reduce((s,i) => s+i.vat,0).toLocaleString()}`,  sub: t.financials.vatRate,                                                       icon: <Icons.analytics size={16} />,  accent: '#F59E0B' },
         ].map(s => (
           <div key={s.label} className="card p-5">
             <div className="flex items-start justify-between mb-3">
