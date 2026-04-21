@@ -119,6 +119,7 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
   const [company,       setCompany]      = useState('');
   const [error,         setError]        = useState('');
   const [loading,       setLoading]      = useState(false);
+  const [pendingEmail,  setPendingEmail] = useState('');   // set when email confirmation needed
   const [darkMode,      setDarkMode]     = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('rems-dark-mode') === '1';
@@ -163,10 +164,22 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
     setLoading(true);
     await new Promise(r => setTimeout(r, 600));
     if (isSupabaseConfigured()) {
-      // Supabase path — creates auth.users row + profiles row via DB trigger
-      const result = await registerUser(email, password, name, company, 'Pro', '');
+      // Pass current URL as emailRedirectTo so confirmation links resolve correctly
+      // on all hosts (localhost, GitHub Pages, Vercel) — no hardcoded URL needed.
+      const redirectTo = typeof window !== 'undefined'
+        ? window.location.href.split('#')[0]
+        : undefined;
+      const result = await registerUser(email, password, name, company, 'Pro', '', redirectTo);
       setLoading(false);
-      if (!result.ok) { setError(result.error); return; }
+      if (!result.ok) {
+        setError(result.error === 'RATE_LIMIT' ? s.errorRateLimit : result.error);
+        return;
+      }
+      if (result.pendingVerification) {
+        // Email confirmation required — show "check inbox" screen
+        setPendingEmail(email);
+        return;
+      }
       onAuthenticated(toStagingShape(result.user));
     } else {
       // localStorage fallback — SHA-256 hashed password, per-user isolated keys
@@ -176,6 +189,33 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
       onAuthenticated(result.user);
     }
   };
+
+  /* ── Pending email confirmation screen ── */
+  if (pendingEmail) {
+    return (
+      <div
+        className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center p-6"
+        dir={lang === 'ar' ? 'rtl' : 'ltr'}
+      >
+        <div className="relative w-full max-w-sm text-center">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 text-3xl"
+            style={{ background: 'linear-gradient(135deg,#7C3AED,#6366F1)' }}>
+            ✉️
+          </div>
+          <h2 className="text-2xl font-extrabold text-white mb-2">{s.confirmTitle}</h2>
+          <p className="text-slate-400 text-sm mb-1">{s.confirmText}</p>
+          <p className="text-violet-300 font-bold text-sm mb-4 break-all">{pendingEmail}</p>
+          <p className="text-slate-500 text-xs mb-8">{s.confirmSub}</p>
+          <button
+            onClick={() => { setPendingEmail(''); setMode('login'); setEmail(pendingEmail); }}
+            className="w-full py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm transition-all border border-white/20"
+          >
+            {s.confirmBack}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

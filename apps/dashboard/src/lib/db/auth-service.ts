@@ -23,7 +23,7 @@ export interface AuthUser {
 }
 
 export type AuthResult =
-  | { ok: true;  user: AuthUser }
+  | { ok: true;  user: AuthUser; pendingVerification?: boolean }
   | { ok: false; error: string };
 
 /* ── Helpers ────────────────────────────────────────────────── */
@@ -53,18 +53,28 @@ export async function registerUser(
   companyName: string,
   plan:        string,
   promoCode:   string,
+  redirectTo?: string,
 ): Promise<AuthResult> {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       data: { full_name: fullName },
+      // Tell Supabase where to redirect after email confirmation.
+      // Falls back to the current page URL so it works on all hosts
+      // (localhost, GitHub Pages, Vercel).
+      emailRedirectTo: redirectTo,
     },
   });
 
   if (error) {
-    if (error.message.includes('already registered')) {
+    if (error.message.toLowerCase().includes('already registered') ||
+        error.message.toLowerCase().includes('already exists')) {
       return { ok: false, error: 'An account with this email already exists.' };
+    }
+    if (error.message.toLowerCase().includes('rate limit') ||
+        error.status === 429) {
+      return { ok: false, error: 'RATE_LIMIT' };
     }
     return { ok: false, error: error.message };
   }
@@ -82,6 +92,22 @@ export async function registerUser(
   await (supabase.from('profiles') as ReturnType<typeof supabase.from>)
     .update(profilePatch)
     .eq('id', data.user.id);
+
+  // When email confirmation is required, data.session is null.
+  // Return pendingVerification so the UI can show a "check inbox" screen.
+  if (!data.session) {
+    // Return a minimal user object — full profile loads after confirmation
+    const fallbackUser: AuthUser = {
+      id:             data.user.id,
+      email:          data.user.email ?? email,
+      fullName,
+      companyName,
+      plan,
+      promoCode,
+      onboardingDone: false,
+    };
+    return { ok: true, user: fallbackUser, pendingVerification: true };
+  }
 
   const profile = await getProfile(data.user.id);
   if (!profile) return { ok: false, error: 'Profile creation failed.' };

@@ -865,7 +865,12 @@ export const translations = {
       errorName:       'Please enter your full name',
       errorCompany:    'Please enter your company name',
       errorInvalid:    'Invalid email or password',
+      errorRateLimit:  'Too many attempts — please wait a minute before trying again',
       welcome:         'Welcome back,',
+      confirmTitle:    'Check your email',
+      confirmText:     'We sent a confirmation link to',
+      confirmSub:      'Click the link in the email to activate your account and sign in.',
+      confirmBack:     'Back to sign in',
     },
 
     superAdmin: {
@@ -1867,7 +1872,12 @@ export const translations = {
       errorName:       'الرجاء إدخال اسمك الكامل',
       errorCompany:    'الرجاء إدخال اسم الشركة',
       errorInvalid:    'البريد الإلكتروني أو كلمة المرور غير صحيحة',
+      errorRateLimit:  'تم تجاوز الحد المسموح به — يرجى الانتظار دقيقة قبل المحاولة مجدداً',
       welcome:         'أهلاً بك،',
+      confirmTitle:    'تحقق من بريدك الإلكتروني',
+      confirmText:     'أرسلنا رابط التأكيد إلى',
+      confirmSub:      'انقر على الرابط في البريد الإلكتروني لتفعيل حسابك وتسجيل الدخول.',
+      confirmBack:     'العودة إلى تسجيل الدخول',
     },
 
     superAdmin: {
