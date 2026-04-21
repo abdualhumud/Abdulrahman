@@ -1,10 +1,36 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
 import { useMode } from '@/lib/mode-context';
 import { OWNER } from '@/lib/mock-data';
+import { getCurrentAuthUser, updateProfile, logoutUser } from '@/lib/db/auth-service';
+import { isSupabaseConfigured } from '@/lib/supabase';
+
+const WA_CONFIG_KEY = 'rems-whatsapp-config';
+
+interface WhatsAppConfig {
+  accessToken: string;
+  phoneNumberId: string;
+  webhookToken: string;
+}
+
+function loadWaConfig(): WhatsAppConfig {
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(WA_CONFIG_KEY) : null;
+    if (raw) return JSON.parse(raw) as WhatsAppConfig;
+  } catch { /* ignore */ }
+  return { accessToken: '', phoneNumberId: '', webhookToken: '' };
+}
+
+function WhatsAppLogo({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="#25D366">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+  );
+}
 
 const PROD_ACCOUNT_KEY    = 'rems-prod-account';
 const ONBOARDING_DONE_KEY = 'rems-onboarding-done';
@@ -163,28 +189,73 @@ export default function SettingsPage() {
       iban:       OWNER.iban,
     } : loadProdProfile()
   );
+  const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
   const [profileSaved, setProfileSaved] = useState(false);
   const [crValidating, setCrValidating] = useState(false);
   const [crValid, setCrValid] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+
+  // WhatsApp gateway state
+  const [waConfig, setWaConfig] = useState<WhatsAppConfig>(loadWaConfig);
+  const [waSaved, setWaSaved] = useState(false);
+  const [waShowTokens, setWaShowTokens] = useState(false);
+  const waConnected = !!(waConfig.accessToken && waConfig.phoneNumberId && waConfig.webhookToken);
+
+  // On mount: pull profile from Supabase when configured (production only)
+  useEffect(() => {
+    if (isDemo || isStaging || !isSupabaseConfigured()) return;
+    getCurrentAuthUser().then(user => {
+      if (!user) return;
+      setSupabaseUserId(user.id);
+      setProfile(prev => ({
+        ...prev,
+        ownerName:  user.fullName  || prev.ownerName,
+        ownerEmail: user.email     || prev.ownerEmail,
+        estNameEn:  user.companyName || prev.estNameEn,
+      }));
+    });
+  }, [isDemo, isStaging]);
 
   const handleSaveProfile = async () => {
     setCrValidating(true);
     await new Promise(r => setTimeout(r, 1200));
     setCrValidating(false);
     setCrValid(true);
-    // Persist to localStorage for production users so the data survives page refresh
-    if (!isDemo && !isStaging) saveProdProfile(profile);
+
+    if (!isDemo && !isStaging) {
+      // Persist to Supabase when configured
+      if (isSupabaseConfigured() && supabaseUserId) {
+        await updateProfile(supabaseUserId, {
+          full_name:    profile.ownerName,
+          company_name: profile.estNameEn,
+        });
+      }
+      // Always mirror to localStorage as offline fallback
+      saveProdProfile(profile);
+    }
+
     setProfileSaved(true);
     setTimeout(() => setProfileSaved(false), 3000);
   };
 
-  /** Sign Out (production only): clears the onboarding-done flag so the user
-   *  is returned to the login/sign-up screen. Account credentials are NOT
-   *  cleared, so they can sign back in immediately. */
+  const saveWaConfig = () => {
+    try { localStorage.setItem(WA_CONFIG_KEY, JSON.stringify(waConfig)); } catch { /* quota */ }
+    setWaSaved(true);
+    setTimeout(() => setWaSaved(false), 2500);
+  };
+
+  const clearWaConfig = () => {
+    setWaConfig({ accessToken: '', phoneNumberId: '', webhookToken: '' });
+    try { localStorage.removeItem(WA_CONFIG_KEY); } catch { /* ignore */ }
+  };
+
+  /** Sign Out (production only). Uses Supabase when configured. */
   const handleSignOut = async () => {
     setSigningOut(true);
     await new Promise(r => setTimeout(r, 400));
+    if (isSupabaseConfigured()) {
+      await logoutUser();
+    }
     localStorage.removeItem(ONBOARDING_DONE_KEY);
     window.location.reload();
   };
@@ -545,6 +616,134 @@ export default function SettingsPage() {
                   </button>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* WhatsApp Business API Gateway */}
+          <div className="card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#dcfce7] flex items-center justify-center flex-shrink-0">
+                  <WhatsAppLogo size={22} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900">
+                    {lang === 'ar' ? 'بوابة واتساب للأعمال' : 'WhatsApp Business API'}
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {lang === 'ar' ? 'Meta Business API — إشعارات الضيوف وتأكيد الحجز' : 'Meta Business API — guest notifications & booking confirmations'}
+                  </p>
+                </div>
+              </div>
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border
+                ${waConnected
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${waConnected ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                {waConnected
+                  ? (lang === 'ar' ? 'متصل' : 'Connected')
+                  : (lang === 'ar' ? 'غير مُفعَّل' : 'Not configured')}
+              </span>
+            </div>
+
+            {/* Info notice when not connected */}
+            {!waConnected && (
+              <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 mb-4 text-xs text-amber-800">
+                {lang === 'ar'
+                  ? 'واتساب في صندوق الوارد هو واجهة مرئية فقط. أضف مفاتيح Meta Business API أدناه لتفعيل الإرسال الفعلي.'
+                  : 'WhatsApp in the Inbox is currently a UI preview. Add your Meta Business API credentials below to activate real messaging.'}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {/* Access Token */}
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">
+                  {lang === 'ar' ? 'رمز الوصول الدائم (Access Token)' : 'Permanent Access Token'}
+                </label>
+                <div className="relative">
+                  <input
+                    type={waShowTokens ? 'text' : 'password'}
+                    value={waConfig.accessToken}
+                    onChange={e => setWaConfig(c => ({ ...c, accessToken: e.target.value }))}
+                    className="input w-full pe-10 font-mono text-xs"
+                    placeholder="EAAxxxxxx..."
+                    style={{ direction: 'ltr' }}
+                  />
+                  <button
+                    onClick={() => setWaShowTokens(v => !v)}
+                    className="absolute end-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    tabIndex={-1}
+                  >
+                    {waShowTokens
+                      ? <Icons.eye size={14} />
+                      : <Icons.eyeOff size={14} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Phone Number ID + Webhook Token row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">
+                    {lang === 'ar' ? 'معرّف رقم الهاتف (Phone Number ID)' : 'Phone Number ID'}
+                  </label>
+                  <input
+                    type={waShowTokens ? 'text' : 'password'}
+                    value={waConfig.phoneNumberId}
+                    onChange={e => setWaConfig(c => ({ ...c, phoneNumberId: e.target.value }))}
+                    className="input w-full font-mono text-xs"
+                    placeholder="1234567890"
+                    style={{ direction: 'ltr' }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">
+                    {lang === 'ar' ? 'رمز التحقق من الـ Webhook' : 'Webhook Verify Token'}
+                  </label>
+                  <input
+                    type={waShowTokens ? 'text' : 'password'}
+                    value={waConfig.webhookToken}
+                    onChange={e => setWaConfig(c => ({ ...c, webhookToken: e.target.value }))}
+                    className="input w-full font-mono text-xs"
+                    placeholder="my_secret_token"
+                    style={{ direction: 'ltr' }}
+                  />
+                </div>
+              </div>
+
+              {/* Webhook URL hint */}
+              <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-xs text-slate-500">
+                <span className="font-semibold text-slate-700">
+                  {lang === 'ar' ? 'رابط الـ Webhook: ' : 'Webhook URL: '}
+                </span>
+                <span className="font-mono" style={{ direction: 'ltr' }}>
+                  {typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'}/api/webhooks/whatsapp
+                </span>
+              </div>
+
+              {waSaved && (
+                <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 text-sm font-semibold">
+                  <Icons.check size={15} />
+                  {lang === 'ar' ? 'تم حفظ إعدادات واتساب بنجاح' : 'WhatsApp credentials saved successfully'}
+                </div>
+              )}
+
+              <div className="flex items-center gap-3">
+                <button onClick={saveWaConfig} className="btn-primary px-6 text-sm">
+                  <Icons.check size={14} />
+                  {lang === 'ar' ? 'حفظ الإعدادات' : 'Save Credentials'}
+                </button>
+                {waConnected && (
+                  <button
+                    onClick={clearWaConfig}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 transition-all"
+                  >
+                    <Icons.x size={14} />
+                    {lang === 'ar' ? 'إلغاء الاتصال' : 'Disconnect'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
