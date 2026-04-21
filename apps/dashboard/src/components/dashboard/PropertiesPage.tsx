@@ -1489,7 +1489,7 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
       {/* Units grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {filtered.map(unit => {
-          const ins = INSURANCE_RECORDS.find(r => r.bookingId && unit.name.includes(r.unit));
+          const ins = isDemo ? INSURANCE_RECORDS.find(r => r.bookingId && unit.name.includes(r.unit)) : undefined;
           const insStatus: InsuranceStatus = released[unit.id] ? 'RELEASED' : (ins?.status as InsuranceStatus) ?? 'HELD';
           const unitImages = PROPERTY_IMAGES[unit.type] ?? PROPERTY_IMAGES.APARTMENT;
           const unitImg = (unit as any).uploadedPhotos?.[0] ?? unitImages[units.indexOf(unit) % unitImages.length];
@@ -1610,7 +1610,7 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
                     {insStatus === 'HELD' ? t.insurance.depositHeld : insStatus === 'RELEASED' ? t.insurance.depositReleased : t.insurance.depositPending}
                   </span>
                   {insStatus === 'PENDING_INSPECTION' && (
-                    <button onClick={() => setInspBkg(INSURANCE_RECORDS.find(r => r.unit.includes(unit.name.split('—')[0]?.trim()))?.bookingId ?? '')}
+                    <button onClick={() => setInspBkg(isDemo ? (INSURANCE_RECORDS.find(r => r.unit.includes(unit.name.split('—')[0]?.trim()))?.bookingId ?? '') : '')}
                       className="text-xs font-bold text-amber-600 hover:text-amber-800 transition-colors underline underline-offset-2">
                       {t.insurance.inspect}
                     </button>
@@ -1668,7 +1668,14 @@ export default function PropertiesPage({ onNavigate }: { onNavigate?: (page: str
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {INSURANCE_RECORDS.map(rec => {
+              {!isDemo && (
+                <tr>
+                  <td colSpan={6} className="text-center py-8 text-sm text-slate-400">
+                    {lang === 'ar' ? 'لا توجد سجلات تأمين حتى الآن — ستظهر هنا بعد إضافة حجوزاتك' : 'No security deposit records yet — they will appear here once you add bookings'}
+                  </td>
+                </tr>
+              )}
+              {(isDemo ? INSURANCE_RECORDS : []).map(rec => {
                 const st: InsuranceStatus = released[rec.bookingId] ? 'RELEASED' : rec.status as InsuranceStatus;
                 return (
                   <tr key={rec.bookingId} className="hover:bg-slate-50/50 transition-colors">
