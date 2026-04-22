@@ -426,7 +426,10 @@ export default function AppShell() {
   useEffect(() => {
     if (!isSupabaseConfigured() || !stagingUser || isDemo || hasUnits === true) return;
     if (!DATA_PAGES.includes(activePage)) return;
-    getUnitCount().then(n => setHasUnits(n > 0));
+    // Timeout guard: if Supabase doesn't respond in 10 s, treat as no units (shows empty gate)
+    const timer = setTimeout(() => setHasUnits(prev => prev === null ? false : prev), 10_000);
+    getUnitCount().then(n => { clearTimeout(timer); setHasUnits(n > 0); });
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePage, stagingUser]);
 

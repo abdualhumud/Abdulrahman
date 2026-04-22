@@ -146,15 +146,17 @@ export default function FinancialsPage() {
   const closeModal = () => { setModalOpen(false); setSaving(false); setSaved(false); };
 
   const saveExpense = async () => {
-    if (!form.desc || !form.amount) return;
+    const descTrimmed = form.desc.trim();
+    const amountNum   = parseFloat(form.amount);
+    if (!descTrimmed || !form.amount || isNaN(amountNum) || amountNum <= 0) return;
     setSaving(true);
     await new Promise(r => setTimeout(r, 1400));
     const newExp: Expense = {
       id:       `EXP-${String(Math.floor(Math.random() * 900) + 100)}`,
       property: form.property,
       category: form.category,
-      desc:     form.desc,
-      amount:   parseFloat(form.amount),
+      desc:     descTrimmed,
+      amount:   amountNum,
       date:     form.date,
     };
     setExpenses(prev => [newExp, ...prev]);
@@ -451,9 +453,14 @@ export default function FinancialsPage() {
                       <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                         {t.financials.expAmount}
                       </label>
-                      <input className="input" type="number" min="0" value={form.amount}
+                      <input className="input" type="number" min="0.01" step="0.01" value={form.amount}
                         onChange={e => setForm(p => ({ ...p, amount: e.target.value }))}
                         style={{ direction: 'ltr' }} />
+                      {form.amount && (isNaN(parseFloat(form.amount)) || parseFloat(form.amount) <= 0) && (
+                        <p className="text-xs text-red-500 mt-1">
+                          {lang === 'ar' ? 'المبلغ يجب أن يكون أكبر من 0' : 'Amount must be greater than 0'}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
@@ -516,7 +523,7 @@ export default function FinancialsPage() {
                     <button onClick={closeModal}
                       className="flex-1 btn-ghost justify-center py-2.5">{t.common.cancel}</button>
                     <button onClick={saveExpense}
-                      disabled={saving || !form.desc || !form.amount}
+                      disabled={saving || !form.desc.trim() || !form.amount || isNaN(parseFloat(form.amount)) || parseFloat(form.amount) <= 0}
                       className="flex-1 btn-primary justify-center py-2.5 disabled:opacity-50">
                       {saving
                         ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> {t.common.saving}</>

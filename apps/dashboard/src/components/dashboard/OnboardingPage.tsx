@@ -211,7 +211,7 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
   };
 
   const handleNext = () => {
-    if (strictMode) setTouched(true);
+    setTouched(true);
     if (!canGoNext) return;
     /* Save account credentials to localStorage ONLY when Supabase is not configured */
     if (step === 2 && (step2Valid || isStaging) && form.email && form.password && !isSupabaseConfigured()) {

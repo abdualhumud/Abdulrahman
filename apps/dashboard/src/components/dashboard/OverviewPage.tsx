@@ -1,18 +1,25 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
 import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
+import { useMode } from '@/lib/mode-context';
 import { useJourney } from '@/lib/journey-context';
+import { useBookings } from '@/lib/hooks/useBookings';
 import {
   KPI_DATA, MONTHLY_REVENUE, CHANNEL_BREAKDOWN,
   RECENT_BOOKINGS, CHANNEL_SYNC_STATUS, OWNER,
 } from '@/lib/mock-data';
 import { STATUS_STYLES, OVERVIEW_RECENT_BOOKINGS_LIMIT } from '@/lib/ui-styles';
+
+const CHANNEL_COLORS_MAP: Record<string, string> = {
+  'Booking.com': '#3B82F6', 'Airbnb': '#FF385C', 'Gathern': '#00A651',
+  'Agoda': '#E31837', 'Expedia': '#1C3D7D', 'Direct': '#F59E0B',
+};
 
 const STATUS_STYLE = STATUS_STYLES;
 
@@ -66,8 +73,54 @@ interface Props {
 
 export default function OverviewPage({ onNavigate }: Props) {
   const { t, lang } = useLang();
+  const { isDemo } = useMode();
   const { completed, markDone } = useJourney();
+  const { allBookings } = useBookings();
   const firstName = OWNER.fullName.split(' ')[0];
+
+  // Production KPIs — derived from real bookings; zero when no data
+  const liveKpi = useMemo(() => {
+    if (isDemo) return KPI_DATA;
+    const totalRevenue   = allBookings.reduce((s, b) => s + b.amount, 0);
+    const totalNights    = allBookings.reduce((s, b) => s + b.nights, 0);
+    const totalBookings  = allBookings.length;
+    const netPayout      = Math.round(totalRevenue * 0.88);
+    const adr            = totalNights > 0 ? Math.round(totalRevenue / totalNights) : 0;
+    const occupancy      = Math.min(99, totalNights > 0 ? Math.round((totalNights / 30) * 100) : 0);
+    const revPAR         = Math.round(adr * occupancy / 100);
+    return { totalRevenue, netPayout, averageOccupancy: occupancy, adr, revPAR, totalBookings, revenueTrend: 0, occupancyTrend: 0 };
+  }, [isDemo, allBookings]);
+
+  // Monthly revenue chart — from real bookings grouped by month
+  const liveMonthly = useMemo(() => {
+    if (isDemo) return MONTHLY_REVENUE;
+    const map = new Map<string, number>();
+    for (const b of allBookings) {
+      const month = new Date(b.checkIn).toLocaleString('en', { month: 'short' });
+      map.set(month, (map.get(month) ?? 0) + b.amount);
+    }
+    return Array.from(map.entries()).map(([month, revenue]) => ({ month, revenue }));
+  }, [isDemo, allBookings]);
+
+  // Channel breakdown — from real bookings
+  const liveChannels = useMemo(() => {
+    if (isDemo) return CHANNEL_BREAKDOWN;
+    const map = new Map<string, number>();
+    for (const b of allBookings) {
+      const ch = b.channel || 'Direct';
+      map.set(ch, (map.get(ch) ?? 0) + b.amount);
+    }
+    const total = Array.from(map.values()).reduce((s, v) => s + v, 0) || 1;
+    return Array.from(map.entries()).map(([channel, revenue]) => ({
+      channel, revenue,
+      share: Math.round((revenue / total) * 100),
+      color: CHANNEL_COLORS_MAP[channel] ?? '#94A3B8',
+      commission: 0,
+    }));
+  }, [isDemo, allBookings]);
+
+  // Recent bookings — real or mock
+  const recentBookings = isDemo ? RECENT_BOOKINGS : allBookings;
 
   // ✅ Journey Step 4 — "Go Live": auto-mark when user reaches overview after steps 1-3
   // Use completed.size (primitive) as dep to avoid re-running on same-set reference changes
@@ -104,29 +157,29 @@ export default function OverviewPage({ onNavigate }: Props) {
       {/* KPIs — all clickable */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         <KpiCard label={t.kpi.totalRevenue}
-          value={`${t.common.sar} ${KPI_DATA.totalRevenue.toLocaleString()}`}
+          value={`${t.common.sar} ${liveKpi.totalRevenue.toLocaleString()}`}
           icon={<Icons.financials size={17} />} accent="#3B82F6"
-          trendVal={KPI_DATA.revenueTrend} trendLabel={t.common.vsLastMonth}
+          trendVal={isDemo ? liveKpi.revenueTrend : undefined} trendLabel={t.common.vsLastMonth}
           onClick={() => nav('financials')} />
         <KpiCard label={t.kpi.netPayout}
-          value={`${t.common.sar} ${KPI_DATA.netPayout.toLocaleString()}`}
+          value={`${t.common.sar} ${liveKpi.netPayout.toLocaleString()}`}
           sub={t.kpi.afterFees} icon={<Icons.download size={17} />} accent="#10B981"
           onClick={() => nav('financials')} />
         <KpiCard label={t.kpi.occupancy}
-          value={`${KPI_DATA.averageOccupancy}%`}
+          value={`${liveKpi.averageOccupancy}%`}
           icon={<Icons.building size={17} />} accent="#8B5CF6"
-          trendVal={KPI_DATA.occupancyTrend} trendLabel={t.common.vsLastMonth}
+          trendVal={isDemo ? liveKpi.occupancyTrend : undefined} trendLabel={t.common.vsLastMonth}
           onClick={() => nav('analytics')} />
         <KpiCard label={t.kpi.adr}
-          value={`${t.common.sar} ${KPI_DATA.adr.toLocaleString()}`}
+          value={`${t.common.sar} ${liveKpi.adr.toLocaleString()}`}
           sub={t.kpi.avgNightly} icon={<Icons.analytics size={17} />} accent="#F59E0B"
           onClick={() => nav('analytics')} />
         <KpiCard label={t.kpi.revpar}
-          value={`${t.common.sar} ${KPI_DATA.revPAR.toLocaleString()}`}
+          value={`${t.common.sar} ${liveKpi.revPAR.toLocaleString()}`}
           sub={t.kpi.perRoom} icon={<Icons.trendUp size={17} />} accent="#EC4899"
           onClick={() => nav('analytics')} />
         <KpiCard label={t.kpi.bookings}
-          value={`${KPI_DATA.totalBookings}`}
+          value={`${liveKpi.totalBookings}`}
           sub={t.kpi.thisPeriod} icon={<Icons.bookings size={17} />} accent="#06B6D4"
           onClick={() => nav('bookings')} />
       </div>
@@ -148,7 +201,7 @@ export default function OverviewPage({ onNavigate }: Props) {
           </div>
           <div className="px-1 pb-3 pt-3" style={{ direction: 'ltr' }}>
             <ResponsiveContainer width="100%" height={190}>
-              <AreaChart data={MONTHLY_REVENUE} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+              <AreaChart data={liveMonthly} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
                 <defs>
                   <linearGradient id="rg" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%"   stopColor="#3B82F6" stopOpacity={0.2} />
@@ -182,17 +235,22 @@ export default function OverviewPage({ onNavigate }: Props) {
           <div style={{ direction: 'ltr' }}>
             <ResponsiveContainer width="100%" height={130}>
               <PieChart>
-                <Pie data={CHANNEL_BREAKDOWN} cx="50%" cy="50%" innerRadius={38} outerRadius={58}
+                <Pie data={liveChannels} cx="50%" cy="50%" innerRadius={38} outerRadius={58}
                   dataKey="revenue" paddingAngle={4} startAngle={90} endAngle={-270}
                   onClick={() => nav('channels')} className="cursor-pointer">
-                  {CHANNEL_BREAKDOWN.map((e, i) => <Cell key={i} fill={e.color} />)}
+                  {liveChannels.map((e, i) => <Cell key={i} fill={e.color} />)}
                 </Pie>
                 <Tooltip formatter={(v: number) => [`SAR ${v.toLocaleString()}`, '']} />
               </PieChart>
             </ResponsiveContainer>
           </div>
+          {liveChannels.length === 0 && (
+            <p className="text-xs text-slate-400 text-center py-2">
+              {lang === 'ar' ? 'لا توجد بيانات قنوات بعد' : 'No channel data yet'}
+            </p>
+          )}
           <div className="space-y-2.5">
-            {CHANNEL_BREAKDOWN.map(ch => (
+            {liveChannels.map(ch => (
               <button key={ch.channel} onClick={() => nav('channels')}
                 className="flex items-center gap-2 w-full text-start hover:bg-slate-50 rounded-lg px-1 -mx-1 py-0.5 transition-colors">
                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: ch.color }} />
@@ -264,7 +322,12 @@ export default function OverviewPage({ onNavigate }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                {RECENT_BOOKINGS.slice(0, OVERVIEW_RECENT_BOOKINGS_LIMIT).map(b => (
+                {recentBookings.length === 0 && (
+                  <tr><td colSpan={6} className="text-center py-8 text-sm text-slate-400">
+                    {lang === 'ar' ? 'لا توجد حجوزات بعد' : 'No bookings yet'}
+                  </td></tr>
+                )}
+                {recentBookings.slice(0, OVERVIEW_RECENT_BOOKINGS_LIMIT).map(b => (
                   <tr key={b.id} onClick={() => nav('bookings')}
                     className="hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors cursor-pointer">
                     <td>

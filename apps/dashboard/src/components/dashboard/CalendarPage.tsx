@@ -60,12 +60,47 @@ export default function CalendarPage({ onNavigate }: CalendarPageProps) {
   const [maintForm,   setMaintForm]   = useState(INITIAL_MAINT);
   const [openForm,    setOpenForm]    = useState(INITIAL_OPEN);
 
-  const closeModal = () => { setModal(null); setStep('idle'); setSyncMsg(''); };
+  const [overlapError, setOverlapError] = useState('');
+  // Manually added bookings accumulate here for production accounts
+  const [localEvents,  setLocalEvents]  = useState<typeof CALENDAR_EVENTS>([]);
 
-  /* ── Booking submit ───────────────────────────────────── */
+  const closeModal = () => { setModal(null); setStep('idle'); setSyncMsg(''); setOverlapError(''); };
+
+  // All events shown on the grid
+  const displayEvents = [...allEvents, ...localEvents];
+
+  // Half-open interval overlap: checkIn inclusive, checkOut exclusive
+  const hasOverlap = (unit: string, checkIn: string, checkOut: string) =>
+    displayEvents.some(e =>
+      e.unit === unit && !(checkOut <= String(e.start) || checkIn >= String(e.end))
+    );
+
   const submitBooking = async () => {
+    setOverlapError('');
+    if (!bookingForm.guestName.trim()) {
+      setOverlapError(lang === 'ar' ? 'اسم الضيف مطلوب' : 'Guest name is required');
+      return;
+    }
+    if (bookingForm.checkOut <= bookingForm.checkIn) {
+      setOverlapError(lang === 'ar' ? 'تاريخ المغادرة يجب أن يكون بعد تاريخ الوصول' : 'Check-out must be after check-in');
+      return;
+    }
+    if (hasOverlap(bookingForm.unit, bookingForm.checkIn, bookingForm.checkOut)) {
+      setOverlapError(lang === 'ar'
+        ? 'تعارض في المواعيد — هذه الوحدة محجوزة في الفترة المحددة'
+        : 'Date conflict — this unit is already booked for the selected period');
+      return;
+    }
     setStep('saving');
     await new Promise(r => setTimeout(r, 1600));
+    setLocalEvents(prev => [...prev, {
+      id:      `BK-${Date.now()}`,
+      unit:    bookingForm.unit,
+      guest:   bookingForm.guestName,
+      channel: bookingForm.channel,
+      start:   bookingForm.checkIn as any,
+      end:     bookingForm.checkOut as any,
+    } as any]);
     setStep('done');
     setTimeout(closeModal, 2500);
   };
@@ -189,7 +224,7 @@ export default function CalendarPage({ onNavigate }: CalendarPageProps) {
                     {unit}
                   </td>
                   {DAYS.map(day => {
-                    const ev    = allEvents.find(e => e.unit === unit && day >= e.start && day < e.end);
+                    const ev    = displayEvents.find(e => e.unit === unit && day >= e.start && day < e.end);
                     const start = ev && day === ev.start;
                     const end   = ev && day === ev.end - 1;
                     const ch    = ev ? (CHANNELS[ev.channel] ?? { bg: '#E2E8F0', text: '#475569', dot: '#94A3B8' }) : null;
@@ -475,10 +510,15 @@ export default function CalendarPage({ onNavigate }: CalendarPageProps) {
                   </select>
                 </Field>
               </div>
+              {overlapError && (
+                <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-xl px-3 py-2 flex items-center gap-2">
+                  <Icons.x size={13} /> {overlapError}
+                </p>
+              )}
               <div className="flex gap-3 pt-2">
                 <button onClick={closeModal}
                   className="flex-1 btn-ghost justify-center py-2.5">{t.common.cancel}</button>
-                <button onClick={submitBooking} disabled={step === 'saving' || !bookingForm.guestName}
+                <button onClick={submitBooking} disabled={step === 'saving' || !bookingForm.guestName.trim()}
                   className="flex-1 btn-primary justify-center py-2.5 disabled:opacity-50">
                   {step === 'saving'
                     ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> {t.common.saving}</>

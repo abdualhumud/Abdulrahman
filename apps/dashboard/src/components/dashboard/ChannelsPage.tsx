@@ -1435,6 +1435,11 @@ function RateParityManager() {
             </div>
           )}
 
+          {/* Simulation notice */}
+          <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-700 mb-1">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span>{lang === 'ar' ? 'وضع المحاكاة — لا تُرسَل أسعار حقيقية إلى القنوات' : 'Simulation mode — no real prices are sent to channels'}</span>
+          </div>
           <button
             onClick={handlePush}
             disabled={pushing || activeCount === 0}
@@ -1442,12 +1447,12 @@ function RateParityManager() {
           >
             {pushing ? (
               <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              {lang === 'ar' ? 'جارٍ الإرسال…' : 'Pushing rates…'}</>
+              {lang === 'ar' ? 'جارٍ المحاكاة…' : 'Simulating push…'}</>
             ) : (
               <><Icons.send size={16} />
               {lang === 'ar'
-                ? `إرسال السعر إلى ${activeCount} قنوات`
-                : `Push rates to ${activeCount} channel${activeCount !== 1 ? 's' : ''}`
+                ? `محاكاة إرسال السعر إلى ${activeCount} قنوات`
+                : `Simulate push to ${activeCount} channel${activeCount !== 1 ? 's' : ''}`
               }</>
             )}
           </button>
