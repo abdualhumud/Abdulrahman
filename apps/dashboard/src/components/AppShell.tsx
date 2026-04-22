@@ -382,6 +382,8 @@ export default function AppShell() {
         markDone(1); markDone(2); markDone(3); markDone(4);
       }
       setShowOnboarding(false);
+      // Demo must bypass the session-check spinner even when Supabase env is set
+      setStagingChecked(true);
     } else if (isSupabaseConfigured()) {
       // Supabase auth — works across all devices / browsers
       getCurrentAuthUser().then(user => {
@@ -526,8 +528,9 @@ export default function AppShell() {
 
   // Show spinner while async session check is in flight.
   // Applies to: staging (localStorage or Supabase) and production with Supabase.
+  // Demo always bypasses session check (pre-loaded mock data, no auth).
   // Pure production (no Supabase) uses a synchronous localStorage check — no spinner needed.
-  const needsSessionCheck = isStaging || isSupabaseConfigured();
+  const needsSessionCheck = !isDemo && (isStaging || isSupabaseConfigured());
   if (needsSessionCheck && !stagingChecked) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
