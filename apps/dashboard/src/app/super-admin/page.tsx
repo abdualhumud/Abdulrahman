@@ -5,7 +5,7 @@ import { ModeProvider }     from '@/lib/mode-context';
 import SuperAdminPage       from '@/components/dashboard/SuperAdminPage';
 
 /**
- * Super-Admin Portal — served at /Abdulrahman/super-admin/
+ * Super-Admin Portal — served at /REMS/super-admin/
  *
  * PIN-gated owner control panel. Contains:
  *  • Promo Code Manager — create, edit, delete, monitor discount codes

@@ -40,20 +40,9 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
-      # Deploy to abdualhumud/Abdulrahman — this is the target repo for all 4 live URLs:
-      # https://abdualhumud.github.io/Abdulrahman/
-      # https://abdualhumud.github.io/Abdulrahman/demo/
-      # https://abdualhumud.github.io/Abdulrahman/staging/
-      # https://abdualhumud.github.io/Abdulrahman/super-admin/
-      #
-      # Requires secret: DEPLOY_PAT — a GitHub Personal Access Token with
-      # repo (read/write) scope on abdualhumud/Abdulrahman.
-      # Add it at: REMS repo → Settings → Secrets → Actions → New secret
-      - name: Deploy to abdualhumud/Abdulrahman
+      - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
-          personal_token: ${{ secrets.DEPLOY_PAT }}
-          external_repository: abdualhumud/Abdulrahman
-          publish_branch: gh-pages
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: apps/dashboard/out
           force_orphan: true

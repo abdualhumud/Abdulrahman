@@ -22,10 +22,10 @@ A bilingual (Arabic/English, **Arabic is the default language**) SaaS property m
 **Live URLs:**
 | Environment | URL | Purpose |
 |---|---|---|
-| Production | `https://abdualhumud.github.io/Abdulrahman/` | Live SaaS — strict onboarding + Supabase auth |
-| Demo/Sandbox | `https://abdualhumud.github.io/Abdulrahman/demo/` | Sales demo — pre-loaded mock data, session storage |
-| Staging/Trial | `https://abdualhumud.github.io/Abdulrahman/staging/` | 14-day free trial — login-gated, Fresh Start |
-| Super-Admin | `https://abdualhumud.github.io/Abdulrahman/super-admin/` | Owner control panel — PIN-gated |
+| Production | `https://abdualhumud.github.io/REMS/` | Live SaaS — strict onboarding + Supabase auth |
+| Demo/Sandbox | `https://abdualhumud.github.io/REMS/demo/` | Sales demo — pre-loaded mock data, session storage |
+| Staging/Trial | `https://abdualhumud.github.io/REMS/staging/` | 14-day free trial — login-gated, Fresh Start |
+| Super-Admin | `https://abdualhumud.github.io/REMS/super-admin/` | Owner control panel — PIN-gated |
 
 ---
 
@@ -107,8 +107,8 @@ Vercel is the **primary production host**. It detects `VERCEL=1` automatically; 
 ```js
 // next.config.js
 const isVercel = !!process.env.VERCEL;
-basePath:    (!isVercel && isProd) ? '/Abdulrahman' : '',
-assetPrefix: (!isVercel && isProd) ? '/Abdulrahman/' : '',
+basePath:    (!isVercel && isProd) ? '/REMS' : '',
+assetPrefix: (!isVercel && isProd) ? '/REMS/' : '',
 ```
 
 **Supabase env vars must be added in Vercel Project Settings → Environment Variables:**
@@ -119,7 +119,7 @@ assetPrefix: (!isVercel && isProd) ? '/Abdulrahman/' : '',
 
 The local git environment runs through a proxy at `127.0.0.1` that **only allows pushes to branches matching `claude/**`**. Direct pushes to `gh-pages` or `main` return HTTP 403.
 
-GitHub Actions uses a `DEPLOY_PAT` secret (Personal Access Token with `repo` scope) to push to the `abdualhumud/Abdulrahman` repository. Add this secret at: **REMS repo → Settings → Secrets and variables → Actions → New repository secret → Name: `DEPLOY_PAT`**.
+GitHub Actions uses `GITHUB_TOKEN` to push to the `gh-pages` branch of the REMS repository directly.
 
 **`.github/workflows/deploy.yml`:**
 ```yaml
@@ -147,9 +147,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
       - uses: peaceiris/actions-gh-pages@v4
         with:
-          personal_token: ${{ secrets.DEPLOY_PAT }}
-          external_repository: abdualhumud/Abdulrahman
-          publish_branch: gh-pages
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: apps/dashboard/out
           force_orphan: true
 ```
@@ -176,15 +174,15 @@ const nextConfig = {
   output: 'export',                // Static HTML export — no server required
   trailingSlash: true,             // Required for both GitHub Pages and Vercel static
   images: { unoptimized: true },   // next/image doesn't work with static export
-  // basePath only needed for GitHub Pages (served at /Abdulrahman/ subdirectory).
+  // basePath only needed for GitHub Pages (served at /REMS/ subdirectory).
   // Vercel serves from root /, so basePath must be empty there.
-  basePath:    (!isVercel && isProd) ? '/Abdulrahman' : '',
-  assetPrefix: (!isVercel && isProd) ? '/Abdulrahman/' : '',
+  basePath:    (!isVercel && isProd) ? '/REMS' : '',
+  assetPrefix: (!isVercel && isProd) ? '/REMS/' : '',
 };
 module.exports = nextConfig;
 ```
 
-**Why basePath?** GitHub Pages serves the app at `username.github.io/Abdulrahman/` (subdirectory). Vercel serves from the root — no prefix needed. The `isVercel` flag ensures the same build works on both hosts.
+**Why basePath?** GitHub Pages serves the app at `username.github.io/REMS/` (subdirectory). Vercel serves from the root — no prefix needed. The `isVercel` flag ensures the same build works on both hosts.
 
 ---
 
@@ -350,10 +348,10 @@ The app ships as **four independent entry points** served from the same static N
 
 | Path | `envMode` | storageType | Auth Gate | Onboarding |
 |---|---|---|---|---|
-| `/Abdulrahman/` | `'production'` | `'local'` | None | Strict, 4-step + payment |
-| `/Abdulrahman/demo/` | `'demo'` | `'session'` | None | Pre-skipped |
-| `/Abdulrahman/staging/` | `'staging'` | `'session'` | Login/Register | Strict, 4-step + payment |
-| `/Abdulrahman/super-admin/` | `'superAdmin'` | `'local'` | PIN (default: 1234) | N/A |
+| `/REMS/` | `'production'` | `'local'` | None | Strict, 4-step + payment |
+| `/REMS/demo/` | `'demo'` | `'session'` | None | Pre-skipped |
+| `/REMS/staging/` | `'staging'` | `'session'` | Login/Register | Strict, 4-step + payment |
+| `/REMS/super-admin/` | `'superAdmin'` | `'local'` | PIN (default: 1234) | N/A |
 
 ### `ModeContext` — `envMode` Union
 
