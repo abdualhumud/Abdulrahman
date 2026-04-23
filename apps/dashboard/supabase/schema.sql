@@ -247,6 +247,32 @@ $$;
 -- Allow any authenticated user to call the RPC (super-admin or checkout flow)
 grant execute on function public.increment_promo_used_count(text) to authenticated, anon;
 
+-- ── Leads (landing page capture) ─────────────────────────────────────────
+create table if not exists public.leads (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  email       text not null,
+  phone       text,
+  business    text,
+  message     text,
+  source      text not null check (source in ('demo','contact')),
+  status      text not null default 'new' check (status in ('new','contacted','converted','closed')),
+  notes       text,
+  created_at  timestamptz not null default now()
+);
+
+-- Public INSERT so the landing page (no auth) can create leads
+alter table public.leads enable row level security;
+create policy "Anyone can submit a lead"
+  on public.leads for insert
+  with check (true);
+
+-- Super-admin can read/update/delete (uses anon key + service_role in admin UI)
+create policy "Service role has full access"
+  on public.leads for all
+  using (true)
+  with check (true);
+
 -- Seed default promo codes
 insert into public.promo_codes (code, discount, max_uses, expires_at, active)
 values

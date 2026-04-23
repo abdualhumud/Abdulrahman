@@ -1,6 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import {
+  submitLead, validateLeadForm,
+  type LeadSource, type ValidationErrors,
+} from '@/lib/leads-service';
 
 const PROD_URL    = 'https://abdualhumud.github.io/REMS/';
 const STAGING_URL = 'https://abdualhumud.github.io/REMS/staging/';
@@ -106,17 +110,44 @@ const T = {
       name: 'Full Name',
       email: 'Email Address',
       phone: 'Phone Number',
+      business: 'Business / Company Name',
       subject: 'Subject',
       message: 'Message',
       send: 'Send Message',
       sending: 'Sending...',
-      successTitle: 'Message Sent!',
-      successSub: "Thank you! We'll respond within 24 hours.",
+      successTitle: 'Message Sent! 🎉',
+      successSub: "Thank you! Our sales team will reach out within 24 hours.",
       subjects: ['General Inquiry', 'Technical Support', 'Sales', 'Partnership'],
       phonePlaceholder: '+966 5X XXX XXXX',
       namePlaceholder: 'Your full name',
       emailPlaceholder: 'you@company.com',
+      businessPlaceholder: 'Your company name (optional)',
       messagePlaceholder: 'Tell us how we can help you...',
+      errRequired: 'This field is required',
+      errEmail: 'Please enter a valid email address',
+      errPhone: 'Please enter a valid phone number',
+    },
+    demo: {
+      badge: 'TRY DEMO',
+      heading: 'Request a Live Demo',
+      sub: 'See REMS in action — our team will set up a personalised walkthrough.',
+      name: 'Full Name',
+      email: 'Email Address',
+      phone: 'Phone Number',
+      business: 'Business / Company Name',
+      message: 'Tell us about your portfolio',
+      send: 'Request Demo →',
+      sending: 'Sending...',
+      successTitle: 'Demo Request Received! 🚀',
+      successSub: "Thank you! Our sales team will reach out within 24 hours to schedule your personalised demo.",
+      phonePlaceholder: '+966 5X XXX XXXX',
+      namePlaceholder: 'Your full name',
+      emailPlaceholder: 'you@company.com',
+      businessPlaceholder: 'Property management company (optional)',
+      messagePlaceholder: 'How many properties do you manage? What challenges are you facing?',
+      errRequired: 'This field is required',
+      errEmail: 'Please enter a valid email address',
+      errPhone: 'Please enter a valid phone number',
     },
     footer: {
       tagline: 'The future of Saudi property management.',
@@ -225,17 +256,44 @@ const T = {
       name: 'الاسم الكامل',
       email: 'البريد الإلكتروني',
       phone: 'رقم الجوال',
+      business: 'اسم الشركة / المنشأة',
       subject: 'الموضوع',
       message: 'الرسالة',
       send: 'إرسال الرسالة',
       sending: 'جارٍ الإرسال...',
-      successTitle: 'تم الإرسال!',
-      successSub: 'شكراً لك! سنرد خلال 24 ساعة.',
+      successTitle: 'تم الإرسال! 🎉',
+      successSub: 'شكراً لك! سيتواصل معك فريق المبيعات خلال 24 ساعة.',
       subjects: ['استفسار عام', 'الدعم الفني', 'المبيعات', 'الشراكات'],
       phonePlaceholder: '+966 5X XXX XXXX',
       namePlaceholder: 'اسمك الكامل',
       emailPlaceholder: 'you@company.com',
+      businessPlaceholder: 'اسم شركتك (اختياري)',
       messagePlaceholder: 'أخبرنا كيف يمكننا مساعدتك...',
+      errRequired: 'هذا الحقل مطلوب',
+      errEmail: 'يرجى إدخال بريد إلكتروني صحيح',
+      errPhone: 'يرجى إدخال رقم جوال صحيح',
+    },
+    demo: {
+      badge: 'جرّب العرض',
+      heading: 'اطلب عرضاً تجريبياً مباشراً',
+      sub: 'شاهد REMS في العمل — سيُعدّ فريقنا جولة مخصصة لك.',
+      name: 'الاسم الكامل',
+      email: 'البريد الإلكتروني',
+      phone: 'رقم الجوال',
+      business: 'اسم الشركة / المنشأة',
+      message: 'أخبرنا عن محفظتك العقارية',
+      send: '← طلب عرض تجريبي',
+      sending: 'جارٍ الإرسال...',
+      successTitle: 'تم استلام طلب العرض! 🚀',
+      successSub: 'شكراً لك! سيتواصل معك فريق المبيعات خلال 24 ساعة لجدولة عرضك التجريبي المخصص.',
+      phonePlaceholder: '+966 5X XXX XXXX',
+      namePlaceholder: 'اسمك الكامل',
+      emailPlaceholder: 'you@company.com',
+      businessPlaceholder: 'شركة إدارة العقارات (اختياري)',
+      messagePlaceholder: 'كم عقاراً تديره؟ ما التحديات التي تواجهها؟',
+      errRequired: 'هذا الحقل مطلوب',
+      errEmail: 'يرجى إدخال بريد إلكتروني صحيح',
+      errPhone: 'يرجى إدخال رقم جوال صحيح',
     },
     footer: {
       tagline: 'مستقبل إدارة العقارات السعودية.',
@@ -522,48 +580,97 @@ function CheckIcon({ blue }: { blue?: boolean }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // CONTACT FORM — saves to localStorage for Super-Admin review
 // ═══════════════════════════════════════════════════════════════════════════
-const CONTACT_STORAGE_KEY = 'rems-contact-submissions';
-
-interface ContactFormState {
-  name: string; email: string; phone: string; subject: string; message: string;
+// ═══════════════════════════════════════════════════════════════════════════
+// SHARED LEAD FORM — used by both ContactSection and DemoRequestModal
+// ═══════════════════════════════════════════════════════════════════════════
+interface FormContent {
+  badge: string; heading: string; sub: string;
+  name: string; email: string; phone: string; business: string; message: string;
+  send: string; sending: string; successTitle: string; successSub: string;
+  namePlaceholder: string; emailPlaceholder: string; phonePlaceholder: string;
+  businessPlaceholder: string; messagePlaceholder: string;
+  errRequired: string; errEmail: string; errPhone: string;
 }
 
-function ContactSection({ t, isAr }: { t: typeof T['en'] | typeof T['ar']; isAr: boolean }) {
-  const [form, setForm] = useState<ContactFormState>({ name: '', email: '', phone: '', subject: '', message: '' });
+interface LeadFormState {
+  name: string; email: string; phone: string; business: string; message: string;
+}
+
+const EMPTY_FORM: LeadFormState = { name: '', email: '', phone: '', business: '', message: '' };
+
+function LeadCaptureForm({
+  c, isAr, source, accentClass = 'focus:border-indigo-500',
+}: {
+  c: FormContent;
+  isAr: boolean;
+  source: LeadSource;
+  accentClass?: string;
+}) {
+  const [form, setForm] = useState<LeadFormState>(EMPTY_FORM);
+  const [touched, setTouched] = useState<Partial<Record<keyof LeadFormState, boolean>>>({});
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
-  const c = t.contact;
+  const [channels, setChannels] = useState<{ email: boolean; sheets: boolean; supabase: boolean } | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const errors: ValidationErrors = validateLeadForm(form);
+  const hasErrors = Object.keys(errors).length > 0;
+
+  const fieldErr = (field: keyof ValidationErrors) =>
+    touched[field] && errors[field] ? errors[field] : undefined;
+
+  const inputCls = (field: keyof ValidationErrors) =>
+    `contact-input w-full bg-slate-800 border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none transition-all ${accentClass} ${
+      fieldErr(field) ? 'border-red-500 ring-1 ring-red-500/40' : 'border-slate-700'
+    }`;
+
+  const LABEL_CLS = 'block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2';
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.message) return;
+    setTouched({ name: true, email: true, phone: !!form.phone || undefined });
+    if (hasErrors) return;
     setSending(true);
-    setTimeout(() => {
-      try {
-        const existing = JSON.parse(localStorage.getItem(CONTACT_STORAGE_KEY) ?? '[]');
-        existing.unshift({ ...form, submittedAt: new Date().toISOString(), id: `c-${Date.now()}` });
-        localStorage.setItem(CONTACT_STORAGE_KEY, JSON.stringify(existing.slice(0, 200)));
-      } catch { /* ignore */ }
-      setSending(false);
+    try {
+      const result = await submitLead(form, source);
+      setChannels(result.channels);
       setSent(true);
-    }, 1200);
+    } finally {
+      setSending(false);
+    }
   };
 
-  const INPUT_CLS = 'contact-input w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all';
-  const LABEL_CLS = 'block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2';
+  const reset = () => { setSent(false); setForm(EMPTY_FORM); setTouched({}); setChannels(null); };
 
   if (sent) {
     return (
-      <div className="max-w-lg mx-auto text-center py-16">
-        <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <div className="max-w-lg mx-auto text-center py-12">
+        <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6"
+          style={{ animation: 'fadeInUp 0.4s ease-out both' }}>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2.5"
+            strokeLinecap="round" strokeLinejoin="round">
             <polyline points="20 6 9 17 4 12" />
           </svg>
         </div>
         <h3 className="text-2xl font-black text-white mb-3">{c.successTitle}</h3>
-        <p className="text-slate-400">{c.successSub}</p>
-        <button onClick={() => { setSent(false); setForm({ name: '', email: '', phone: '', subject: '', message: '' }); }}
-          className="mt-8 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors">
+        <p className="text-slate-400 text-sm leading-relaxed mb-6">{c.successSub}</p>
+        {/* Channel status chips */}
+        {channels && (
+          <div className="flex flex-wrap justify-center gap-2 mb-6">
+            {[
+              { ok: channels.email,    label: isAr ? 'بريد إلكتروني' : 'Email' },
+              { ok: channels.sheets,   label: isAr ? 'Google Sheets' : 'Google Sheets' },
+              { ok: channels.supabase, label: isAr ? 'قاعدة البيانات' : 'Database' },
+            ].map(ch => (
+              <span key={ch.label} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                ch.ok ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-700 text-slate-500'
+              }`}>
+                {ch.ok ? '✓' : '—'} {ch.label}
+              </span>
+            ))}
+          </div>
+        )}
+        <button onClick={reset}
+          className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors">
           {isAr ? 'إرسال رسالة أخرى' : 'Send Another Message'}
         </button>
       </div>
@@ -571,45 +678,59 @@ function ContactSection({ t, isAr }: { t: typeof T['en'] | typeof T['ar']; isAr:
   }
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-2xl mx-auto">
+    <form onSubmit={handleSubmit} noValidate className="max-w-2xl mx-auto">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
+        {/* Name */}
         <div>
           <label className={LABEL_CLS}>{c.name} <span className="text-red-400">*</span></label>
-          <input type="text" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            placeholder={c.namePlaceholder} className={INPUT_CLS} />
+          <input type="text" value={form.name}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            onBlur={() => setTouched(t => ({ ...t, name: true }))}
+            placeholder={c.namePlaceholder} className={inputCls('name')} />
+          {fieldErr('name') && <p className="mt-1 text-xs text-red-400">{c.errRequired}</p>}
         </div>
+        {/* Email */}
         <div>
           <label className={LABEL_CLS}>{c.email} <span className="text-red-400">*</span></label>
-          <input type="email" required value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-            placeholder={c.emailPlaceholder} className={INPUT_CLS} />
+          <input type="email" value={form.email}
+            onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+            onBlur={() => setTouched(t => ({ ...t, email: true }))}
+            placeholder={c.emailPlaceholder} className={inputCls('email')} style={{ direction: 'ltr' }} />
+          {fieldErr('email') === 'required' && <p className="mt-1 text-xs text-red-400">{c.errRequired}</p>}
+          {fieldErr('email') === 'invalid'  && <p className="mt-1 text-xs text-red-400">{c.errEmail}</p>}
         </div>
+        {/* Phone */}
         <div>
           <label className={LABEL_CLS}>{c.phone}</label>
-          <input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-            placeholder={c.phonePlaceholder} className={INPUT_CLS} style={{ direction: 'ltr' }} />
+          <input type="tel" value={form.phone}
+            onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+            onBlur={() => setTouched(t => ({ ...t, phone: true }))}
+            placeholder={c.phonePlaceholder} className={inputCls('phone')} style={{ direction: 'ltr' }} />
+          {fieldErr('phone') && <p className="mt-1 text-xs text-red-400">{c.errPhone}</p>}
         </div>
+        {/* Business */}
         <div>
-          <label className={LABEL_CLS}>{c.subject}</label>
-          <select value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
-            className={INPUT_CLS + ' cursor-pointer'} style={{ colorScheme: 'dark' }}>
-            <option value="">{isAr ? '-- اختر الموضوع --' : '-- Select Subject --'}</option>
-            {c.subjects.map((s, i) => <option key={i} value={s}>{s}</option>)}
-          </select>
+          <label className={LABEL_CLS}>{c.business}</label>
+          <input type="text" value={form.business}
+            onChange={e => setForm(f => ({ ...f, business: e.target.value }))}
+            placeholder={c.businessPlaceholder} className="contact-input w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all" />
         </div>
       </div>
+      {/* Message */}
       <div className="mb-6">
-        <label className={LABEL_CLS}>{c.message} <span className="text-red-400">*</span></label>
-        <textarea required rows={5} value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
-          placeholder={c.messagePlaceholder} className={INPUT_CLS + ' resize-none'} />
+        <label className={LABEL_CLS}>{c.message}</label>
+        <textarea rows={4} value={form.message}
+          onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
+          placeholder={c.messagePlaceholder}
+          className="contact-input w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all resize-none" />
       </div>
       <button type="submit" disabled={sending}
         className="w-full py-4 rounded-xl text-white font-bold text-base transition-all hover:opacity-90 disabled:opacity-60 shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2"
         style={{ background: 'linear-gradient(135deg,#4F46E5,#7C3AED)' }}>
         {sending ? (
           <>
-            <svg className="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-            </svg>
+            <svg className="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
             {c.sending}
           </>
         ) : c.send}
@@ -619,9 +740,21 @@ function ContactSection({ t, isAr }: { t: typeof T['en'] | typeof T['ar']; isAr:
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CONTACT MODAL
+// CONTACT SECTION (in-page, dark-bg)
 // ═══════════════════════════════════════════════════════════════════════════
-function ContactModal({ t, isAr, onClose }: { t: typeof T['en'] | typeof T['ar']; isAr: boolean; onClose: () => void }) {
+function ContactSection({ t, isAr }: { t: typeof T['en'] | typeof T['ar']; isAr: boolean }) {
+  return <LeadCaptureForm c={t.contact} isAr={isAr} source="contact" />;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SHARED MODAL SHELL
+// ═══════════════════════════════════════════════════════════════════════════
+function LeadModal({
+  badge, heading, sub, badgeCls, onClose, children,
+}: {
+  badge: string; heading: string; sub: string;
+  badgeCls?: string; onClose: () => void; children: React.ReactNode;
+}) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handler);
@@ -631,7 +764,7 @@ function ContactModal({ t, isAr, onClose }: { t: typeof T['en'] | typeof T['ar']
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-slate-900/85 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm" />
       <div
         className="relative bg-slate-800 border border-slate-700/60 rounded-3xl p-8 sm:p-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl"
         onClick={e => e.stopPropagation()}
@@ -639,21 +772,47 @@ function ContactModal({ t, isAr, onClose }: { t: typeof T['en'] | typeof T['ar']
       >
         <div className="flex items-start justify-between mb-8 gap-4">
           <div>
-            <span className="inline-block px-3 py-1 rounded-full bg-indigo-500/15 text-indigo-400 text-xs font-black uppercase tracking-[0.15em] mb-3 border border-indigo-500/20">
-              {t.contact.badge}
+            <span className={`inline-block px-3 py-1 rounded-full text-xs font-black uppercase tracking-[0.15em] mb-3 border ${badgeCls ?? 'bg-indigo-500/15 text-indigo-400 border-indigo-500/20'}`}>
+              {badge}
             </span>
-            <h2 className="font-black text-white text-2xl leading-tight">{t.contact.heading}</h2>
-            <p className="text-slate-400 text-sm mt-1">{t.contact.sub}</p>
+            <h2 className="font-black text-white text-2xl leading-tight">{heading}</h2>
+            <p className="text-slate-400 text-sm mt-1">{sub}</p>
           </div>
-          <button
-            onClick={onClose}
+          <button onClick={onClose}
             className="flex-shrink-0 w-9 h-9 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white flex items-center justify-center transition-all font-bold text-base"
-            aria-label="Close"
-          >✕</button>
+            aria-label="Close">✕</button>
         </div>
-        <ContactSection t={t} isAr={isAr} />
+        {children}
       </div>
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONTACT MODAL
+// ═══════════════════════════════════════════════════════════════════════════
+function ContactModal({ t, isAr, onClose }: { t: typeof T['en'] | typeof T['ar']; isAr: boolean; onClose: () => void }) {
+  const c = t.contact;
+  return (
+    <LeadModal badge={c.badge} heading={c.heading} sub={c.sub} onClose={onClose}>
+      <LeadCaptureForm c={c} isAr={isAr} source="contact" />
+    </LeadModal>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEMO REQUEST MODAL
+// ═══════════════════════════════════════════════════════════════════════════
+function DemoRequestModal({ t, isAr, onClose }: { t: typeof T['en'] | typeof T['ar']; isAr: boolean; onClose: () => void }) {
+  const c = t.demo;
+  return (
+    <LeadModal
+      badge={c.badge} heading={c.heading} sub={c.sub}
+      badgeCls="bg-blue-500/15 text-blue-400 border-blue-500/20"
+      onClose={onClose}
+    >
+      <LeadCaptureForm c={c} isAr={isAr} source="demo" accentClass="focus:border-blue-500" />
+    </LeadModal>
   );
 }
 
@@ -666,6 +825,7 @@ export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [showDemoModal,    setShowDemoModal]    = useState(false);
 
   const t = T[lang];
   const isAr = lang === 'ar';
@@ -699,9 +859,12 @@ export default function LandingPage() {
   return (
     <div style={{ fontFamily: isAr ? "'Cairo', 'Segoe UI', sans-serif" : "'Inter', 'Segoe UI', sans-serif" }}>
 
-      {/* Contact Modal */}
+      {/* Modals */}
       {showContactModal && (
         <ContactModal t={t} isAr={isAr} onClose={() => setShowContactModal(false)} />
+      )}
+      {showDemoModal && (
+        <DemoRequestModal t={t} isAr={isAr} onClose={() => setShowDemoModal(false)} />
       )}
 
       {/* ── Premium Design System ───────────────────────────────────────── */}
@@ -893,10 +1056,10 @@ export default function LandingPage() {
               <span>{lang === 'en' ? 'العربية' : 'English'}</span>
             </button>
 
-            {/* Demo → contact popup */}
+            {/* Demo → demo request modal */}
             <button
-              onClick={() => setShowContactModal(true)}
-              className="h-9 px-4 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-white text-sm font-medium transition-all hidden sm:flex items-center gap-1.5"
+              onClick={() => setShowDemoModal(true)}
+              className="h-9 px-4 rounded-xl border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 hover:text-white text-sm font-medium transition-all hidden sm:flex items-center gap-1.5"
             >
               {t.nav.demo}
             </button>
@@ -966,7 +1129,7 @@ export default function LandingPage() {
                   style={{ display:'inline-block' }}>
                   {t.hero.cta}
                 </a>
-                <button onClick={() => setShowContactModal(true)}
+                <button onClick={() => setShowDemoModal(true)}
                   className="ghost-btn text-slate-300 hover:text-white font-semibold px-7 py-3.5 rounded-xl text-base"
                   style={{ cursor:'pointer' }}>
                   {t.hero.ctaDemo}

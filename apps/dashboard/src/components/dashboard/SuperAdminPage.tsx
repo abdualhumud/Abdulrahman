@@ -15,6 +15,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLang } from '@/lib/language-context';
 import {
+  getLeads, updateLeadStatus, deleteLead,
+  type Lead, type LeadStatus,
+} from '@/lib/leads-service';
+import {
   getPromoCodes, createPromoCode, updatePromoCode, deletePromoCode,
   type PromoCode,
 } from '@/lib/promo-service';
@@ -1428,7 +1432,204 @@ function WhatsAppGateway() {
 /* ─────────────────────────────────────────────────────────────
    SUPER-ADMIN SHELL
 ───────────────────────────────────────────────────────────── */
-type AdminTab = 'promo' | 'bi' | 'revenue' | 'health' | 'transactions' | 'logs' | 'gateway' | 'global';
+
+/* ── LeadsPanel ──────────────────────────────────────────────────────────── */
+const STATUS_COLORS: Record<LeadStatus, string> = {
+  new:       'bg-blue-100 text-blue-700',
+  contacted: 'bg-amber-100 text-amber-700',
+  converted: 'bg-emerald-100 text-emerald-700',
+  closed:    'bg-slate-100 text-slate-500',
+};
+
+function LeadsPanel() {
+  const { lang } = useLang();
+  const isAr = lang === 'ar';
+  const [leads, setLeads]         = useState<Lead[]>([]);
+  const [filter, setFilter]       = useState<LeadStatus | 'all'>('all');
+  const [sourceFilter, setSrcFilter] = useState<'all' | 'demo' | 'contact'>('all');
+  const [expandId, setExpandId]   = useState<string | null>(null);
+
+  useEffect(() => { setLeads(getLeads()); }, []);
+
+  const refresh = () => setLeads(getLeads());
+
+  const handleStatus = (id: string, status: LeadStatus) => {
+    updateLeadStatus(id, status);
+    refresh();
+  };
+
+  const handleDelete = (id: string) => {
+    if (!confirm(isAr ? 'هل تريد حذف هذا العميل المحتمل؟' : 'Delete this lead?')) return;
+    deleteLead(id);
+    refresh();
+  };
+
+  const exportCsv = () => {
+    const header = 'Timestamp,Name,Email,Phone,Business,Source,Status,Message';
+    const rows = leads.map(l =>
+      [l.createdAt, l.name, l.email, l.phone, l.business, l.source, l.status, l.message]
+        .map(v => `"${(v ?? '').replace(/"/g, '""')}"`)
+        .join(',')
+    );
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), { href: url, download: 'rems-leads.csv' });
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  };
+
+  const filtered = leads.filter(l => {
+    if (filter !== 'all' && l.status !== filter) return false;
+    if (sourceFilter !== 'all' && l.source !== sourceFilter) return false;
+    return true;
+  });
+
+  const counts = {
+    total:     leads.length,
+    new:       leads.filter(l => l.status === 'new').length,
+    contacted: leads.filter(l => l.status === 'contacted').length,
+    converted: leads.filter(l => l.status === 'converted').length,
+  };
+
+  const statusLabel: Record<LeadStatus, string> = isAr
+    ? { new: 'جديد', contacted: 'تم التواصل', converted: 'تحوّل', closed: 'مغلق' }
+    : { new: 'New',  contacted: 'Contacted',   converted: 'Converted', closed: 'Closed' };
+
+  const sourceLabel = { demo: isAr ? 'طلب عرض' : 'Demo Request', contact: isAr ? 'استفسار' : 'Inquiry' };
+
+  return (
+    <div style={{ direction: isAr ? 'rtl' : 'ltr' }}>
+      {/* KPI row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        {[
+          { label: isAr ? 'إجمالي العملاء' : 'Total Leads', value: counts.total, color: 'blue' },
+          { label: isAr ? 'جديد' : 'New',        value: counts.new, color: 'indigo' },
+          { label: isAr ? 'تم التواصل' : 'Contacted', value: counts.contacted, color: 'amber' },
+          { label: isAr ? 'تحوّل' : 'Converted', value: counts.converted, color: 'emerald' },
+        ].map(k => (
+          <div key={k.label} className={`card p-4 border-t-2 border-${k.color}-400`}>
+            <div className="text-2xl font-black text-slate-800">{k.value}</div>
+            <div className="text-xs text-slate-500 mt-0.5">{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters + Export */}
+      <div className="flex flex-wrap gap-3 mb-4 items-center justify-between">
+        <div className="flex flex-wrap gap-2">
+          {(['all', 'new', 'contacted', 'converted', 'closed'] as const).map(s => (
+            <button key={s}
+              onClick={() => setFilter(s)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                filter === s ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}>
+              {s === 'all' ? (isAr ? 'الكل' : 'All') : statusLabel[s]}
+            </button>
+          ))}
+          <span className="text-slate-300">|</span>
+          {(['all', 'demo', 'contact'] as const).map(s => (
+            <button key={s}
+              onClick={() => setSrcFilter(s)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                sourceFilter === s ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}>
+              {s === 'all' ? (isAr ? 'كل المصادر' : 'All Sources') : sourceLabel[s]}
+            </button>
+          ))}
+        </div>
+        <button onClick={exportCsv}
+          className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition-colors border border-emerald-200">
+          ⬇ {isAr ? 'تصدير CSV' : 'Export CSV'}
+        </button>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="text-center py-16 text-slate-400">
+          <div className="text-4xl mb-3">📭</div>
+          <p className="text-sm">{isAr ? 'لا توجد عملاء محتملون بعد' : 'No leads yet'}</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map(lead => (
+            <div key={lead.id} className="card border border-slate-100">
+              {/* Row */}
+              <div className="flex items-center gap-3 p-4 cursor-pointer hover:bg-slate-50 transition-colors rounded-2xl"
+                onClick={() => setExpandId(expandId === lead.id ? null : lead.id)}>
+                {/* Source chip */}
+                <span className={`flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                  lead.source === 'demo' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                }`}>
+                  {sourceLabel[lead.source]}
+                </span>
+                {/* Name + email */}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-slate-800 text-sm truncate">{lead.name}</div>
+                  <div className="text-slate-500 text-xs truncate" style={{ direction: 'ltr' }}>{lead.email}</div>
+                </div>
+                {/* Business */}
+                {lead.business && (
+                  <span className="hidden sm:block text-xs text-slate-500 truncate max-w-[140px]">{lead.business}</span>
+                )}
+                {/* Status badge */}
+                <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold ${STATUS_COLORS[lead.status]}`}>
+                  {statusLabel[lead.status]}
+                </span>
+                {/* Date */}
+                <span className="flex-shrink-0 text-xs text-slate-400 hidden sm:block" style={{ direction: 'ltr' }}>
+                  {new Date(lead.createdAt).toLocaleDateString()}
+                </span>
+                <span className="text-slate-400 text-sm">{expandId === lead.id ? '▲' : '▼'}</span>
+              </div>
+
+              {/* Expanded detail */}
+              {expandId === lead.id && (
+                <div className="px-4 pb-4 border-t border-slate-100 pt-4 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                    <div><div className="text-xs text-slate-400 mb-1">{isAr ? 'الجوال' : 'Phone'}</div>
+                      <div style={{ direction: 'ltr' }}>{lead.phone || '—'}</div></div>
+                    <div><div className="text-xs text-slate-400 mb-1">{isAr ? 'الشركة' : 'Business'}</div>
+                      <div>{lead.business || '—'}</div></div>
+                    <div><div className="text-xs text-slate-400 mb-1">{isAr ? 'التاريخ' : 'Date'}</div>
+                      <div style={{ direction: 'ltr' }}>{new Date(lead.createdAt).toLocaleString()}</div></div>
+                  </div>
+                  {lead.message && (
+                    <div>
+                      <div className="text-xs text-slate-400 mb-1">{isAr ? 'الرسالة' : 'Message'}</div>
+                      <p className="text-sm text-slate-700 bg-slate-50 rounded-xl p-3 leading-relaxed">{lead.message}</p>
+                    </div>
+                  )}
+                  {/* Status management */}
+                  <div className="flex flex-wrap gap-2 items-center pt-1">
+                    <span className="text-xs text-slate-500 font-medium">{isAr ? 'تغيير الحالة:' : 'Status:'}</span>
+                    {(['new', 'contacted', 'converted', 'closed'] as LeadStatus[]).map(s => (
+                      <button key={s}
+                        onClick={() => handleStatus(lead.id, s)}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                          lead.status === s
+                            ? STATUS_COLORS[s] + ' ring-2 ring-offset-1 ring-current'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}>
+                        {statusLabel[s]}
+                      </button>
+                    ))}
+                    <button onClick={() => handleDelete(lead.id)}
+                      className="ms-auto px-3 py-1 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors border border-red-200">
+                      🗑 {isAr ? 'حذف' : 'Delete'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Main portal ─────────────────────────────────────────────────────────
+───────────────────────────────────────────────────────────── */
+type AdminTab = 'promo' | 'bi' | 'revenue' | 'health' | 'transactions' | 'logs' | 'gateway' | 'global' | 'leads';
 
 export default function SuperAdminPage() {
   const { t, lang, toggle } = useLang();
@@ -1442,6 +1643,7 @@ export default function SuperAdminPage() {
   }
 
   const tabs: { key: AdminTab; label: string; icon: string }[] = [
+    { key: 'leads',        label: sa.tabLeads,        icon: '📥' },
     { key: 'promo',        label: sa.tabPromo,        icon: '🏷️' },
     { key: 'bi',           label: sa.tabBI,           icon: '📊' },
     { key: 'revenue',      label: sa.tabRevenue,      icon: '💰' },
@@ -1498,6 +1700,7 @@ export default function SuperAdminPage() {
 
       {/* Content */}
       <div className="p-6">
+        {tab === 'leads'        && <LeadsPanel />}
         {tab === 'promo'        && <PromoManager />}
         {tab === 'bi'           && <BIPanel />}
         {tab === 'revenue'      && <RevenuePanel />}
