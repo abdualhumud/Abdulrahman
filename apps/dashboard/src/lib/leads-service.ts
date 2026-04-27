@@ -3,12 +3,12 @@
  *
  * Submission pipeline (all run in parallel, each fails gracefully):
  *   1. localStorage  — always persisted, primary store for Super-Admin view
- *   2. EmailJS REST  — real-time email to alhumudab@gmail.com
+ *   2. EmailJS REST  — real-time alert to alhumudab@gmail.com ✓ configured
  *                      Requires: NEXT_PUBLIC_EMAILJS_SERVICE_ID
  *                                NEXT_PUBLIC_EMAILJS_TEMPLATE_ID
  *                                NEXT_PUBLIC_EMAILJS_PUBLIC_KEY
- *   3. Google Sheets — append row via Apps Script webhook
- *                      Requires: NEXT_PUBLIC_SHEETS_WEBHOOK (Apps Script Web App URL)
+ *   3. Google Sheets — append row via Apps Script webhook (optional)
+ *                      Requires: NEXT_PUBLIC_SHEETS_WEBHOOK
  *   4. Supabase      — insert to `leads` table when credentials are configured
  *
  * None of the optional channels block submission — if env vars are missing the
