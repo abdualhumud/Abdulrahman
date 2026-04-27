@@ -106,6 +106,9 @@ export function redeemPromoCode(rawCode: string): void {
 }
 
 export function createPromoCode(partial: Omit<PromoCode, 'usedCount' | 'createdAt'>): void {
+  if (partial.discount < 1 || partial.discount > 99) {
+    throw new Error('Discount must be between 1 and 99 percent');
+  }
   const codes = getPromoCodes();
   const exists = codes.find(c => c.code === partial.code.toUpperCase());
   if (exists) throw new Error('Code already exists');
@@ -119,6 +122,9 @@ export function createPromoCode(partial: Omit<PromoCode, 'usedCount' | 'createdA
 }
 
 export function updatePromoCode(code: string, patch: Partial<PromoCode>): void {
+  if (patch.discount !== undefined && (patch.discount < 1 || patch.discount > 99)) {
+    throw new Error('Discount must be between 1 and 99 percent');
+  }
   const codes = getPromoCodes();
   const idx = codes.findIndex(c => c.code === code);
   if (idx === -1) throw new Error('Code not found');

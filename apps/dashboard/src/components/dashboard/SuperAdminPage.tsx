@@ -103,6 +103,16 @@ function appendLog(event: string, category: LogCategory = 'system', user = 'Supe
 const INPUT =
   'w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all';
 
+/** Weak PINs that must be rejected. */
+function isWeakPin(p: string): boolean {
+  if (p === DEFAULT_PIN) return true;
+  if (/^(.)\1+$/.test(p)) return true;                           // all same digit e.g. 0000
+  const digits = p.split('').map(Number);
+  const isSeq = digits.every((d, i) => i === 0 || d === digits[i - 1] + 1);
+  const isRevSeq = digits.every((d, i) => i === 0 || d === digits[i - 1] - 1);
+  return isSeq || isRevSeq;                                      // 1234 / 4321
+}
+
 /* ─────────────────────────────────────────────────────────────
    PIN GATE
 ───────────────────────────────────────────────────────────── */
@@ -111,9 +121,13 @@ function PinGate({ onUnlock }: { onUnlock: () => void }) {
   const sa = t.superAdmin;
   const [pin, setPin] = useState('');
   const [err, setErr] = useState('');
+  // Forced PIN-change flow — triggered when the current PIN is still the default
+  const [forcedChange, setForcedChange] = useState(false);
+  const [newPin,       setNewPin]       = useState('');
+  const [confirmPin,   setConfirmPin]   = useState('');
+  const [changeErr,    setChangeErr]    = useState('');
 
   const unlock = () => {
-    // Check lockout before verifying PIN
     const rl = getPinRate();
     if (rl.lockedUntil && Date.now() < rl.lockedUntil) {
       const mins = Math.ceil((rl.lockedUntil - Date.now()) / 60_000);
@@ -126,6 +140,13 @@ function PinGate({ onUnlock }: { onUnlock: () => void }) {
 
     if (pin === getPin()) {
       resetPinRate();
+      // Force PIN change if the default is still in use
+      const storedPin = localStorage.getItem(PIN_KEY);
+      if (!storedPin || storedPin === DEFAULT_PIN) {
+        setForcedChange(true);
+        setPin('');
+        return;
+      }
       onUnlock();
     } else {
       const next      = bumpPinRate();
@@ -138,6 +159,92 @@ function PinGate({ onUnlock }: { onUnlock: () => void }) {
       setPin('');
     }
   };
+
+  const commitNewPin = () => {
+    setChangeErr('');
+    if (newPin.length < 4) {
+      setChangeErr(lang === 'ar' ? 'يجب أن يكون الرقم السري 4 أحرف على الأقل.' : 'PIN must be at least 4 characters.');
+      return;
+    }
+    if (isWeakPin(newPin)) {
+      setChangeErr(lang === 'ar' ? 'رقم السري ضعيف جداً. اختر رقماً أصعب.' : 'PIN is too weak. Choose a harder one.');
+      return;
+    }
+    if (newPin !== confirmPin) {
+      setChangeErr(lang === 'ar' ? 'الرقمان السريان غير متطابقين.' : 'PINs do not match.');
+      return;
+    }
+    savePin(newPin);
+    onUnlock();
+  };
+
+  if (forcedChange) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center p-6"
+        dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+        <div className="absolute top-0 start-0 w-80 h-80 bg-amber-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 end-0 w-64 h-64 bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative w-full max-w-xs">
+          <div className="flex justify-end mb-4">
+            <button onClick={toggle} className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20">
+              {lang === 'ar' ? 'English' : 'عربي'}
+            </button>
+          </div>
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-amber-500">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
+            <h1 className="text-xl font-extrabold text-white">
+              {lang === 'ar' ? 'يجب تغيير الرقم السري' : 'PIN Change Required'}
+            </h1>
+            <p className="text-amber-300 text-sm mt-2">
+              {lang === 'ar'
+                ? 'لا يزال الرقم السري الافتراضي مستخدماً. يجب تغييره قبل المتابعة.'
+                : 'The default PIN is still active. You must change it before proceeding.'}
+            </p>
+          </div>
+          <div className="bg-white rounded-3xl p-8 shadow-2xl space-y-4">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">
+                {lang === 'ar' ? 'الرقم السري الجديد' : 'New PIN'}
+              </label>
+              <input type="password" value={newPin}
+                onChange={e => { setNewPin(e.target.value); setChangeErr(''); }}
+                onKeyDown={e => e.key === 'Enter' && commitNewPin()}
+                placeholder="••••"
+                className={INPUT + ' text-center text-2xl tracking-widest font-mono'}
+                style={{ direction: 'ltr' }} autoFocus />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">
+                {lang === 'ar' ? 'تأكيد الرقم السري' : 'Confirm PIN'}
+              </label>
+              <input type="password" value={confirmPin}
+                onChange={e => { setConfirmPin(e.target.value); setChangeErr(''); }}
+                onKeyDown={e => e.key === 'Enter' && commitNewPin()}
+                placeholder="••••"
+                className={INPUT + ' text-center text-2xl tracking-widest font-mono'}
+                style={{ direction: 'ltr' }} />
+            </div>
+            {changeErr && <p className="text-xs text-red-500 font-semibold text-center">{changeErr}</p>}
+            <button onClick={commitNewPin}
+              className="w-full py-3 rounded-xl text-sm font-bold text-white hover:opacity-90 shadow-lg"
+              style={{ background: 'linear-gradient(135deg,#D97706,#B45309)' }}>
+              {lang === 'ar' ? 'حفظ الرقم السري والمتابعة' : 'Save PIN & Continue'}
+            </button>
+            <p className="text-[11px] text-slate-400 text-center">
+              {lang === 'ar'
+                ? 'لا يُسمح بالأرقام السرية الضعيفة مثل 1234 أو 0000'
+                : 'Weak PINs like 1234 or 0000 are not allowed'}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center p-6"

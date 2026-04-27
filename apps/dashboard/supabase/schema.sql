@@ -267,11 +267,19 @@ create policy "Anyone can submit a lead"
   on public.leads for insert
   with check (true);
 
--- Super-admin can read/update/delete (uses anon key + service_role in admin UI)
-create policy "Service role has full access"
-  on public.leads for all
-  using (true)
-  with check (true);
+-- Only authenticated users (super-admin) can read, update, and delete leads.
+-- Anon users (landing page visitors) can only INSERT via the policy above.
+create policy "Authenticated can read leads"
+  on public.leads for select
+  using (auth.role() = 'authenticated');
+
+create policy "Authenticated can update leads"
+  on public.leads for update
+  using (auth.role() = 'authenticated');
+
+create policy "Authenticated can delete leads"
+  on public.leads for delete
+  using (auth.role() = 'authenticated');
 
 -- Seed default promo codes
 insert into public.promo_codes (code, discount, max_uses, expires_at, active)

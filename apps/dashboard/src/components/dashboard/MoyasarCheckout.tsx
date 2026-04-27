@@ -98,12 +98,13 @@ function DemoCardForm({
 }: Pick<MoyasarCheckoutProps, 'amountSAR' | 'description' | 'onSuccess' | 'onFail'>) {
   const { t, lang } = useLang();
   const p = t.payment;
-  const [cardNum,  setCardNum]  = useState('');
-  const [expiry,   setExpiry]   = useState('');
-  const [cvv,      setCvv]      = useState('');
-  const [name,     setName]     = useState('');
-  const [paying,   setPaying]   = useState(false);
-  const [method,   setMethod]   = useState<'card' | 'mada' | 'applepay' | 'stcpay'>('card');
+  const [cardNum,   setCardNum]   = useState('');
+  const [expiry,    setExpiry]    = useState('');
+  const [cvv,       setCvv]       = useState('');
+  const [name,      setName]      = useState('');
+  const [paying,    setPaying]    = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [method,    setMethod]    = useState<'card' | 'mada' | 'applepay' | 'stcpay'>('card');
 
   /* Apple Pay: only available on Safari/iOS with ApplePaySession */
   const applePayAvailable = typeof window !== 'undefined' &&
@@ -113,14 +114,18 @@ function DemoCardForm({
   const INPUT = 'w-full border border-slate-200 dark:border-slate-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-400 transition-all placeholder-slate-300 dark:placeholder-slate-500 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100';
 
   const handlePay = async () => {
+    if (submitted || paying) return;  // idempotency guard — prevents double-charge
+    setSubmitted(true);
     setPaying(true);
     await new Promise(r => setTimeout(r, 1800));
     // Demo: fail if card number ends in 0000
     const fail = cardNum.replace(/\s/g, '').endsWith('0000');
     if (fail) {
+      setSubmitted(false);  // allow retry on failure
       onFail?.(null);
     } else {
       onSuccess(null);
+      // submitted stays true on success — button remains disabled
     }
     setPaying(false);
   };
@@ -299,7 +304,7 @@ function DemoCardForm({
 
       <button
         onClick={handlePay}
-        disabled={paying || !canPay}
+        disabled={paying || submitted || !canPay}
         className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-extrabold text-sm text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20"
         style={{ background: 'linear-gradient(135deg,#2563EB,#4F46E5)' }}
       >

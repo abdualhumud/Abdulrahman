@@ -36,10 +36,10 @@ export function validateCRNumber(cr: string): string | null {
   return null;
 }
 
-/** Saudi VAT Number — min 10 characters (starts with 3). */
+/** Saudi VAT Number — exactly 15 digits, must start with 3 (ZATCA format). */
 export function validateVATNumber(vat: string): string | null {
   if (!vat.trim()) return 'VAT Number is required';
-  if (vat.trim().length < 10) return 'VAT Number must be at least 10 characters';
+  if (!/^3\d{14}$/.test(vat.trim())) return 'VAT Number must be 15 digits starting with 3';
   return null;
 }
 
