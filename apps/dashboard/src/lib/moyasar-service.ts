@@ -92,20 +92,42 @@ const LS_KEY   = 'rems-moyasar-key';
  */
 export const STAGING_MOYASAR_TEST_KEY = ''; // empty → DemoCardForm renders in staging (no real API calls)
 
-/** Returns the configured publishable/secret key from localStorage. */
+/** Returns the configured PUBLISHABLE key from localStorage. Never returns sk_*. */
 export function getMoyasarKey(): string {
-  try { return localStorage.getItem(LS_KEY) ?? ''; } catch { return ''; }
+  try {
+    const v = localStorage.getItem(LS_KEY) ?? '';
+    // Defence-in-depth: if a sk_* key was somehow planted in storage, refuse to surface it.
+    if (v.startsWith('sk_')) return '';
+    return v;
+  } catch { return ''; }
 }
+
+/**
+ * Stores a Moyasar PUBLISHABLE key (pk_*) in localStorage.
+ * Throws on sk_* — secret keys must NEVER be persisted in the browser.
+ * sk_* operations (refunds, payment-link creation) belong on a backend
+ * (Supabase Edge Function, Vercel Function, etc.).
+ */
+export class MoyasarKeyError extends Error {
+  constructor(message: string) { super(message); this.name = 'MoyasarKeyError'; }
+}
+
 export function setMoyasarKey(key: string): void {
+  if (key.startsWith('sk_')) {
+    throw new MoyasarKeyError(
+      'Refusing to store a Moyasar secret key in the browser. ' +
+      'Use a publishable key (pk_*) on the client; proxy sk_* operations through a server.',
+    );
+  }
   try { localStorage.setItem(LS_KEY, key); } catch { /* ignore */ }
 }
 export function clearMoyasarKey(): void {
   try { localStorage.removeItem(LS_KEY); } catch { /* ignore */ }
 }
 
-/** Returns true when a key has been configured. */
+/** Returns true when a publishable key (pk_*) has been configured. */
 export function isMoyasarConfigured(): boolean {
-  return getMoyasarKey().startsWith('pk_') || getMoyasarKey().startsWith('sk_');
+  return getMoyasarKey().startsWith('pk_');
 }
 
 function authHeader(key?: string): string {

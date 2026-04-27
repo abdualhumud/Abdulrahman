@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
 import { useMode } from '@/lib/mode-context';
@@ -61,7 +61,13 @@ interface Props {
   showPayment?: boolean;
 }
 
-export default function OnboardingPage({ onComplete, strictMode = false, showPayment = false }: Props) {
+export default function OnboardingPage({ onComplete: rawOnComplete, strictMode = false, showPayment = false }: Props) {
+  // Wipe the persisted draft as soon as the wizard successfully exits —
+  // every onComplete code path goes through this wrapper.
+  const onComplete = (plan?: string, promoCode?: string) => {
+    try { localStorage.removeItem('rems-onboarding-draft'); } catch { /* noop */ }
+    rawOnComplete(plan, promoCode);
+  };
   const { t, lang, toggle } = useLang();
   const { isStaging } = useMode();
   const o = t.onboarding;
@@ -97,16 +103,43 @@ export default function OnboardingPage({ onComplete, strictMode = false, showPay
   const [paySubStep, setPaySubStep] = useState<PaySubStep>('summary');
 
   /* ── Form ── */
-  const [form, setForm] = useState({
+  // Draft persistence — wizard form auto-saves to localStorage per keystroke
+  // so users can close the tab mid-onboarding and resume where they left off.
+  // Password fields are excluded from persistence (never written to disk).
+  const DRAFT_KEY = 'rems-onboarding-draft';
+  const initialForm = {
     cr: '', vat: '', natCity: '', natDistr: '', natStreet: '', natPostal: '',
     freelanceCert: '',
     ownerName: '', email: '', phone: '', nationalId: '',
     username: '', password: '',
     bankName: '', iban: '',
+  };
+
+  const [form, setForm] = useState(() => {
+    if (typeof window === 'undefined') return initialForm;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return initialForm;
+      const saved = JSON.parse(raw) as Partial<typeof initialForm>;
+      // Re-merge to preserve future fields and drop any that no longer exist.
+      // Always start `password` empty — never restore secrets from disk.
+      return { ...initialForm, ...saved, password: '' };
+    } catch { return initialForm; }
   });
+
   const set = (k: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm(f => ({ ...f, [k]: e.target.value }));
+
+  // Persist draft (without password) on every change.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const { password: _pw, ...persistable } = form;
+      void _pw;
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(persistable));
+    } catch { /* ignore quota/storage errors */ }
+  }, [form]);
 
   /* ── Google autofill simulation ── */
   const handleGoogleAutofill = async () => {

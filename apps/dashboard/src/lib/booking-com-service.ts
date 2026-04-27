@@ -117,10 +117,28 @@ const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;  // refresh 5 min before expiry
  * • Token TTL  : 1 hour
  * • Rate limit : max 30 tokens/hour per client_id
  * • The token payload includes: machine_account_id, provider_id, client_id
+ *
+ * SECURITY: client_secret is a long-lived shared secret. It must NEVER be
+ * loaded from localStorage, sessionStorage, cookies, or any other browser
+ * storage. Inject it into a server-side process (Edge Function / Cloud
+ * Function / Supabase RPC) where the browser cannot read it back. Calling
+ * this function from a user's browser leaks the secret to the network panel.
  */
 export async function exchangeToken(
   credentials: BookingComCredentials,
 ): Promise<BookingComToken> {
+  // Defence-in-depth: warn (not throw — keeps tests/SSR usable) when this
+  // function is invoked from a browser context. Real callers must run on a
+  // backend; the Next.js static export bundles this file but should not
+  // execute exchangeToken at runtime.
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[booking-com-service] exchangeToken() called from a browser context — ' +
+      'client_secret will be visible in the network panel. Move this call to a backend.',
+    );
+  }
+
   const response = await fetch(AUTH_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

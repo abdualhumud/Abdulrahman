@@ -4,7 +4,14 @@ import { useState, useEffect, useRef } from 'react';
 import { Icons } from '@/lib/icons';
 import { useLang } from '@/lib/language-context';
 import { useJourney } from '@/lib/journey-context';
+import { useMode } from '@/lib/mode-context';
 import { CHANNEL_SYNC_STATUS, CHANNEL_BREAKDOWN, UNITS } from '@/lib/mock-data';
+import {
+  probeChannel,
+  getChannelHealth,
+  emptyHealth,
+  type ChannelHealth,
+} from '@/lib/channel-health';
 import {
   buildAvailNotifXml,
   buildRatePlanNotifXml,
@@ -1483,12 +1490,25 @@ function RateParityManager() {
 export default function ChannelsPage() {
   const { t, lang } = useLang();
   const { markDone } = useJourney();
+  const { isDemo } = useMode();
 
-  const [syncState, setSyncState] = useState<Record<string, 'idle' | 'syncing' | 'done'>>({});
+  const [syncState, setSyncState] = useState<Record<string, 'idle' | 'syncing' | 'done' | 'failed'>>({});
   const [killSwitch, setKillSwitch] = useState<Record<string, boolean>>({
     'Booking.com': true, 'Airbnb': true, 'Gathern': true, 'Agoda': true, 'Expedia': true,
   });
   const [killAnimating, setKillAnimating] = useState<Record<string, boolean>>({});
+  // Real-health overrides — keyed by channel name. Only populated outside demo mode.
+  const [healthMap, setHealthMap] = useState<Record<string, ChannelHealth>>({});
+
+  // Hydrate real health snapshot for production / staging on first mount.
+  useEffect(() => {
+    if (isDemo) return;
+    const next: Record<string, ChannelHealth> = {};
+    for (const ch of CHANNEL_SYNC_STATUS) {
+      next[ch.channel] = getChannelHealth(ch.channel) ?? emptyHealth(ch.channel);
+    }
+    setHealthMap(next);
+  }, [isDemo]);
 
   const toggleKill = (channel: string) => {
     setKillAnimating(s => ({ ...s, [channel]: true }));
@@ -1500,8 +1520,17 @@ export default function ChannelsPage() {
 
   const forceSync = async (channelName: string) => {
     setSyncState(s => ({ ...s, [channelName]: 'syncing' }));
-    await new Promise(r => setTimeout(r, 1600));
-    setSyncState(s => ({ ...s, [channelName]: 'done' }));
+    if (isDemo) {
+      // Demo: simulate sync (CHANNEL_SYNC_STATUS stays the source of truth)
+      await new Promise(r => setTimeout(r, 1600));
+      setSyncState(s => ({ ...s, [channelName]: 'done' }));
+    } else {
+      // Production / staging: run a real probe and persist the snapshot
+      const result = await probeChannel(channelName);
+      const next = getChannelHealth(channelName) ?? emptyHealth(channelName);
+      setHealthMap(m => ({ ...m, [channelName]: next }));
+      setSyncState(s => ({ ...s, [channelName]: result.reachable ? 'done' : 'failed' }));
+    }
     markDone(3);
     setTimeout(() => setSyncState(s => ({ ...s, [channelName]: 'idle' })), 3000);
   };
@@ -1532,7 +1561,18 @@ export default function ChannelsPage() {
 
       {/* Channel cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {CHANNEL_SYNC_STATUS.map(ch => {
+        {CHANNEL_SYNC_STATUS.map(mockCh => {
+          // In production / staging, override the mock counters with real health.
+          // In demo, keep the curated mock values for the sales surface.
+          const live = !isDemo ? healthMap[mockCh.channel] : null;
+          const ch = live ? {
+            ...mockCh,
+            isConnected:   live.isConnected,
+            lastSync:      live.lastSync,
+            bookingsToday: live.bookingsToday,
+            pending:       live.pending,
+            failed:        live.failed,
+          } : mockCh;
           const isPriority = ch.channel === 'Booking.com' || ch.channel === 'Gathern';
           const isActive = killSwitch[ch.channel] !== false;
           return (

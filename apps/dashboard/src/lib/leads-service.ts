@@ -96,24 +96,49 @@ async function sendEmailJS(lead: Lead): Promise<void> {
 
 /* ── Google Sheets via Apps Script Webhook ───────────────────────────────── */
 
+/**
+ * HMAC-SHA256 (hex) — Web Crypto API, browser-safe.
+ * Used to sign the Sheets webhook body so the Apps Script can reject
+ * forged submissions from anyone who happens to find the webhook URL.
+ */
+async function hmacHex(secret: string, body: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await globalThis.crypto.subtle.importKey(
+    'raw', enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false, ['sign'],
+  );
+  const sig = await globalThis.crypto.subtle.sign('HMAC', key, enc.encode(body));
+  return Array.from(new Uint8Array(sig))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 async function logToSheets(lead: Lead): Promise<void> {
   const webhookUrl = process.env.NEXT_PUBLIC_SHEETS_WEBHOOK;
   if (!webhookUrl) return;
 
-  await fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      timestamp: new Date(lead.createdAt).toLocaleString('en-SA', { timeZone: 'Asia/Riyadh' }),
-      name:      lead.name,
-      email:     lead.email,
-      phone:     lead.phone,
-      business:  lead.business,
-      message:   lead.message,
-      source:    lead.source === 'demo' ? 'Demo Request' : 'Contact Inquiry',
-      status:    'New',
-    }),
+  const body = JSON.stringify({
+    timestamp: new Date(lead.createdAt).toLocaleString('en-SA', { timeZone: 'Asia/Riyadh' }),
+    name:      lead.name,
+    email:     lead.email,
+    phone:     lead.phone,
+    business:  lead.business,
+    message:   lead.message,
+    source:    lead.source === 'demo' ? 'Demo Request' : 'Contact Inquiry',
+    status:    'New',
   });
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+  // Sign the request when a shared secret is configured so the Apps Script
+  // can verify authenticity. Apps Script side: compute HMAC-SHA256 of
+  // e.postData.contents using the same secret and reject on mismatch.
+  const secret = process.env.NEXT_PUBLIC_SHEETS_HMAC_SECRET;
+  if (secret) {
+    headers['X-REMS-Signature'] = `sha256=${await hmacHex(secret, body)}`;
+  }
+
+  await fetch(webhookUrl, { method: 'POST', headers, body });
 }
 
 /* ── Supabase Insert ─────────────────────────────────────────────────────── */

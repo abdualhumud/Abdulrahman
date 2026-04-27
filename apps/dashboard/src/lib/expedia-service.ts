@@ -82,19 +82,38 @@ const EQC_BASE_URL     = 'https://services.expediapartnercentral.com/eqc';
 const DEFAULT_POLL_MS  = 120_000;
 const EQC_NAMESPACE    = 'http://www.expedia.com/EQC/AR/2011/06';
 
-// localStorage key for persisting credentials
+// localStorage key for persisting NON-SECRET credential fields only.
+// `password` is intentionally never persisted to the browser.
 const EXPEDIA_CREDS_KEY = 'rems-expedia-creds';
+
+/**
+ * Subset of ExpediaCredentials that is safe to persist client-side
+ * (everything except `password`). The password must be re-entered each
+ * session OR injected via a backend proxy that holds it in a secure store.
+ */
+export type ExpediaPublicCredentials = Omit<ExpediaCredentials, 'password'>;
 
 // ── Credential localStorage helpers ───────────────────────────────────────
 
-export function getExpediaCredentials(): Partial<ExpediaCredentials> {
+export function getExpediaCredentials(): Partial<ExpediaPublicCredentials> {
   try {
     const raw = localStorage.getItem(EXPEDIA_CREDS_KEY);
     return raw ? JSON.parse(raw) : {};
   } catch { return {}; }
 }
+
+/**
+ * Persists ONLY username and hotelId. `password` is dropped on the way in —
+ * a secret EQC password in localStorage is an XSS-exfiltration risk and a
+ * lateral-movement risk if the device is ever compromised.
+ */
 export function setExpediaCredentials(creds: ExpediaCredentials): void {
-  try { localStorage.setItem(EXPEDIA_CREDS_KEY, JSON.stringify(creds)); } catch { /* noop */ }
+  // Strip password — never goes to disk in the browser.
+  const safe: ExpediaPublicCredentials = {
+    username: creds.username,
+    hotelId:  creds.hotelId,
+  };
+  try { localStorage.setItem(EXPEDIA_CREDS_KEY, JSON.stringify(safe)); } catch { /* noop */ }
 }
 export function clearExpediaCredentials(): void {
   try { localStorage.removeItem(EXPEDIA_CREDS_KEY); } catch { /* noop */ }

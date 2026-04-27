@@ -88,7 +88,8 @@ export type TransactionStatus =
   | 'REJECTED_OVERLAP'
   | 'REJECTED_LOCK_TIMEOUT'
   | 'REJECTED_DEADLINE_EXCEEDED'
-  | 'REJECTED_PRE_CHECK_FAILED';
+  | 'REJECTED_PRE_CHECK_FAILED'
+  | 'REJECTED_INVALID_RANGE';
 
 export interface TransactionRecord {
   id:            string;
@@ -176,6 +177,13 @@ export async function processBooking(
     updateMetrics(status, durationMs, request.channel);
     return tx;
   };
+
+  // ── Phase 0: Validate date range (no point spending budget on garbage input) ─
+  const reqInMs  = new Date(request.checkIn).getTime();
+  const reqOutMs = new Date(request.checkOut).getTime();
+  if (!Number.isFinite(reqInMs) || !Number.isFinite(reqOutMs) || reqOutMs <= reqInMs) {
+    return record('REJECTED_INVALID_RANGE');
+  }
 
   // ── Phase 1: Pre-Check (parallel, ≤150ms) ───────────────────────────────
   const p1Start = Date.now();

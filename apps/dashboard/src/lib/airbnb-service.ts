@@ -428,7 +428,195 @@ export function parseReservationFromWebhook(event: AirbnbWebhookEvent): AirbnbRe
   };
 }
 
-// ── iCal Fallback (no direct block API needed — iCal auto-updates) ─────────
+// ── Inbound Reservation Pull (REST) ────────────────────────────────────────
+
+/**
+ * Pulls reservations updated since `sinceTimestamp` (ISO 8601) for a single
+ * listing. Use this as the inbound channel — webhooks are the primary path,
+ * but a poller on top of pullAirbnbReservations() guarantees no booking is
+ * lost during webhook outages or if the property owner has not yet enabled
+ * webhook delivery in their Airbnb dashboard.
+ *
+ * Endpoint: GET /v2/reservations?listing_id=&updated_since=&_limit=
+ */
+export async function pullAirbnbReservations(
+  listingId:      string,
+  sinceTimestamp: string,
+  accessToken:    string,
+  fetchFn:        typeof fetch = fetch,
+): Promise<AirbnbReservation[]> {
+  const params = new URLSearchParams({
+    listing_id:    listingId,
+    updated_since: sinceTimestamp,
+    _limit:        '100',
+  });
+  const response = await fetchFn(`${AIRBNB_BASE}/reservations?${params.toString()}`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Accept':        'application/json',
+    },
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new AirbnbApiError(`Reservation pull failed — HTTP ${response.status}`, response.status, body);
+  }
+  const data = await response.json();
+  const list = (data.reservations ?? []) as Record<string, unknown>[];
+  return list.map(parseReservationRecord);
+}
+
+function parseReservationRecord(d: Record<string, unknown>): AirbnbReservation {
+  return {
+    confirmationCode: String(d.confirmation_code ?? d.id ?? ''),
+    listingId:        String(d.listing_id ?? ''),
+    guestId:          String(d.guest_id ?? ''),
+    guestName:        `${String(d.guest_first_name ?? '')} ${String(d.guest_last_name ?? '')}`.trim(),
+    guestEmail:       String(d.guest_email ?? ''),
+    checkIn:          String(d.start_date ?? d.check_in ?? ''),
+    checkOut:         String(d.end_date ?? d.check_out ?? ''),
+    nights:           Number(d.nights ?? 0),
+    guestCount:       Number(d.number_of_guests ?? 1),
+    totalPayout:      Number(d.expected_payout_amount_accurate ?? 0) / 100,
+    currency:         String(d.listing_currency ?? 'SAR'),
+    status:           (d.status as AirbnbReservation['status']) ?? 'accepted',
+    bookingMethod:    (d.instant_book as boolean) ? 'instant_book' : 'request_to_book',
+    createdAt:        String(d.created_at ?? new Date().toISOString()),
+    updatedAt:        String(d.updated_at ?? new Date().toISOString()),
+  };
+}
+
+// ── Inbound Reservation Poller ─────────────────────────────────────────────
+
+export interface AirbnbPollerConfig {
+  credentials:    AirbnbCredentials;
+  /** Airbnb userId of the property owner — used for the token cache lookup. */
+  userId:         string;
+  /** Listing IDs to poll. One request per listing per tick. */
+  listingIds:     string[];
+  /** Callback invoked when reservations arrive. */
+  onReservations: (reservations: AirbnbReservation[]) => void;
+  /** Optional error sink — defaults to console.error. */
+  onError?:       (err: Error) => void;
+  /** Polling interval. Default: 120_000 ms (2 min). */
+  intervalMs?:    number;
+  /** Override fetch (for tests). */
+  fetchFn?:       typeof fetch;
+}
+
+/**
+ * Starts a background poller that calls pullAirbnbReservations for every
+ * configured listing on the supplied interval. Returns a `stop()` handle so
+ * the caller can tear the poller down on unmount or reconfiguration.
+ *
+ * Use this when:
+ *   • Airbnb webhooks are not yet enabled for the account.
+ *   • Belt-and-braces redundancy alongside webhook delivery is desired.
+ *   • Operating in environments without a public webhook endpoint
+ *     (e.g. local dev, GitHub Pages — which has no inbound HTTP).
+ */
+export function startAirbnbPoller(cfg: AirbnbPollerConfig): { stop: () => void } {
+  const interval = cfg.intervalMs ?? 120_000;
+  const fetchFn  = cfg.fetchFn   ?? fetch;
+  let lastRunISO = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  let stopped    = false;
+
+  const tick = async () => {
+    if (stopped) return;
+    try {
+      const token = await getValidAirbnbToken(cfg.credentials, cfg.userId);
+      const all: AirbnbReservation[] = [];
+      for (const listingId of cfg.listingIds) {
+        const batch = await pullAirbnbReservations(listingId, lastRunISO, token, fetchFn);
+        all.push(...batch);
+      }
+      lastRunISO = new Date().toISOString();
+      if (all.length > 0) cfg.onReservations(all);
+    } catch (err) {
+      const cb = cfg.onError ?? ((e: Error) => console.error('[airbnb-poller]', e.message));
+      cb(err as Error);
+    }
+  };
+
+  // Fire once immediately, then on interval.
+  void tick();
+  const handle = setInterval(tick, interval);
+
+  return {
+    stop: () => { stopped = true; clearInterval(handle); },
+  };
+}
+
+// ── iCal Fallback (inbound + outbound) ─────────────────────────────────────
+
+/**
+ * Fetches and parses an Airbnb iCal feed (the listing's "Export Calendar" URL).
+ * Returns blocked dates as one AirbnbCalendarDay per night so the local
+ * registry can pre-populate before the next REST poll.
+ *
+ * Use this when:
+ *   • The owner has shared their Airbnb iCal export URL.
+ *   • A cheap, public-safe fallback to the Partner API is needed.
+ */
+export async function pullAirbnbICal(
+  icalUrl: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<AirbnbCalendarDay[]> {
+  const response = await fetchFn(icalUrl);
+  if (!response.ok) {
+    throw new AirbnbApiError(`iCal fetch failed — HTTP ${response.status}`, response.status, '');
+  }
+  return parseICalToDays(await response.text());
+}
+
+function parseICalToDays(text: string): AirbnbCalendarDay[] {
+  const days: AirbnbCalendarDay[] = [];
+  const lines = text.split(/\r?\n/);
+  let inEvent = false;
+  let dtStart = '';
+  let dtEnd   = '';
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (line === 'BEGIN:VEVENT') { inEvent = true; dtStart = ''; dtEnd = ''; continue; }
+    if (line === 'END:VEVENT') {
+      if (dtStart && dtEnd) {
+        const start = parseICalYmd(dtStart);
+        const end   = parseICalYmd(dtEnd);
+        if (start && end) {
+          for (let d = new Date(start); d < end; d.setUTCDate(d.getUTCDate() + 1)) {
+            days.push({ date: d.toISOString().slice(0, 10), available: false, status: 'blocked' });
+          }
+        }
+      }
+      inEvent = false;
+      continue;
+    }
+    if (!inEvent) continue;
+
+    const colonIdx = line.indexOf(':');
+    if (colonIdx === -1) continue;
+    const keyPart = line.slice(0, colonIdx);
+    const value   = line.slice(colonIdx + 1);
+
+    if (keyPart.startsWith('DTSTART')) dtStart = value;
+    else if (keyPart.startsWith('DTEND')) dtEnd = value;
+  }
+
+  return days;
+}
+
+function parseICalYmd(raw: string): Date | null {
+  // Accepts "YYYYMMDD" (date-only) or "YYYYMMDDTHHMMSSZ" (datetime).
+  const v = raw.trim();
+  if (v.length < 8) return null;
+  const yyyy = Number(v.slice(0, 4));
+  const mm   = Number(v.slice(4, 6));
+  const dd   = Number(v.slice(6, 8));
+  if (!Number.isFinite(yyyy) || !Number.isFinite(mm) || !Number.isFinite(dd)) return null;
+  return new Date(Date.UTC(yyyy, mm - 1, dd));
+}
+
+// ── iCal Outbound (export — unchanged) ─────────────────────────────────────
 
 /**
  * Generates a valid iCal (RFC 5545) string for a list of blocked date ranges.

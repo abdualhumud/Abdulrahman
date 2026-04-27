@@ -80,7 +80,19 @@ export type AvailabilityResult =
 
 export type BookingResult =
   | { success: true;  booking: ConfirmedBooking }
-  | { success: false; reason: 'LOCK_TIMEOUT' | 'DATES_UNAVAILABLE' | 'LOCK_EXPIRED' };
+  | { success: false; reason: 'LOCK_TIMEOUT' | 'DATES_UNAVAILABLE' | 'LOCK_EXPIRED' | 'INVALID_DATE_RANGE' };
+
+/**
+ * Validates a date range — checkIn must parse, checkOut must parse, and
+ * checkOut must be strictly after checkIn (i.e. at least 1 night).
+ * Zero-night and reversed ranges are rejected upstream so the lock engine
+ * never has to think about them.
+ */
+function isValidRange(range: DateRange): boolean {
+  const inMs  = new Date(range.checkIn).getTime();
+  const outMs = new Date(range.checkOut).getTime();
+  return Number.isFinite(inMs) && Number.isFinite(outMs) && outMs > inMs;
+}
 
 export interface SyncCredentials {
   bookingCom?:   BookingComCredentials;
@@ -229,6 +241,11 @@ export async function processBookingRequest(
     checkOut: request.checkOut,
   };
 
+  // ── Step 0: Reject invalid / zero-night ranges before touching the lock ─
+  if (!isValidRange(range)) {
+    return { success: false, reason: 'INVALID_DATE_RANGE' };
+  }
+
   // ── Step 1: Acquire exclusive lock ────────────────────────────────────
   const lock = await acquireLock(request.unitId, range);
   if (!lock) {
@@ -237,7 +254,12 @@ export async function processBookingRequest(
 
   try {
     // ── Step 2: Safety — verify lock hasn't expired during wait ─────────
+    //   AND verify the lock is still ours (not stolen by an external clear)
     if (Date.now() > lock.expiresAt) {
+      return { success: false, reason: 'LOCK_EXPIRED' };
+    }
+    const stillOurs = _locks.get(makeLockKey(lock.unitId, lock))?.token === lock.token;
+    if (!stillOurs) {
       return { success: false, reason: 'LOCK_EXPIRED' };
     }
 
