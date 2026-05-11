@@ -59,9 +59,19 @@ interface Props {
   strictMode?: boolean;
   /** showPayment=true: show Step 3 payment/checkout */
   showPayment?: boolean;
+  /** initialName: pre-fill Step 2 "Full Name" from signup. Skipped if a draft exists. */
+  initialName?: string;
+  /** initialEmail: pre-fill Step 2 "Email" from signup. Skipped if a draft exists. */
+  initialEmail?: string;
 }
 
-export default function OnboardingPage({ onComplete: rawOnComplete, strictMode = false, showPayment = false }: Props) {
+export default function OnboardingPage({
+  onComplete: rawOnComplete,
+  strictMode = false,
+  showPayment = false,
+  initialName,
+  initialEmail,
+}: Props) {
   // Wipe the persisted draft as soon as the wizard successfully exits —
   // every onComplete code path goes through this wrapper.
   const onComplete = (plan?: string, promoCode?: string) => {
@@ -116,15 +126,23 @@ export default function OnboardingPage({ onComplete: rawOnComplete, strictMode =
   };
 
   const [form, setForm] = useState(() => {
-    if (typeof window === 'undefined') return initialForm;
+    // Seed Step 2 with the name/email the user already gave at signup,
+    // so they don't need to re-type the same credentials.
+    const seeded = {
+      ...initialForm,
+      ownerName: initialName ?? '',
+      email:     initialEmail ?? '',
+    };
+    if (typeof window === 'undefined') return seeded;
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
-      if (!raw) return initialForm;
+      if (!raw) return seeded;
       const saved = JSON.parse(raw) as Partial<typeof initialForm>;
       // Re-merge to preserve future fields and drop any that no longer exist.
       // Always start `password` empty — never restore secrets from disk.
-      return { ...initialForm, ...saved, password: '' };
-    } catch { return initialForm; }
+      // Draft values win over seeded values when both exist (user already edited).
+      return { ...seeded, ...saved, password: '' };
+    } catch { return seeded; }
   });
 
   const set = (k: keyof typeof form) =>
@@ -1046,6 +1064,7 @@ export default function OnboardingPage({ onComplete: rawOnComplete, strictMode =
                       </button>
                     ) : (
                       <button
+                        type="button"
                         onClick={handleNext}
                         disabled={strictMode && !isStaging && !canGoNext}
                         className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 shadow-lg shadow-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed"

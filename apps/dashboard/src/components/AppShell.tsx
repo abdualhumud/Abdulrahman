@@ -109,7 +109,25 @@ function toStagingShape(user: AuthUser): StagingUser {
    ────────────────────────────────────────────────────────────── */
 function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingUser) => void }) {
   const { t, lang, toggle } = useLang();
+  const { envMode } = useMode();
   const s = t.staging;
+  const a = t.auth;
+  const isProd = envMode === 'production';
+
+  // Production vs Staging copy. Staging keeps the existing "trial" wording.
+  const titleLogin    = isProd ? a.prodLoginTitle    : s.loginTitle;
+  const titleRegister = isProd ? a.prodRegisterTitle : s.registerTitle;
+  const subtitleLogin    = isProd ? a.prodLoginSubtitle    : '';
+  const subtitleRegister = isProd ? a.prodRegisterSubtitle : '';
+  const loginCta    = isProd ? a.prodLoginCta    : s.loginBtn;
+  const registerCta = isProd ? a.prodRegisterCta : s.registerBtn;
+  // Switcher links: "Don't have an account? Register" / "Already have an account? Sign in"
+  const switchToRegister = isProd
+    ? `${a.prodNoAccount} ${a.prodRegisterCta}`
+    : s.registerLink;
+  const switchToLogin = isProd
+    ? `${a.prodHaveAccount} ${a.prodLoginCta}`
+    : s.loginLink;
 
   const [mode,          setMode]         = useState<'login' | 'register'>('login');
   const [email,         setEmail]        = useState('');
@@ -249,14 +267,22 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
         <div className="text-center mb-6">
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center font-extrabold text-xl text-white mx-auto mb-4"
             style={{ background: 'linear-gradient(135deg,#7C3AED,#6366F1)' }}>R</div>
-          <div className="flex items-center justify-center gap-2 mb-1">
-            <span className="px-2 py-0.5 bg-violet-500/20 border border-violet-500/40 text-violet-300 text-xs font-bold rounded-full">
-              {s.badge}
-            </span>
-          </div>
+          {/* Staging shows TRIAL badge; production is unbranded. */}
+          {!isProd && (
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <span className="px-2 py-0.5 bg-violet-500/20 border border-violet-500/40 text-violet-300 text-xs font-bold rounded-full">
+                {s.badge}
+              </span>
+            </div>
+          )}
           <h1 className="text-2xl font-extrabold text-white tracking-tight">
-            {mode === 'login' ? s.loginTitle : s.registerTitle}
+            {mode === 'login' ? titleLogin : titleRegister}
           </h1>
+          {isProd && (
+            <p className="mt-2 text-sm text-slate-400 leading-relaxed">
+              {mode === 'login' ? subtitleLogin : subtitleRegister}
+            </p>
+          )}
         </div>
 
         <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-2xl space-y-4 border border-transparent dark:border-slate-700">
@@ -313,12 +339,12 @@ function StagingAuthGate({ onAuthenticated }: { onAuthenticated: (user: StagingU
             style={{ background: 'linear-gradient(135deg,#7C3AED,#6366F1)' }}
           >
             {loading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-            {mode === 'login' ? s.loginBtn : s.registerBtn}
+            {mode === 'login' ? loginCta : registerCta}
           </button>
 
           <button onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError(''); }}
             className="w-full text-center text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors py-1">
-            {mode === 'login' ? s.registerLink : s.loginLink}
+            {mode === 'login' ? switchToRegister : switchToLogin}
           </button>
         </div>
       </div>
@@ -547,11 +573,15 @@ export default function AppShell() {
 
   // Onboarding gate (production or staging first-time)
   if (showOnboarding) {
+    // Pre-fill Step 2 with name/email captured at signup so the user
+    // doesn't need to re-type the same credentials they just used.
     return (
       <OnboardingPage
         onComplete={completeOnboarding}
         strictMode={true}
         showPayment={true}
+        initialName={stagingUser?.name ?? ''}
+        initialEmail={stagingUser?.email ?? ''}
       />
     );
   }

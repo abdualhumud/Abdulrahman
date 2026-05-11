@@ -842,6 +842,17 @@ export const translations = {
       filterFailed:    'Failed',
     },
 
+    auth: {
+      prodLoginTitle:    'Login to your account',
+      prodLoginSubtitle: 'Welcome back. Sign in to manage your properties.',
+      prodRegisterTitle: 'Create your account',
+      prodRegisterSubtitle: 'Register to start managing your properties on REMS.',
+      prodNoAccount:     "Don't have an account?",
+      prodHaveAccount:   'Already have an account?',
+      prodRegisterCta:   'Register',
+      prodLoginCta:      'Sign In',
+    },
+
     staging: {
       badge:           'TRIAL',
       banner:          'Staging / Trial Environment',
@@ -1848,6 +1859,17 @@ export const translations = {
       filterPaid:      'مدفوع',
       filterPending:   'معلّق',
       filterFailed:    'فشل',
+    },
+
+    auth: {
+      prodLoginTitle:    'تسجيل الدخول إلى حسابك',
+      prodLoginSubtitle: 'أهلًا بك من جديد. سجّل دخولك لإدارة عقاراتك.',
+      prodRegisterTitle: 'إنشاء حساب جديد',
+      prodRegisterSubtitle: 'سجّل حسابك لإدارة عقاراتك عبر منصة ريمز.',
+      prodNoAccount:     'ليس لديك حساب؟',
+      prodHaveAccount:   'هل لديك حساب بالفعل؟',
+      prodRegisterCta:   'سجّل الآن',
+      prodLoginCta:      'تسجيل الدخول',
     },
 
     staging: {

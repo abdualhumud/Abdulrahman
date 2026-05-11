@@ -40,10 +40,29 @@ body {
 [dir=rtl] .inbox-active-border { border-left: none !important; border-right: 2px solid #3B82F6; }
 .font-mono                      { direction: ltr; unicode-bidi: embed; }
 
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+/* ── Scrollbars (visible on both light and dark backgrounds) ───── */
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #94A3B8 #E2E8F0;
+}
+/* WebKit / Blink */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #E2E8F0; border-radius: 99px; }
+::-webkit-scrollbar-thumb { background: #94A3B8; border-radius: 99px; border: 2px solid #E2E8F0; }
+::-webkit-scrollbar-thumb:hover { background: #64748B; }
+
+/* Landing page (dark slate-950 background) — lighter thumb against dark track */
+.landing-scroll,
+.landing-scroll * {
+  scrollbar-color: #64748B #1E293B;
+}
+.landing-scroll::-webkit-scrollbar-track,
+.landing-scroll *::-webkit-scrollbar-track { background: #1E293B; }
+.landing-scroll::-webkit-scrollbar-thumb,
+.landing-scroll *::-webkit-scrollbar-thumb { background: #64748B; border: 2px solid #1E293B; }
+.landing-scroll::-webkit-scrollbar-thumb:hover,
+.landing-scroll *::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 
 @layer components {
   .card { @apply bg-white rounded-2xl border border-slate-100 shadow-sm; }
@@ -195,9 +214,11 @@ html.dark tr:hover td { background-color: rgba(51,65,85,0.4); }
 /* Dividers */
 html.dark hr { border-color: #334155; }
 
-/* Scrollbar */
-html.dark ::-webkit-scrollbar-thumb { background: #475569; }
-html.dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+/* Scrollbar — dark mode (visible thumb against dark page) */
+html.dark { scrollbar-color: #64748B #1E293B; }
+html.dark ::-webkit-scrollbar-track { background: #1E293B; }
+html.dark ::-webkit-scrollbar-thumb { background: #64748B; border: 2px solid #1E293B; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 
 /* Modal / overlay whites */
 html.dark .rounded-3xl.bg-white,
